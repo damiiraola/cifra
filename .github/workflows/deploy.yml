@@ -20,22 +20,44 @@ jobs:
     name: Vercel
     runs-on: ubuntu-latest
     timeout-minutes: 12
-    if: ${{ secrets.VERCEL_TOKEN != '' && secrets.VERCEL_ORG_ID != '' && secrets.VERCEL_PROJECT_ID != '' }}
     steps:
+      - name: ¿Hay secretos de Vercel?
+        id: gate
+        env:
+          TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          ORG: ${{ secrets.VERCEL_ORG_ID }}
+          PROJECT: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          if [ -z "$TOKEN" ] || [ -z "$ORG" ] || [ -z "$PROJECT" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Faltan VERCEL_TOKEN, VERCEL_ORG_ID o VERCEL_PROJECT_ID."
+            echo "Importá el repo en vercel.com/new y pegá los 3 secretos en GitHub → Settings → Secrets."
+            exit 0
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v4
+        if: steps.gate.outputs.skip != 'true'
       - uses: actions/setup-node@v4
+        if: steps.gate.outputs.skip != 'true'
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - run: npm run typecheck
+      - if: steps.gate.outputs.skip != 'true'
+        run: npm ci
+      - if: steps.gate.outputs.skip != 'true'
+        run: npm run typecheck
       - name: Instalar Vercel CLI
+        if: steps.gate.outputs.skip != 'true'
         run: npm install --global vercel@latest
       - name: Pull entorno
+        if: steps.gate.outputs.skip != 'true'
         run: vercel pull --yes --environment=${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'production' || 'preview' }} --token=${{ secrets.VERCEL_TOKEN }}
       - name: Build
+        if: steps.gate.outputs.skip != 'true'
         run: vercel build ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }}
       - name: Deploy
+        if: steps.gate.outputs.skip != 'true'
         id: deploy
         run: |
           if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
@@ -45,5 +67,3 @@ jobs:
           fi
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "Publicado: $url"
-      - name: URL
-        run: echo "${{ steps.deploy.outputs.url }}"
