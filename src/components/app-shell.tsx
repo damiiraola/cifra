@@ -1,0 +1,172 @@
+import { useEffect, useState } from "react";
+import { Link, useRouterState } from "@tanstack/react-router";
+import {
+  BarChart3,
+  Brain,
+  CalendarDays,
+  LayoutDashboard,
+  List,
+  Plus,
+  Repeat,
+  Settings,
+  Target,
+} from "lucide-react";
+import { UserButton } from "@/lib/auth/gates";
+import { useCurrentUser } from "@/lib/auth/use-current-user";
+import { useLedger } from "@/lib/store";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QuickAdd } from "@/components/quick-add";
+import { SettingsDialog } from "@/components/settings-dialog";
+import { Onboarding } from "@/components/onboarding";
+import { BookSwitcher } from "@/components/book-switcher";
+import { Toaster } from "sonner";
+
+const NAV = [
+  { to: "/", label: "Inicio", icon: LayoutDashboard },
+  { to: "/diario", label: "Diario", icon: CalendarDays },
+  { to: "/analitica", label: "Analítica", icon: BarChart3 },
+  { to: "/ia", label: "Asistente", icon: Brain },
+];
+
+const MORE = [
+  { to: "/movimientos", label: "Movimientos", icon: List },
+  { to: "/presupuestos", label: "Presupuestos", icon: Target },
+  { to: "/fijos", label: "Fijos", icon: Repeat },
+];
+
+export function AppShell({ children }: { children: React.ReactNode }) {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const openQuick = useLedger((s) => s.openQuick);
+  const status = useLedger((s) => s.status);
+  const hydrate = useLedger((s) => s.hydrate);
+  const user = useCurrentUser();
+  const userId = user?.id;
+  const [settings, setSettings] = useState(false);
+  const onboarded = useLedger((s) => s.onboarded);
+
+  useEffect(() => {
+    if (!userId) return;
+    void hydrate();
+  }, [userId, hydrate]);
+
+  return (
+    <TooltipProvider delayDuration={250}>
+      <div className="min-h-dvh bg-bg text-fg">
+        <aside className="fixed inset-y-0 left-0 z-30 hidden w-56 flex-col border-r border-border bg-bg px-4 py-6 md:flex">
+          <Link to="/" className="px-2">
+            <p className="font-display text-3xl tracking-tight">Cifra</p>
+            <p className="mt-0.5 text-[11px] tracking-wide text-muted uppercase">Libro de gastos</p>
+          </Link>
+          <div className="mt-5 px-1">
+            <BookSwitcher />
+          </div>
+          <nav className="mt-8 flex flex-1 flex-col gap-1">
+            <Button className="mb-3 w-full" onClick={() => openQuick()}>
+              <Plus className="size-4" />
+              Nuevo
+            </Button>
+            {[...NAV, ...MORE].map((item) => {
+              const active = pathname === item.to;
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  className={cn(
+                    "flex h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors duration-150",
+                    active ? "bg-elevated text-fg" : "text-muted hover:bg-elevated hover:text-fg",
+                  )}
+                >
+                  <Icon className="size-4" />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+          <div className="space-y-3">
+            <div className="overflow-hidden px-1 [&_span]:truncate [&_button]:text-muted">
+              <UserButton />
+            </div>
+            <Button variant="ghost" className="w-full justify-start" onClick={() => setSettings(true)}>
+              <Settings className="size-4" />
+              Ajustes
+            </Button>
+          </div>
+        </aside>
+
+        <header className="sticky top-0 z-20 border-b border-border bg-bg/90 px-4 py-3 backdrop-blur-sm md:hidden">
+          <div className="flex items-center justify-between gap-3">
+            <p className="font-display text-2xl leading-none tracking-tight">Cifra</p>
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="icon-sm" aria-label="Ajustes" onClick={() => setSettings(true)}>
+                <Settings className="size-4" />
+              </Button>
+              <Button size="icon-sm" aria-label="Nuevo movimiento" onClick={() => openQuick()}>
+                <Plus className="size-4" />
+              </Button>
+            </div>
+          </div>
+          <div className="mt-3">
+            <BookSwitcher />
+          </div>
+        </header>
+
+        <div className="md:pl-56">
+          <div className="mx-auto min-h-dvh w-full max-w-5xl px-4 pt-4 pb-28 md:px-8 md:pt-8 md:pb-12">
+            {status === "ready" ? (
+              onboarded ? children : <Onboarding />
+            ) : status === "error" ? (
+              <div className="grid min-h-[50vh] place-items-center">
+                <div className="max-w-sm text-center">
+                  <p className="font-display text-3xl">No pude abrir el libro</p>
+                  <p className="mt-2 text-sm text-muted">Reintentá. Si sigue fallando, recargá la app.</p>
+                  <Button className="mt-4" onClick={() => void hydrate()}>
+                    Reintentar
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="grid gap-4">
+                <div className="h-10 w-40 animate-pulse rounded-lg bg-elevated" />
+                <div className="h-40 animate-pulse rounded-3xl bg-surface" />
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="h-24 animate-pulse rounded-2xl bg-surface" />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-bg/95 px-2 pt-1 pb-[max(0.4rem,env(safe-area-inset-bottom))] backdrop-blur-sm md:hidden">
+          <div className="grid grid-cols-4">
+            {NAV.map((item) => {
+              const active = pathname === item.to;
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  className={cn(
+                    "flex min-h-12 flex-col items-center justify-center gap-0.5 text-[11px] font-medium",
+                    active ? "text-fg" : "text-muted",
+                  )}
+                >
+                  <Icon className="size-4" />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
+
+        <QuickAdd />
+        <SettingsDialog open={settings} onOpenChange={setSettings} />
+        <Toaster theme="dark" position="top-center" />
+      </div>
+    </TooltipProvider>
+  );
+}

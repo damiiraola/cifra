@@ -1,0 +1,33 @@
+node_modules
+dist
+.output
+.nitro
+.vercel
+.vinxi
+.tanstack
+*.local
+.env
+.env.*
+!.env.example
+
+# Embedded preview DB
+data/
+
+# Local / sandbox only
+.grok/
+AGENTS.md
+AGENTS.project.md
+artifacts/
+screenshots/
+.project_id
+.node_modules.lock
+startup.sh
+
+# OS / editor
+.DS_Store
+.idea
+.vscode
+*.log
+coverage
+playwright-report
+test-results
