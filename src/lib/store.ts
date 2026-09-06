@@ -183,7 +183,18 @@ export const useLedger = create<LedgerState>()((set, get) => ({
     set({ status: "loading" });
     hydrateLock = (async () => {
       try {
-        const remote = await loadLedger();
+        const remote = await Promise.race([
+          loadLedger(),
+          new Promise<never>((_, reject) => {
+            window.setTimeout(
+              () =>
+                reject(
+                  new Error("La base no responde. Pegá DATABASE_URL de Neon en Vercel y hacé Redeploy."),
+                ),
+              12000,
+            );
+          }),
+        ]);
         if (remote.transactions.length === 0) {
           const local = readLocalSnapshot();
           if (local) {

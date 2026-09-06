@@ -1,6 +1,6 @@
 import { Navigate, createFileRoute, Link } from "@tanstack/react-router";
 import { GROK_PROVIDERS, authEnabled, signIn } from "@/lib/auth/client";
-import { useCurrentUserState } from "@/lib/auth/use-current-user";
+import { useSessionWait } from "@/lib/auth/use-current-user";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/login")({
@@ -8,7 +8,23 @@ export const Route = createFileRoute("/login")({
 });
 
 function Login() {
-  const { user, isPending } = useCurrentUserState();
+  const { user, isPending, timedOut } = useSessionWait();
+  if (isPending && timedOut) {
+    return (
+      <main className="grid min-h-dvh place-items-center bg-bg px-6 text-fg">
+        <div className="max-w-sm text-center">
+          <p className="font-display text-4xl tracking-tight">Cifra</p>
+          <p className="mt-3 text-sm text-muted">
+            El login no arranca. Falta Neon (<span className="text-fg">DATABASE_URL</span>) o la URL pública (
+            <span className="text-fg">BETTER_AUTH_URL</span>).
+          </p>
+          <Button className="mt-5" onClick={() => window.location.reload()}>
+            Recargar
+          </Button>
+        </div>
+      </main>
+    );
+  }
   if (isPending) {
     return (
       <main className="grid min-h-dvh place-items-center bg-bg text-fg">

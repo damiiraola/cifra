@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { authClient, authEnabled } from "./client";
 
 /** Normalized user shape used across the app, auth on or off. */
@@ -71,6 +72,21 @@ export function useCurrentUserState(): CurrentUserState {
       : null,
     isPending,
   };
+}
+
+/** Same as `useCurrentUserState`, plus `timedOut` if the session never resolves. */
+export function useSessionWait(ms = 8000): CurrentUserState & { timedOut: boolean } {
+  const state = useCurrentUserState();
+  const [timedOut, setTimedOut] = useState(false);
+  useEffect(() => {
+    if (!state.isPending) {
+      setTimedOut(false);
+      return;
+    }
+    const t = window.setTimeout(() => setTimedOut(true), ms);
+    return () => window.clearTimeout(t);
+  }, [state.isPending, ms]);
+  return { ...state, timedOut };
 }
 
 /**
