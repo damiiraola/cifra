@@ -12,6 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as BetaRouteImport } from './routes/beta'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as OlvideRouteImport } from './routes/olvide'
+import { Route as ResetRouteImport } from './routes/reset'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppAnaliticaRouteImport } from './routes/_app/analitica'
 import { Route as AppDiarioRouteImport } from './routes/_app/diario'
@@ -33,6 +35,16 @@ const BetaRoute = BetaRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OlvideRoute = OlvideRouteImport.update({
+  id: '/olvide',
+  path: '/olvide',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetRoute = ResetRouteImport.update({
+  id: '/reset',
+  path: '/reset',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppIndexRoute = AppIndexRouteImport.update({
@@ -80,6 +92,8 @@ export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/beta': typeof BetaRoute
   '/login': typeof LoginRoute
+  '/olvide': typeof OlvideRoute
+  '/reset': typeof ResetRoute
   '/analitica': typeof AppAnaliticaRoute
   '/diario': typeof AppDiarioRoute
   '/fijos': typeof AppFijosRoute
@@ -91,6 +105,8 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/beta': typeof BetaRoute
   '/login': typeof LoginRoute
+  '/olvide': typeof OlvideRoute
+  '/reset': typeof ResetRoute
   '/analitica': typeof AppAnaliticaRoute
   '/diario': typeof AppDiarioRoute
   '/fijos': typeof AppFijosRoute
@@ -105,6 +121,8 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/beta': typeof BetaRoute
   '/login': typeof LoginRoute
+  '/olvide': typeof OlvideRoute
+  '/reset': typeof ResetRoute
   '/_app/analitica': typeof AppAnaliticaRoute
   '/_app/diario': typeof AppDiarioRoute
   '/_app/fijos': typeof AppFijosRoute
@@ -120,6 +138,8 @@ export interface FileRouteTypes {
     | '/'
     | '/beta'
     | '/login'
+    | '/olvide'
+    | '/reset'
     | '/analitica'
     | '/diario'
     | '/fijos'
@@ -131,6 +151,8 @@ export interface FileRouteTypes {
   to:
     | '/beta'
     | '/login'
+    | '/olvide'
+    | '/reset'
     | '/analitica'
     | '/diario'
     | '/fijos'
@@ -144,6 +166,8 @@ export interface FileRouteTypes {
     | '/_app'
     | '/beta'
     | '/login'
+    | '/olvide'
+    | '/reset'
     | '/_app/analitica'
     | '/_app/diario'
     | '/_app/fijos'
@@ -158,6 +182,8 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   BetaRoute: typeof BetaRoute
   LoginRoute: typeof LoginRoute
+  OlvideRoute: typeof OlvideRoute
+  ResetRoute: typeof ResetRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
@@ -182,6 +208,20 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/olvide': {
+      id: '/olvide'
+      path: '/olvide'
+      fullPath: '/olvide'
+      preLoaderRoute: typeof OlvideRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset': {
+      id: '/reset'
+      path: '/reset'
+      fullPath: '/reset'
+      preLoaderRoute: typeof ResetRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app/': {
@@ -269,17 +309,10 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   BetaRoute: BetaRoute,
   LoginRoute: LoginRoute,
+  OlvideRoute: OlvideRoute,
+  ResetRoute: ResetRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}

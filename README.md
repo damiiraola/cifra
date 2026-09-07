@@ -53,6 +53,8 @@ Variables de entorno (no se commitean). En Vercel se cargan en Project → Setti
 | `GROK_AUTH_ISSUER` / `GROK_AUTH_CLIENT_ID` / `GROK_AUTH_CLIENT_SECRET` | servidor | login Google / X |
 | `XAI_API_KEY` | servidor | asistente IA |
 | `VITE_AUTH_ENABLED` | build | `true` en producción |
+| `RESEND_API_KEY` | servidor | mails (confirmar cuenta + olvidé clave) |
+| `MAIL_FROM` | servidor | opcional. Default de prueba Resend hasta verificar dominio |
 
 Sin `DATABASE_URL` la app igual arranca (PGLite). No uses ese modo para testers reales: el libro se borra al reiniciar.
 
