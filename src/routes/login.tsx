@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from "react";
-import { Navigate, createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useState, type FormEvent } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { GROK_PROVIDERS, authClient, authEnabled, signIn } from "@/lib/auth/client";
 import { useSessionWait } from "@/lib/auth/use-current-user";
 import { AuthScreen } from "@/components/auth-screen";
@@ -34,6 +34,11 @@ function Login() {
   const onGrok =
     typeof window !== "undefined" && window.location.hostname.endsWith(".grok-sandbox.com");
 
+  useEffect(() => {
+    if (isPending || !user) return;
+    window.location.replace("/");
+  }, [isPending, user]);
+
   if (isPending && timedOut) {
     return (
       <AuthScreen kicker="La sesión no responde. En Vercel falta DATABASE_URL o BETTER_AUTH_URL.">
@@ -43,14 +48,13 @@ function Login() {
       </AuthScreen>
     );
   }
-  if (isPending) {
+  if (isPending || user) {
     return (
       <main className="grid min-h-dvh place-items-center bg-bg text-fg">
         <div className="h-10 w-28 animate-pulse rounded-lg bg-elevated" />
       </main>
     );
   }
-  if (user) return <Navigate to="/" />;
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -68,6 +72,11 @@ function Login() {
           setError(spanishAuthError(err.message, "No pude crear la cuenta."));
           return;
         }
+        const session = await authClient.getSession();
+        if (session.data?.user) {
+          window.location.replace("/");
+          return;
+        }
         setCheckEmail(true);
         return;
       }
@@ -82,7 +91,7 @@ function Login() {
         if (msg.includes("Confirmá el mail")) setCheckEmail(true);
         return;
       }
-      window.location.href = "/";
+      window.location.replace("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "No pude entrar. Probá de nuevo.");
     } finally {

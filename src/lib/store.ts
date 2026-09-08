@@ -160,7 +160,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
   books: [],
   accounts: [],
   activeBookId: "",
-  onboarded: true,
+  onboarded: false,
   categoryNames: {},
   recurrings: [],
   budgets: { ...DEFAULT_BUDGETS },
