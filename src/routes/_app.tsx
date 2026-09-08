@@ -1,5 +1,5 @@
+import { useEffect } from "react";
 import { Outlet, createFileRoute } from "@tanstack/react-router";
-import { RedirectToSignIn } from "@/lib/auth/gates";
 import { useSessionWait } from "@/lib/auth/use-current-user";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,12 @@ export const Route = createFileRoute("/_app")({
 
 function AppLayout() {
   const { user, isPending, timedOut } = useSessionWait();
+  const userId = user?.id ?? null;
+
+  useEffect(() => {
+    if (isPending || timedOut) return;
+    if (!userId) window.location.replace("/login");
+  }, [isPending, timedOut, userId]);
 
   if (isPending && timedOut) {
     return (
@@ -28,7 +34,7 @@ function AppLayout() {
     );
   }
 
-  if (isPending) {
+  if (isPending || !user) {
     return (
       <div className="grid min-h-dvh place-items-center bg-bg text-fg">
         <div className="text-center">
@@ -38,8 +44,6 @@ function AppLayout() {
       </div>
     );
   }
-
-  if (!user) return <RedirectToSignIn />;
 
   return (
     <AppShell>

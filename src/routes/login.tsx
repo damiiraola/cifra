@@ -37,7 +37,7 @@ function Login() {
   useEffect(() => {
     if (isPending || !user) return;
     window.location.replace("/");
-  }, [isPending, user]);
+  }, [isPending, user?.id]);
 
   if (isPending && timedOut) {
     return (

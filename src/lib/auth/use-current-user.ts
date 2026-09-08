@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { authClient, authEnabled } from "./client";
 
 /** Normalized user shape used across the app, auth on or off. */
@@ -59,19 +59,19 @@ export function useCurrentUserState(): CurrentUserState {
   if (!authEnabled) return { user: DEV_USER, isPending: false };
   // eslint-disable-next-line react-hooks/rules-of-hooks -- authEnabled is constant for the app's lifetime
   const { data, isPending } = authClient.useSession();
-  const user = data?.user;
-  return {
-    user: user
-      ? {
-          id: user.id,
-          displayName: user.name ?? null,
-          primaryEmail: user.email ?? null,
-          profileImageUrl: user.image ?? null,
-          isDevFallback: false,
-        }
-      : null,
-    isPending,
-  };
+  const raw = data?.user;
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- authEnabled is constant for the app's lifetime
+  const user = useMemo<AppUser | null>(() => {
+    if (!raw) return null;
+    return {
+      id: raw.id,
+      displayName: raw.name ?? null,
+      primaryEmail: raw.email ?? null,
+      profileImageUrl: raw.image ?? null,
+      isDevFallback: false,
+    };
+  }, [raw?.id, raw?.name, raw?.email, raw?.image]);
+  return { user, isPending };
 }
 
 /** Same as `useCurrentUserState`, plus `timedOut` if the session never resolves. */
@@ -80,7 +80,7 @@ export function useSessionWait(ms = 8000): CurrentUserState & { timedOut: boolea
   const [timedOut, setTimedOut] = useState(false);
   useEffect(() => {
     if (!state.isPending) {
-      setTimedOut(false);
+      setTimedOut((was) => (was ? false : was));
       return;
     }
     const t = window.setTimeout(() => setTimedOut(true), ms);

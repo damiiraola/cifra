@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useShallow } from "zustand/react/shallow";
 import { toast } from "sonner";
 import { DEFAULT_BUDGETS, DEFAULT_GLOBAL_BUDGET } from "./categories";
 import {
@@ -447,9 +448,13 @@ export const useLedger = create<LedgerState>()((set, get) => ({
 }));
 
 export function useBookTxs() {
-  return useLedger((s) => s.transactions.filter((t) => !s.activeBookId || t.bookId === s.activeBookId));
+  return useLedger(
+    useShallow((s) => s.transactions.filter((t) => !s.activeBookId || t.bookId === s.activeBookId)),
+  );
 }
 
 export function useBookAccounts() {
-  return useLedger((s) => s.accounts.filter((a) => a.bookId === s.activeBookId && !a.archived));
+  return useLedger(
+    useShallow((s) => s.accounts.filter((a) => a.bookId === s.activeBookId && !a.archived)),
+  );
 }
