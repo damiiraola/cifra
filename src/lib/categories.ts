@@ -87,6 +87,9 @@ export function parseHiddenIds(raw: unknown): string[] {
 }
 
 export function mergedCategories(custom: Category[], names: Record<string, string>): Category[] {
+  if ((!custom || custom.length === 0) && (!names || Object.keys(names).length === 0)) {
+    return CATEGORIES;
+  }
   return [...CATEGORIES, ...custom].map((c) => ({
     ...c,
     name: names[c.id]?.trim() || c.name,

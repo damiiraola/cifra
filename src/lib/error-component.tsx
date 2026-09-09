@@ -15,7 +15,7 @@ export function AppErrorComponent({ error }: ErrorComponentProps) {
         <button
           type="button"
           className="mt-6 h-11 rounded-lg bg-accent px-4 text-sm font-medium text-accent-fg"
-          onClick={() => window.location.replace("/")}
+          onClick={() => window.location.reload()}
         >
           Recargar
         </button>

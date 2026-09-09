@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import { toast } from "sonner";
@@ -509,15 +510,17 @@ export function useBookAccounts() {
 }
 
 export function useAllCategories() {
-  return useLedger(useShallow((s) => mergedCategories(s.customCategories, s.categoryNames)));
+  const custom = useLedger((s) => s.customCategories);
+  const names = useLedger((s) => s.categoryNames);
+  return useMemo(() => mergedCategories(custom, names), [custom, names]);
 }
 
 export function useVisibleCategories(kind?: CategoryKind) {
-  return useLedger(
-    useShallow((s) => {
-      const hidden = new Set(s.hiddenCategoryIds);
-      const all = mergedCategories(s.customCategories, s.categoryNames).filter((c) => !hidden.has(c.id));
-      return kind ? all.filter((c) => c.kind === kind) : all;
-    }),
-  );
+  const all = useAllCategories();
+  const hidden = useLedger((s) => s.hiddenCategoryIds);
+  return useMemo(() => {
+    const hide = new Set(hidden);
+    const vis = all.filter((c) => !hide.has(c.id));
+    return kind ? vis.filter((c) => c.kind === kind) : vis;
+  }, [all, hidden, kind]);
 }
