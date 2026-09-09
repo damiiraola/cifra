@@ -46,6 +46,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const user = useCurrentUser();
   const userId = user?.id;
   const onboarded = useLedger((s) => s.onboarded);
+  const chrome = status === "ready" && onboarded;
 
   useEffect(() => {
     if (!userId) return;
@@ -55,7 +56,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <TooltipProvider delayDuration={250}>
       <div className="min-h-dvh bg-bg text-fg">
-        <aside className="fixed inset-y-0 left-0 z-30 hidden w-56 flex-col border-r border-border bg-bg px-4 py-6 md:flex">
+        <aside className={cn("fixed inset-y-0 left-0 z-30 w-56 flex-col border-r border-border bg-bg px-4 py-6", chrome ? "hidden md:flex" : "hidden")}>
           <Link to="/" className="px-2">
             <p className="font-display text-3xl tracking-tight">Cifra</p>
             <p className="mt-0.5 text-[11px] tracking-wide text-muted uppercase">Libro de gastos</p>
@@ -91,7 +92,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </aside>
 
-        <header className="sticky top-0 z-20 border-b border-border bg-bg/90 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-sm md:hidden">
+        {chrome ? <header className="sticky top-0 z-20 border-b border-border bg-bg/90 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-sm md:hidden">
           <div className="flex items-center justify-between gap-3">
             <p className="font-display text-2xl leading-none tracking-tight">Cifra</p>
             <div className="flex items-center gap-1">
@@ -106,12 +107,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="mt-3">
             <BookSwitcher />
           </div>
-        </header>
+        </header> : null}
 
-        <div className="md:pl-56">
+        <div className={chrome ? "md:pl-56" : ""}>
+          {status === "ready" && !onboarded ? (
+            <Onboarding />
+          ) : (
           <div className="cifra-main mx-auto min-h-dvh w-full max-w-5xl px-4 pt-4 md:px-8 md:pt-8 md:pb-12">
             {status === "ready" ? (
-              onboarded ? children : <Onboarding />
+              children
             ) : status === "error" ? (
               <div className="grid min-h-[50vh] place-items-center">
                 <div className="max-w-sm text-center">
@@ -134,9 +138,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </div>
             )}
           </div>
+          )}
         </div>
 
-        <nav className="cifra-tabbar fixed inset-x-0 bottom-0 z-40 border-t border-border bg-bg/95 px-2 pt-1 backdrop-blur-sm md:hidden">
+        {chrome ? <nav className="cifra-tabbar fixed inset-x-0 bottom-0 z-40 border-t border-border bg-bg/95 px-2 pt-1 backdrop-blur-sm md:hidden">
           <div className="grid grid-cols-4">
             {NAV.map((item) => {
               const active = pathname === item.to;
@@ -156,11 +161,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               );
             })}
           </div>
-        </nav>
+        </nav> : null}
 
         <QuickAdd />
         <ShortcutListener />
-        <QuotesTicker />
+        {chrome ? <QuotesTicker /> : null}
         <Toaster theme="dark" position="top-center" />
       </div>
     </TooltipProvider>

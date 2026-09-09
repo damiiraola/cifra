@@ -63,20 +63,11 @@
   }
 
   .cifra-tabbar {
-    padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+    padding-bottom: max(0.55rem, env(safe-area-inset-bottom, 0px));
   }
 
   .cifra-main {
-    padding-bottom: 6rem;
-  }
-
-  @media (display-mode: browser) and (max-width: 767px) {
-    .cifra-tabbar {
-      padding-bottom: calc(2.75rem + env(safe-area-inset-bottom, 0px));
-    }
-    .cifra-main {
-      padding-bottom: calc(8rem + env(safe-area-inset-bottom, 0px));
-    }
+    padding-bottom: 5.5rem;
   }
 
   button:not(:disabled),
