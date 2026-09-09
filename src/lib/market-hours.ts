@@ -16,3 +16,12 @@ export function quotesAreStale(quotesAt: string | null, at = Date.now()): boolea
   if (!Number.isFinite(ts)) return true;
   return at - ts >= QUOTE_INTERVAL_MS;
 }
+
+export function argentinaDay(at = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(at);
+}

@@ -595,3 +595,49 @@ export const removeRecurring = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const BACKUP_KEEP_DAYS = 30;
+
+export const saveDailyBackup = createServerFn({ method: "POST" })
+  .validator((input: { day: string; payloadJson: string }) => {
+    if (!DAY_RE.test(input?.day ?? "")) throw new Error("Día inválido");
+    if (!input?.payloadJson || input.payloadJson.length > 2_000_000) throw new Error("Respaldo inválido");
+    JSON.parse(input.payloadJson);
+    return { day: input.day, payloadJson: input.payloadJson };
+  })
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    await sql`
+      insert into ledger_backups (user_id, day, payload)
+      values (${context.userId}, ${data.day}::date, ${data.payloadJson}::jsonb)
+      on conflict (user_id, day) do update set
+        payload = excluded.payload,
+        created_at = now()
+    `;
+    await sql`
+      delete from ledger_backups
+      where user_id = ${context.userId}
+        and day < (${data.day}::date - ${BACKUP_KEEP_DAYS}::int)
+    `;
+    return { ok: true as const, day: data.day };
+  });
+
+export const loadLatestBackup = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const sql = await getSql();
+    const rows = await sql<{ day: string; payload: string; created_at: string }>`
+      select day::text as day, payload::text as payload, created_at::text as created_at
+      from ledger_backups
+      where user_id = ${context.userId}
+      order by day desc
+      limit 1
+    `;
+    if (!rows[0]) return { day: "", at: "", payloadJson: "" };
+    return {
+      day: rows[0].day,
+      at: rows[0].created_at,
+      payloadJson: rows[0].payload,
+    };
+  });

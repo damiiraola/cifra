@@ -6,7 +6,7 @@ import { moneyARS, parseAmount } from "@/lib/format";
 import { formatRate, USD_SOURCES } from "@/lib/fx";
 import { CatIcon } from "@/lib/icons";
 import { isArgentineWeekday } from "@/lib/market-hours";
-import { downloadLocalVault, vaultHint } from "@/lib/local-vault";
+import { autoBackupHint, downloadLocalVault } from "@/lib/local-vault";
 import { useAllCategories, useBookAccounts, useBookTxs, useLedger } from "@/lib/store";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { UserButton } from "@/lib/auth/gates";
@@ -71,7 +71,7 @@ function Ajustes() {
   const [newKind, setNewKind] = useState<CategoryKind>("expense");
   const [confirmWipe, setConfirmWipe] = useState(false);
   const live = isArgentineWeekday();
-  const hint = vaultHint(user?.primaryEmail);
+  const auto = autoBackupHint(user?.primaryEmail);
 
   const gastos = categories.filter((c) => c.kind === "expense");
   const ingresos = categories.filter((c) => c.kind === "income");
@@ -243,10 +243,8 @@ function Ajustes() {
       <section className="rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
         <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Datos</p>
         <p className="mt-1 text-xs text-subtle">
-          Respaldo en este teléfono, atado a tu mail. Si se cae Neon, Cifra lo recupera de acá.
-          {hint
-            ? ` Último: ${new Date(hint.at).toLocaleString("es-AR", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })} · ${hint.cajas} caja${hint.cajas === 1 ? "" : "s"} · ${hint.txs} mov.`
-            : " Todavía no hay copia local."}
+          Se respalda solo, todos los días, en tu cuenta. No tenés que tocar nada. Quedan 30 días.
+          {auto ? ` Último automático: ${auto.day.slice(8, 10)}/${auto.day.slice(5, 7)}.` : " Hoy se copia al abrir el libro."}
         </p>
         <div className="mt-4 grid gap-2 sm:max-w-sm">
           <Button variant="secondary" onClick={() => exportCsv(transactions)}>

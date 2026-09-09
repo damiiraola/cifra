@@ -4,11 +4,15 @@ import { useShallow } from "zustand/react/shallow";
 import { toast } from "sonner";
 import {
   applyOpenings,
+  asVault,
+  buildLocalVault,
+  markAutoBackup,
   readLocalVault,
   remapVaultRecurrings,
   remapVaultTxs,
   writeLocalVault,
 } from "./local-vault";
+import { argentinaDay } from "./market-hours";
 import { DEFAULT_BUDGETS, DEFAULT_GLOBAL_BUDGET, BUILTIN_IDS, mergedCategories, nextCustomStyle } from "./categories";
 import {
   loadLedger,
@@ -18,6 +22,8 @@ import {
   replaceTransactions,
   saveAccounts,
   saveRecurring,
+  loadLatestBackup,
+  saveDailyBackup,
   saveSettings,
   saveTransaction,
 } from "./ledger-api";
@@ -104,9 +110,9 @@ function persistFail(err: unknown) {
   toast.error("No pude guardar en tu libro", { description: desc });
 }
 
-function persistLocal(get: () => LedgerState) {
+function vaultInput(get: () => LedgerState) {
   const s = get();
-  writeLocalVault({
+  return {
     email: s.ownerEmail,
     books: s.books,
     accounts: s.accounts,
@@ -117,7 +123,40 @@ function persistLocal(get: () => LedgerState) {
     categoryNames: s.categoryNames,
     hiddenCategoryIds: s.hiddenCategoryIds,
     customCategories: s.customCategories,
-  });
+  };
+}
+
+function persistLocal(get: () => LedgerState) {
+  writeLocalVault(vaultInput(get));
+  queueDailyBackup(get);
+}
+
+let backupTimer: number | null = null;
+let backupBusy = false;
+
+function queueDailyBackup(get: () => LedgerState) {
+  if (typeof window === "undefined") return;
+  if (backupTimer) window.clearTimeout(backupTimer);
+  backupTimer = window.setTimeout(() => {
+    backupTimer = null;
+    void pushDailyBackup(get);
+  }, 1200);
+}
+
+async function pushDailyBackup(get: () => LedgerState) {
+  if (backupBusy) return;
+  const payload = buildLocalVault(vaultInput(get));
+  if (!payload) return;
+  backupBusy = true;
+  try {
+    const day = argentinaDay();
+    await saveDailyBackup({ data: { day, payloadJson: JSON.stringify(payload) } });
+    markAutoBackup(payload.email, day);
+  } catch {
+    /* local vault already holds it */
+  } finally {
+    backupBusy = false;
+  }
 }
 
 function readLocalSnapshot(): {
@@ -188,9 +227,19 @@ function fillTx(get: () => LedgerState, tx: Omit<Transaction, "id" | "createdAt"
 }
 
 
-function restoreVault(get: () => LedgerState, set: (p: Partial<LedgerState>) => void) {
+async function restoreVault(get: () => LedgerState, set: (p: Partial<LedgerState>) => void) {
   const state = get();
-  const vault = readLocalVault(state.ownerEmail);
+  let vault = readLocalVault(state.ownerEmail);
+  const localEmpty = !vault || (!vault.openings.length && !vault.transactions.length && !vault.recurrings.length);
+  if (localEmpty) {
+    try {
+      const remote = await loadLatestBackup();
+      const parsed = asVault(remote?.payloadJson ? JSON.parse(remote.payloadJson) : null);
+      if (parsed) vault = parsed;
+    } catch {
+      /* ignore */
+    }
+  }
   if (!vault) {
     persistLocal(get);
     return;
@@ -293,7 +342,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
             });
             pushSettings(get);
             clearLocalSnapshot();
-            restoreVault(get, set);
+            await restoreVault(get, set);
             void get().refreshQuotes();
             const posted = get().postDueRecurrings();
             if (posted > 0) toast.success(posted === 1 ? "Anoté 1 fijo de este mes" : `Anoté ${posted} fijos de este mes`);
@@ -319,7 +368,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
           usdtRate: remote.usdtRate,
           usdSource: remote.usdSource,
         });
-        restoreVault(get, set);
+        await restoreVault(get, set);
         void get().refreshQuotes();
         const posted = get().postDueRecurrings();
         if (posted > 0) toast.success(posted === 1 ? "Anoté 1 fijo de este mes" : `Anoté ${posted} fijos de este mes`);

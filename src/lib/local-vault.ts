@@ -48,7 +48,7 @@ function accountName(accounts: Account[], id: string) {
   return accounts.find((a) => a.id === id)?.name ?? "";
 }
 
-export function writeLocalVault(input: {
+export function buildLocalVault(input: {
   email: string | null | undefined;
   books: Book[];
   accounts: Account[];
@@ -59,10 +59,10 @@ export function writeLocalVault(input: {
   categoryNames: Record<string, string>;
   hiddenCategoryIds: string[];
   customCategories: Category[];
-}) {
+}): LocalVault | null {
   const email = mailOf(input.email);
-  if (typeof window === "undefined" || !email) return;
-  const vault: LocalVault = {
+  if (!email) return null;
+  return {
     v: 1,
     email,
     at: Date.now(),
@@ -91,11 +91,61 @@ export function writeLocalVault(input: {
     hiddenCategoryIds: input.hiddenCategoryIds,
     customCategories: input.customCategories,
   };
+}
+
+export function writeLocalVault(input: Parameters<typeof buildLocalVault>[0]) {
+  const vault = buildLocalVault(input);
+  if (typeof window === "undefined" || !vault) return;
   try {
     localStorage.setItem(KEY, JSON.stringify(vault));
   } catch {
     /* quota */
   }
+}
+
+const AUTO_KEY = "cifra.auto-backup";
+
+export function markAutoBackup(email: string | null | undefined, day: string) {
+  const mail = mailOf(email);
+  if (typeof window === "undefined" || !mail) return;
+  try {
+    localStorage.setItem(AUTO_KEY, JSON.stringify({ email: mail, day, at: Date.now() }));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function autoBackupHint(email: string | null | undefined): { day: string; at: number } | null {
+  const mail = mailOf(email);
+  if (typeof window === "undefined" || !mail) return null;
+  try {
+    const raw = localStorage.getItem(AUTO_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { email?: string; day?: string; at?: number };
+    if (parsed.email !== mail || !parsed.day) return null;
+    return { day: parsed.day, at: Number(parsed.at) || 0 };
+  } catch {
+    return null;
+  }
+}
+
+export function asVault(raw: unknown): LocalVault | null {
+  if (!raw || typeof raw !== "object") return null;
+  const p = raw as Partial<LocalVault>;
+  if (p.v !== 1) return null;
+  return {
+    v: 1,
+    email: String(p.email ?? ""),
+    at: Number(p.at) || Date.now(),
+    openings: Array.isArray(p.openings) ? p.openings : [],
+    transactions: Array.isArray(p.transactions) ? p.transactions : [],
+    recurrings: Array.isArray(p.recurrings) ? p.recurrings : [],
+    budgets: p.budgets && typeof p.budgets === "object" ? p.budgets : {},
+    globalBudget: Number(p.globalBudget) || 0,
+    categoryNames: p.categoryNames && typeof p.categoryNames === "object" ? p.categoryNames : {},
+    hiddenCategoryIds: Array.isArray(p.hiddenCategoryIds) ? p.hiddenCategoryIds : [],
+    customCategories: Array.isArray(p.customCategories) ? p.customCategories : [],
+  };
 }
 
 export function readLocalVault(email: string | null | undefined): LocalVault | null {
