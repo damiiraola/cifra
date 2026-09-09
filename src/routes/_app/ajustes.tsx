@@ -90,6 +90,7 @@ function Ajustes() {
           <div>
             <p className="text-sm">{user?.displayName || "Cifra"}</p>
             <p className="text-xs text-muted">{user?.primaryEmail}</p>
+            <p className="mt-1 text-xs text-subtle">El libro está atado a este mail. Otro mail = otro libro vacío.</p>
           </div>
           <UserButton />
         </div>

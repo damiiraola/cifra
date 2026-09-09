@@ -48,8 +48,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!userId) return;
-    void hydrate();
-  }, [userId, hydrate]);
+    void hydrate({ id: userId, email: user?.primaryEmail });
+  }, [userId, user?.primaryEmail, hydrate]);
 
   return (
     <TooltipProvider delayDuration={250}>

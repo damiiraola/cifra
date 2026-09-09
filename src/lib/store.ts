@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import { toast } from "sonner";
+import { applyCajaBackup, readCajaBackup, writeCajaBackup } from "./caja-backup";
 import { DEFAULT_BUDGETS, DEFAULT_GLOBAL_BUDGET, BUILTIN_IDS, mergedCategories, nextCustomStyle } from "./categories";
 import {
   loadLedger,
@@ -36,6 +37,8 @@ type Status = "idle" | "loading" | "ready" | "error";
 
 type LedgerState = {
   status: Status;
+  ownerId: string;
+  ownerEmail: string;
   transactions: Transaction[];
   books: Book[];
   accounts: Account[];
@@ -59,7 +62,7 @@ type LedgerState = {
   editingId: string | null;
   draft: Draft;
   chat: ChatMessage[];
-  hydrate: () => Promise<void>;
+  hydrate: (identity?: { id: string; email?: string | null }) => Promise<void>;
   resetClient: () => void;
   refreshQuotes: (quiet?: boolean) => Promise<void>;
   setUsdSource: (source: UsdSource) => void;
@@ -91,8 +94,8 @@ type LedgerState = {
 
 function persistFail(err: unknown) {
   const msg = err instanceof Error ? err.message : "No pude guardar";
-  if (msg === "Unauthorized") return;
-  toast.error("No pude guardar en tu libro", { description: msg });
+  const desc = msg === "Unauthorized" ? "Se cayó la sesión. Entrá de nuevo o el libro no se guarda." : msg;
+  toast.error("No pude guardar en tu libro", { description: desc });
 }
 
 function readLocalSnapshot(): {
@@ -161,8 +164,24 @@ function fillTx(get: () => LedgerState, tx: Omit<Transaction, "id" | "createdAt"
   };
 }
 
+
+function restoreOpenings(get: () => LedgerState, set: (p: Partial<LedgerState>) => void) {
+  const { ownerEmail, books, accounts } = get();
+  const restored = applyCajaBackup(books, accounts, readCajaBackup(ownerEmail));
+  if (!restored) {
+    writeCajaBackup(ownerEmail, books, accounts);
+    return;
+  }
+  set({ accounts: restored });
+  void saveAccounts({ data: { accounts: restored.map((a) => ({ id: a.id, opening: a.opening })) } }).catch(persistFail);
+  writeCajaBackup(ownerEmail, books, restored);
+  toast.success("Restauré los saldos iniciales que quedaron en este teléfono");
+}
+
 export const useLedger = create<LedgerState>()((set, get) => ({
   status: "idle",
+  ownerId: "",
+  ownerEmail: "",
   transactions: [],
   books: [],
   accounts: [],
@@ -186,10 +205,12 @@ export const useLedger = create<LedgerState>()((set, get) => ({
   editingId: null,
   draft: {},
   chat: [],
-  hydrate: () => {
-    if (get().status === "ready") return Promise.resolve();
+  hydrate: (identity) => {
+    const ownerId = identity?.id ?? "";
+    const ownerEmail = identity?.email ?? "";
+    if (get().status === "ready" && get().ownerId && get().ownerId === ownerId) return Promise.resolve();
     if (hydrateLock) return hydrateLock;
-    set({ status: "loading" });
+    set({ status: "loading", ownerId, ownerEmail });
     hydrateLock = (async () => {
       try {
         const remote = await Promise.race([
@@ -233,6 +254,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
             });
             pushSettings(get);
             clearLocalSnapshot();
+            restoreOpenings(get, set);
             void get().refreshQuotes();
             const posted = get().postDueRecurrings();
             if (posted > 0) toast.success(posted === 1 ? "Anoté 1 fijo de este mes" : `Anoté ${posted} fijos de este mes`);
@@ -258,6 +280,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
           usdtRate: remote.usdtRate,
           usdSource: remote.usdSource,
         });
+        restoreOpenings(get, set);
         void get().refreshQuotes();
         const posted = get().postDueRecurrings();
         if (posted > 0) toast.success(posted === 1 ? "Anoté 1 fijo de este mes" : `Anoté ${posted} fijos de este mes`);
@@ -274,6 +297,8 @@ export const useLedger = create<LedgerState>()((set, get) => ({
     hydrateLock = null;
     set({
       status: "idle",
+      ownerId: "",
+      ownerEmail: "",
       transactions: [],
       books: [],
       accounts: [],
@@ -404,9 +429,9 @@ export const useLedger = create<LedgerState>()((set, get) => ({
     pushSettings(get);
   },
   setAccountOpening: (id, opening) => {
-    set({
-      accounts: get().accounts.map((a) => (a.id === id ? { ...a, opening } : a)),
-    });
+    const accounts = get().accounts.map((a) => (a.id === id ? { ...a, opening } : a));
+    set({ accounts });
+    writeCajaBackup(get().ownerEmail, get().books, accounts);
     void saveAccounts({ data: { accounts: [{ id, opening }] } }).catch(persistFail);
   },
   completeOnboarding: ({ globalBudget, openings }) => {
@@ -415,6 +440,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
       return hit ? { ...a, opening: hit.opening } : a;
     });
     set({ accounts, globalBudget, onboarded: true });
+    writeCajaBackup(get().ownerEmail, get().books, accounts);
     void saveAccounts({ data: { accounts: openings } }).catch(persistFail);
     pushSettings(get);
   },
