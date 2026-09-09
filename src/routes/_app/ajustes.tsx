@@ -72,6 +72,7 @@ function Ajustes() {
   const [confirmWipe, setConfirmWipe] = useState(false);
   const live = isArgentineWeekday();
   const auto = autoBackupHint(user?.primaryEmail);
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://cifra-prpfe-ye.vercel.app";
 
   const gastos = categories.filter((c) => c.kind === "expense");
   const ingresos = categories.filter((c) => c.kind === "income");
@@ -238,6 +239,51 @@ function Ajustes() {
           </select>
           <Button type="submit">Agregar</Button>
         </form>
+      </section>
+
+      <section className="rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
+        <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Atajos de iPhone</p>
+        <p className="mt-1 text-xs text-subtle">
+          Apple Atajos abre Cifra con un link. Tenés que estar logueado. La sesión de Safari vale.
+        </p>
+        <div className="mt-4 grid gap-2 sm:max-w-sm">
+          <Button
+            variant="secondary"
+            onClick={() => {
+              void navigator.clipboard.writeText(`${origin}/?cargar=1`);
+              toast.success("Copié el link de cargar");
+            }}
+          >
+            Copiar link: anotar gasto
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              void navigator.clipboard.writeText(`${origin}/?cargar=1&tipo=gasto&guardar=1&monto=`);
+              toast.success("Copié el link con monto");
+            }}
+          >
+            Copiar link: guardar directo
+          </Button>
+        </div>
+        <ol className="mt-4 list-decimal space-y-2 pl-4 text-sm text-muted">
+          <li>
+            Abrí <span className="text-fg">Atajos</span> → + → Agregar acción → <span className="text-fg">Abrir URL</span>.
+            Pegá el primer link. Nombralo “Cifra”.
+          </li>
+          <li>
+            En Atajos, tap del atajo → Automatización → <span className="text-fg">Hora del día</span> → todos los días 21:30.
+            Así se abre y corre el respaldo.
+          </li>
+          <li>
+            Otro atajo “Anotar gasto”: Pedir entrada (Número, “¿Cuánto?”) → Abrir URL
+            <span className="text-fg"> {origin}/?tipo=gasto&guardar=1&monto=</span>
+            y concatená la respuesta. Agregar a Siri: “anotar gasto”.
+          </li>
+          <li>
+            Opcional: agregá <span className="text-fg">&libro=negocio&caja=usdt&nota=</span> y otra pregunta para la nota.
+          </li>
+        </ol>
       </section>
 
       <section className="rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">

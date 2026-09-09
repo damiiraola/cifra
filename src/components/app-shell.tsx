@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QuickAdd } from "@/components/quick-add";
+import { ShortcutListener } from "@/components/shortcut-listener";
 import { QuotesTicker } from "@/components/quotes-ticker";
 import { Onboarding } from "@/components/onboarding";
 import { BookSwitcher } from "@/components/book-switcher";
@@ -158,6 +159,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
 
         <QuickAdd />
+        <ShortcutListener />
         <QuotesTicker />
         <Toaster theme="dark" position="top-center" />
       </div>
