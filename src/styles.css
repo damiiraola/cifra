@@ -50,11 +50,33 @@
     color: var(--color-fg);
   }
 
+  html,
+  body {
+    overflow-x: hidden;
+  }
+
   body {
     min-height: 100dvh;
     background: var(--color-bg);
     color: var(--color-fg);
     font-family: var(--font-sans);
+  }
+
+  .cifra-tabbar {
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+  }
+
+  .cifra-main {
+    padding-bottom: 6rem;
+  }
+
+  @media (display-mode: browser) and (max-width: 767px) {
+    .cifra-tabbar {
+      padding-bottom: calc(2.75rem + env(safe-area-inset-bottom, 0px));
+    }
+    .cifra-main {
+      padding-bottom: calc(8rem + env(safe-area-inset-bottom, 0px));
+    }
   }
 
   button:not(:disabled),

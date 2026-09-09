@@ -45,10 +45,10 @@ function Home() {
 
   return (
     <div className="grid gap-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
         <div>
           <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Este mes</p>
-          <h1 className="font-display text-4xl tracking-tight">Resumen</h1>
+          <h1 className="font-display text-3xl tracking-tight sm:text-4xl">Resumen</h1>
         </div>
         <MonthSwitcher value={viewMonth} onChange={setViewMonth} />
       </div>
@@ -58,7 +58,7 @@ function Home() {
           Te pasaste el presupuesto por {moneyARS(stats.spent - globalBudget)}.
         </p>
       ) : null}
-      {!loggedToday && viewMonth === today.slice(0, 7) ? (
+      {transactions.length > 0 && !loggedToday && viewMonth === today.slice(0, 7) ? (
         <button
           type="button"
           onClick={() => openQuick()}
@@ -90,8 +90,8 @@ function Home() {
             Cargar un movimiento
           </button>
         </section>
-      ) : null}
-
+      ) : (
+      <>
       <HeroSpend
         label="Gastado"
         amount={moneyARS(stats.spent)}
@@ -195,6 +195,8 @@ function Home() {
           ) : null}
         </div>
       </section>
+      </>
+      )}
     </div>
   );
 }

@@ -31,13 +31,13 @@ export function WalletStrip() {
           Mover
         </button>
       </div>
-      <div className="flex gap-2 overflow-x-auto pb-1">
+      <div className="grid grid-cols-2 gap-2">
         {rows.map(({ a, bal }) => (
           <button
             key={a.id}
             type="button"
             onClick={() => openQuick({ type: "expense", accountId: a.id, currency: a.currency })}
-            className="min-w-[7.5rem] shrink-0 rounded-2xl bg-elevated px-3 py-2.5 text-left"
+            className="rounded-2xl bg-elevated px-3 py-2.5 text-left"
           >
             <span className="block truncate text-[11px] text-muted">{a.name}</span>
             <span className="mt-0.5 block text-sm font-medium tabular-nums text-fg">{money(bal, a.currency, true)}</span>

@@ -21,7 +21,7 @@ export function MonthSwitcher({
       >
         <ChevronLeft />
       </Button>
-      <p className="min-w-36 text-center text-sm font-medium capitalize">{monthLabel(value)}</p>
+      <p className="min-w-28 text-center text-sm font-medium capitalize sm:min-w-36">{monthLabel(value)}</p>
       <Button
         variant="ghost"
         size="icon-sm"

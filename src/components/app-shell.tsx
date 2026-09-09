@@ -90,7 +90,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </aside>
 
-        <header className="sticky top-0 z-20 border-b border-border bg-bg/90 px-4 py-3 backdrop-blur-sm md:hidden">
+        <header className="sticky top-0 z-20 border-b border-border bg-bg/90 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-sm md:hidden">
           <div className="flex items-center justify-between gap-3">
             <p className="font-display text-2xl leading-none tracking-tight">Cifra</p>
             <div className="flex items-center gap-1">
@@ -108,7 +108,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </header>
 
         <div className="md:pl-56">
-          <div className="mx-auto min-h-dvh w-full max-w-5xl px-4 pt-4 pb-28 md:px-8 md:pt-8 md:pb-12">
+          <div className="cifra-main mx-auto min-h-dvh w-full max-w-5xl px-4 pt-4 md:px-8 md:pt-8 md:pb-12">
             {status === "ready" ? (
               onboarded ? children : <Onboarding />
             ) : status === "error" ? (
@@ -135,7 +135,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
 
-        <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-bg/95 px-2 pt-1 pb-[max(0.4rem,env(safe-area-inset-bottom))] backdrop-blur-sm md:hidden">
+        <nav className="cifra-tabbar fixed inset-x-0 bottom-0 z-40 border-t border-border bg-bg/95 px-2 pt-1 backdrop-blur-sm md:hidden">
           <div className="grid grid-cols-4">
             {NAV.map((item) => {
               const active = pathname === item.to;
