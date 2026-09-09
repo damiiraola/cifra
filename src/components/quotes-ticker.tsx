@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { isArgentineWeekday, quotesAreStale, QUOTE_INTERVAL_MS } from "@/lib/market-hours";
+import { QUOTE_TICK_MS, shouldRefreshQuotes } from "@/lib/market-hours";
 import { useLedger } from "@/lib/store";
 
 export function QuotesTicker() {
@@ -8,16 +8,18 @@ export function QuotesTicker() {
   useEffect(() => {
     const run = () => {
       if (typeof document !== "undefined" && document.hidden) return;
-      if (!isArgentineWeekday()) return;
-      if (!quotesAreStale(useLedger.getState().quotesAt)) return;
+      if (!shouldRefreshQuotes(useLedger.getState().quotesAt)) return;
       void refreshQuotes(true);
     };
 
-    const id = window.setInterval(run, QUOTE_INTERVAL_MS);
+    run();
+    const id = window.setInterval(run, QUOTE_TICK_MS);
     document.addEventListener("visibilitychange", run);
+    window.addEventListener("focus", run);
     return () => {
       window.clearInterval(id);
       document.removeEventListener("visibilitychange", run);
+      window.removeEventListener("focus", run);
     };
   }, [refreshQuotes]);
 

@@ -1,11 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { Eye, EyeOff, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { BUILTIN_IDS } from "@/lib/categories";
 import { moneyARS, parseAmount } from "@/lib/format";
 import { formatRate, USD_SOURCES } from "@/lib/fx";
 import { CatIcon } from "@/lib/icons";
-import { isArgentineWeekday } from "@/lib/market-hours";
+import { isArgentineWeekday, quotesAgeLabel } from "@/lib/market-hours";
 import { autoBackupHint, downloadLocalVault, shareVaultToIcloud } from "@/lib/local-vault";
 import { useAllCategories, useBookAccounts, useBookTxs, useLedger } from "@/lib/store";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
@@ -14,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import type { CategoryKind, Transaction } from "@/lib/types";
+import type { Category, CategoryKind, Transaction } from "@/lib/types";
 
 export const Route = createFileRoute("/_app/ajustes")({
   component: Ajustes,
@@ -35,6 +36,8 @@ function exportCsv(txs: Transaction[]) {
   a.click();
   URL.revokeObjectURL(url);
 }
+
+const USD_PICK = new Set(["blue", "bolsa", "cripto", "oficial"]);
 
 function Ajustes() {
   const user = useCurrentUser();
@@ -70,9 +73,15 @@ function Ajustes() {
   const [newName, setNewName] = useState("");
   const [newKind, setNewKind] = useState<CategoryKind>("expense");
   const [confirmWipe, setConfirmWipe] = useState(false);
+  const [, setTick] = useState(0);
   const live = isArgentineWeekday();
   const auto = autoBackupHint(user?.primaryEmail);
-  const origin = typeof window !== "undefined" ? window.location.origin : "https://cifra-prpfe-ye.vercel.app";
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+
+  useEffect(() => {
+    const id = window.setInterval(() => setTick((n) => n + 1), 30_000);
+    return () => window.clearInterval(id);
+  }, []);
 
   const gastos = categories.filter((c) => c.kind === "expense");
   const ingresos = categories.filter((c) => c.kind === "income");
@@ -105,21 +114,21 @@ function Ajustes() {
             <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Cotizaciones</p>
             <p className="mt-1 text-xs text-subtle">
               {live
-                ? "Hábil: se actualizan solas cada 10 min."
-                : "Fin de semana: queda la última. Actualizá a mano si hace falta."}
+                ? `Hábil: se actualizan solas cada 10 min · ${quotesAgeLabel(quotesAt)}`
+                : `Fin de semana: queda la última · ${quotesAgeLabel(quotesAt)}`}
             </p>
           </div>
           <button
             type="button"
             onClick={() => void refreshQuotes()}
             disabled={quotesBusy}
-            className="text-xs text-muted hover:text-fg disabled:opacity-40"
+            className="h-11 px-2 text-xs text-muted hover:text-fg disabled:opacity-40"
           >
             {quotesBusy ? "Actualizando…" : "Actualizar"}
           </button>
         </div>
         <div className="mt-4 grid gap-1.5">
-          {USD_SOURCES.filter((s) => ["blue", "bolsa", "cripto", "oficial"].includes(s.id)).map((s) => {
+          {USD_SOURCES.filter((s) => USD_PICK.has(s.id)).map((s) => {
             const q = quotes.find((x) => x.casa === s.id);
             const venta = q?.venta ?? (s.id === "cripto" ? usdtRate : s.id === usdSource ? usdRate : null);
             const on = usdSource === s.id;
@@ -142,12 +151,7 @@ function Ajustes() {
             );
           })}
         </div>
-        <p className="mt-3 text-xs tabular-nums text-subtle">
-          USDT ${formatRate(usdtRate)}
-          {quotesAt
-            ? ` · ${new Date(quotesAt).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}`
-            : ""}
-        </p>
+        <p className="mt-3 text-xs tabular-nums text-subtle">USDT ${formatRate(usdtRate)}</p>
       </section>
 
       <section className="rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
@@ -217,9 +221,10 @@ function Ajustes() {
           className="mt-6 grid gap-2 sm:grid-cols-[1fr_auto_auto]"
           onSubmit={(e) => {
             e.preventDefault();
-            addCustomCategory({ name: newName, kind: newKind });
-            setNewName("");
-            toast.success("Categoría lista");
+            if (addCustomCategory({ name: newName, kind: newKind })) {
+              setNewName("");
+              toast.success("Categoría lista");
+            }
           }}
         >
           <Input
@@ -359,7 +364,7 @@ function CatGroup({
   onRemove,
 }: {
   title: string;
-  rows: { id: string; name: string; token: string; icon: string }[];
+  rows: Category[];
   hidden: Set<string>;
   budgets: Record<string, number>;
   hideBudget?: boolean;
@@ -368,10 +373,22 @@ function CatGroup({
   onBudget: (id: string, amount: number) => void;
   onRemove: (id: string) => void;
 }) {
+  const visibleCount = rows.filter((c) => !hidden.has(c.id)).length;
   return (
     <div className="mt-6">
-      <p className="mb-2 text-sm font-medium">{title}</p>
-      <div className="grid gap-2">
+      <div className="mb-2 flex items-baseline justify-between gap-3">
+        <p className="text-sm font-medium">{title}</p>
+        <p className="text-xs text-subtle">
+          {visibleCount} visible{visibleCount === 1 ? "" : "s"}
+          {rows.length - visibleCount > 0 ? ` · ${rows.length - visibleCount} oculta${rows.length - visibleCount === 1 ? "" : "s"}` : ""}
+        </p>
+      </div>
+      <div className="hidden grid-cols-[1fr_7rem_auto] gap-2 px-3 text-[11px] tracking-wide text-subtle uppercase sm:grid">
+        <span>Categoría</span>
+        <span>{hideBudget ? "" : "Tope"}</span>
+        <span className="sr-only">Acciones</span>
+      </div>
+      <div className="mt-1 grid gap-2">
         {rows.map((c) => {
           const off = hidden.has(c.id);
           const custom = !BUILTIN_IDS.has(c.id);
@@ -385,13 +402,14 @@ function CatGroup({
             >
               <div className="flex items-center gap-2">
                 <span
-                  className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface"
+                  className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface"
                   style={{ color: `var(--color-${c.token})` }}
                 >
                   <CatIcon name={c.icon} className="size-3.5" />
                 </span>
                 <Input
                   defaultValue={c.name}
+                  aria-label={`Nombre de ${c.name}`}
                   onBlur={(e) => {
                     const n = e.target.value.trim();
                     if (n.length >= 2) onName(c.id, n);
@@ -405,6 +423,7 @@ function CatGroup({
                   inputMode="decimal"
                   defaultValue={budgets[c.id] ? String(budgets[c.id]) : ""}
                   placeholder="Tope"
+                  aria-label={`Tope de ${c.name}`}
                   onBlur={(e) => {
                     const n = parseAmount(e.target.value);
                     onBudget(c.id, n && n > 0 ? n : 0);
@@ -412,12 +431,27 @@ function CatGroup({
                 />
               )}
               <div className="flex gap-1">
-                <Button type="button" variant="ghost" size="sm" onClick={() => onHide(c.id, !off)}>
-                  {off ? "Mostrar" : "Ocultar"}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-11 min-w-11"
+                  aria-label={off ? `Mostrar ${c.name}` : `Ocultar ${c.name}`}
+                  onClick={() => onHide(c.id, !off)}
+                >
+                  {off ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  <span className="sm:hidden">{off ? "Oculta" : "Visible"}</span>
                 </Button>
                 {custom ? (
-                  <Button type="button" variant="ghost" size="sm" onClick={() => onRemove(c.id)}>
-                    Quitar
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-11 min-w-11"
+                    aria-label={`Quitar ${c.name}`}
+                    onClick={() => onRemove(c.id)}
+                  >
+                    <Trash2 className="size-4" />
                   </Button>
                 ) : null}
               </div>

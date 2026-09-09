@@ -90,7 +90,7 @@ type LedgerState = {
   setGlobalBudget: (amount: number) => void;
   setCategoryName: (id: string, name: string) => void;
   setCategoryHidden: (id: string, hidden: boolean) => void;
-  addCustomCategory: (input: { name: string; kind: CategoryKind }) => void;
+  addCustomCategory: (input: { name: string; kind: CategoryKind }) => boolean;
   removeCustomCategory: (id: string) => void;
   setAccountOpening: (id: string, opening: number) => void;
   completeOnboarding: (input: { globalBudget: number; openings: { id: string; opening: number }[] }) => void;
@@ -403,7 +403,9 @@ export const useLedger = create<LedgerState>()((set, get) => ({
     set({ quotesBusy: true });
     try {
       const { quotes } = await fetchQuotes();
-      const rates = applyQuotes(quotes, get().usdSource);
+      const prev = get();
+      const rates = applyQuotes(quotes, prev.usdSource);
+      const changed = rates.usd !== prev.usdRate || rates.usdt !== prev.usdtRate;
       set({
         quotes,
         quotesAt: new Date().toISOString(),
@@ -411,7 +413,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
         usdtRate: rates.usdt,
         quotesBusy: false,
       });
-      pushSettings(get);
+      if (changed) pushSettings(get);
     } catch {
       set({ quotesBusy: false });
       if (!quiet) toast.error("No pude actualizar las cotizaciones");
@@ -481,8 +483,16 @@ export const useLedger = create<LedgerState>()((set, get) => ({
   },
   addCustomCategory: ({ name, kind }) => {
     const trimmed = name.trim().slice(0, 40);
-    if (trimmed.length < 2) return;
+    if (trimmed.length < 2) return false;
     const custom = get().customCategories;
+    const names = get().categoryNames;
+    const taken = mergedCategories(custom, names).some(
+      (c) => c.name.toLowerCase() === trimmed.toLowerCase(),
+    );
+    if (taken) {
+      toast.error("Ya hay una categoría con ese nombre");
+      return false;
+    }
     const style = nextCustomStyle(custom.length, kind);
     const row: Category = {
       id: `c_${uid().replaceAll("-", "").slice(0, 12)}`,
@@ -493,6 +503,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
     };
     set({ customCategories: [...custom, row] });
     pushSettings(get);
+    return true;
   },
   removeCustomCategory: (id) => {
     if (BUILTIN_IDS.has(id)) {
@@ -502,6 +513,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
     const used = get().transactions.some((t) => t.categoryId === id) || get().recurrings.some((r) => r.categoryId === id);
     if (used) {
       get().setCategoryHidden(id, true);
+      toast.message("La oculté. Hay movimientos con esta categoría.");
       return;
     }
     set({

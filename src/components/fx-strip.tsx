@@ -1,9 +1,20 @@
+import { useEffect, useState } from "react";
 import { formatRate, USD_SOURCES } from "@/lib/fx";
+import { isArgentineWeekday, quotesAgeLabel } from "@/lib/market-hours";
 import { useLedger } from "@/lib/store";
 
 export function FxStrip() {
-  const { usdRate, usdtRate, usdSource, quotesBusy, refreshQuotes } = useLedger();
+  const { usdRate, usdtRate, usdSource, quotesBusy, quotesAt, refreshQuotes } = useLedger();
   const usdLabel = USD_SOURCES.find((s) => s.id === usdSource)?.label ?? "USD";
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    const id = window.setInterval(() => setTick((n) => n + 1), 30_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const live = isArgentineWeekday();
+  const age = quotesAgeLabel(quotesAt);
 
   return (
     <button
@@ -12,7 +23,11 @@ export function FxStrip() {
       className="flex w-full flex-wrap items-baseline justify-between gap-x-4 gap-y-1 rounded-2xl bg-surface px-4 py-3 text-left shadow-[0_0_0_1px_rgba(244,244,240,0.06)]"
     >
       <span className="text-xs text-muted">
-        {quotesBusy ? "Actualizando cotizaciones…" : "Cotizaciones en vivo"}
+        {quotesBusy
+          ? "Actualizando cotizaciones…"
+          : live
+            ? `Cotizaciones en vivo · ${age}`
+            : `Fin de semana · ${age}`}
       </span>
       <span className="text-sm tabular-nums text-fg">
         USD {usdLabel} ${formatRate(usdRate)}
