@@ -3,7 +3,7 @@ import { categoryRows, computeMonth } from "@/lib/analytics";
 import { moneyARS } from "@/lib/format";
 import { CatIcon } from "@/lib/icons";
 import { PAY_METHODS } from "@/lib/types";
-import { useLedger, useBookTxs } from "@/lib/store";
+import { useAllCategories, useLedger, useBookTxs } from "@/lib/store";
 import { CatDonut, WeekdayBars } from "@/components/charts";
 import { MonthSwitcher } from "@/components/month-switcher";
 import { Progress } from "@/components/ui/progress";
@@ -17,13 +17,14 @@ export const Route = createFileRoute("/_app/analitica")({
 function Analitica() {
   const { viewMonth, setViewMonth, usdRate, usdtRate, budgets, globalBudget } = useLedger();
   const transactions = useBookTxs();
+  const allCats = useAllCategories();
   const fx = { usd: usdRate, usdt: usdtRate };
   const stats = computeMonth(transactions, viewMonth, fx);
   const prev = computeMonth(transactions, prevYm(viewMonth), fx);
   const prevSlice = prev.byDay.slice(0, stats.elapsed);
   const prevMtdSpent = prevSlice.reduce((s, d) => s + d.spent, 0);
   const prevMtdEarned = prevSlice.reduce((s, d) => s + d.earned, 0);
-  const cats = categoryRows(stats.byCat, budgets);
+  const cats = categoryRows(stats.byCat, budgets, allCats);
   const donut = cats
     .filter((c) => c.spent > 0)
     .map((c) => ({

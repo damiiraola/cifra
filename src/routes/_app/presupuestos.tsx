@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { categoryRows, computeMonth } from "@/lib/analytics";
 import { moneyARS, parseAmount } from "@/lib/format";
 import { CatIcon } from "@/lib/icons";
-import { useLedger, useBookTxs } from "@/lib/store";
+import { useLedger, useBookTxs, useAllCategories } from "@/lib/store";
 import { MonthSwitcher } from "@/components/month-switcher";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
@@ -23,8 +23,9 @@ function Presupuestos() {
     setGlobalBudget,
   } = useLedger();
   const transactions = useBookTxs();
+  const allCats = useAllCategories();
   const stats = computeMonth(transactions, viewMonth, { usd: usdRate, usdt: usdtRate });
-  const cats = categoryRows(stats.byCat, budgets);
+  const cats = categoryRows(stats.byCat, budgets, allCats);
   const used = globalBudget ? (stats.spent / globalBudget) * 100 : 0;
 
   return (

@@ -1,12 +1,11 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { CATEGORIES } from "@/lib/categories";
 import { money, parseAmount } from "@/lib/format";
 import { FIJO_TEMPLATES, isDue, isPosted } from "@/lib/recurring";
 import { PAY_METHODS, type Currency, type PayMethod, type Recurring, type TxType } from "@/lib/types";
 import { cn, uid } from "@/lib/utils";
-import { useBookAccounts, useBookTxs, useLedger } from "@/lib/store";
+import { useAllCategories, useVisibleCategories, useBookAccounts, useBookTxs, useLedger } from "@/lib/store";
 import { MonthSwitcher } from "@/components/month-switcher";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,12 +16,12 @@ export const Route = createFileRoute("/_app/fijos")({
 });
 
 function Fijos() {
+  const allCats = useAllCategories();
   const {
     recurrings,
     activeBookId,
     viewMonth,
     setViewMonth,
-    categoryNames,
     upsertRecurring,
     deleteRecurring,
     postRecurring,
@@ -89,7 +88,7 @@ function Fijos() {
                 <span className="block text-xs text-muted">
                   Día {r.day}
                   {" · "}
-                  {categoryNames[r.categoryId] || CATEGORIES.find((c) => c.id === r.categoryId)?.name}
+                  {allCats.find((c) => c.id === r.categoryId)?.name}
                   {posted ? " · cargado" : due ? " · pendiente" : " · programado"}
                   {!r.active ? " · pausado" : ""}
                 </span>
@@ -202,10 +201,10 @@ function FijoEditor({
   const [accountId, setAccountId] = useState(value.accountId);
   const [method, setMethod] = useState<PayMethod>(value.method);
   const [active, setActive] = useState(value.active);
-  const names = useLedger((s) => s.categoryNames);
+  const visible = useVisibleCategories();
   const cats = useMemo(
-    () => CATEGORIES.filter((c) => c.kind === (type === "income" ? "income" : "expense")),
-    [type],
+    () => visible.filter((c) => c.kind === (type === "income" ? "income" : "expense")),
+    [type, visible],
   );
   const existing = Boolean(value.amount);
 
@@ -254,7 +253,7 @@ function FijoEditor({
           >
             {cats.map((c) => (
               <option key={c.id} value={c.id}>
-                {names[c.id] || c.name}
+                {c.name}
               </option>
             ))}
           </select>

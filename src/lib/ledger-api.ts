@@ -1,14 +1,14 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getSql } from "@/lib/db";
 import { authMiddleware } from "@/lib/auth/middleware";
-import { DEFAULT_BUDGETS, DEFAULT_GLOBAL_BUDGET } from "@/lib/categories";
+import { DEFAULT_BUDGETS, DEFAULT_GLOBAL_BUDGET, parseCustomCategories, parseHiddenIds } from "@/lib/categories";
 import {
   ACCOUNT_TEMPLATES,
   BOOK_SPECS,
   inferAccount,
 } from "@/lib/books";
 import { DEFAULT_USD_RATE, DEFAULT_USDT_RATE, DEFAULT_USD_SOURCE, isUsdSource, type UsdSource } from "@/lib/fx";
-import type { Account, Book, BookKind, Currency, PayMethod, Recurring, Transaction, TxType } from "@/lib/types";
+import type { Account, Book, BookKind, Category, Currency, PayMethod, Recurring, Transaction, TxType } from "@/lib/types";
 import { uid } from "@/lib/utils";
 
 export type LedgerSnapshot = {
@@ -23,6 +23,8 @@ export type LedgerSnapshot = {
   activeBookId: string;
   onboarded: boolean;
   categoryNames: Record<string, string>;
+  hiddenCategoryIds: string[];
+  customCategories: Category[];
   recurrings: Recurring[];
 };
 
@@ -129,7 +131,12 @@ async function ensureSettings(sql: Awaited<ReturnType<typeof getSql>>, userId: s
     active_book_id: string | null;
     onboarded: boolean | number | null;
     category_names: Record<string, string> | string | null;
-  }>`select budgets, global_budget, usd_rate, usdt_rate, usd_source, active_book_id, onboarded, category_names from ledger_settings where user_id = ${userId} limit 1`;
+    hidden_category_ids: unknown;
+    custom_categories: unknown;
+  }>`select budgets, global_budget, usd_rate, usdt_rate, usd_source, active_book_id, onboarded, category_names,
+             coalesce(hidden_category_ids, '[]'::jsonb) as hidden_category_ids,
+             coalesce(custom_categories, '[]'::jsonb) as custom_categories
+      from ledger_settings where user_id = ${userId} limit 1`;
   if (existing[0]) {
     const budgets =
       typeof existing[0].budgets === "string"
@@ -147,11 +154,13 @@ async function ensureSettings(sql: Awaited<ReturnType<typeof getSql>>, userId: s
       activeBookId: existing[0].active_book_id ?? "",
       onboarded: Boolean(existing[0].onboarded),
       categoryNames,
+      hiddenCategoryIds: parseHiddenIds(existing[0].hidden_category_ids),
+      customCategories: parseCustomCategories(existing[0].custom_categories),
     };
   }
   await sql`
-    insert into ledger_settings (user_id, budgets, global_budget, usd_rate, usdt_rate, usd_source, onboarded, category_names)
-    values (${userId}, ${JSON.stringify(DEFAULT_BUDGETS)}::jsonb, ${DEFAULT_GLOBAL_BUDGET}, ${DEFAULT_USD_RATE}, ${DEFAULT_USDT_RATE}, ${DEFAULT_USD_SOURCE}, false, '{}'::jsonb)
+    insert into ledger_settings (user_id, budgets, global_budget, usd_rate, usdt_rate, usd_source, onboarded, category_names, hidden_category_ids, custom_categories)
+    values (${userId}, ${JSON.stringify(DEFAULT_BUDGETS)}::jsonb, ${DEFAULT_GLOBAL_BUDGET}, ${DEFAULT_USD_RATE}, ${DEFAULT_USDT_RATE}, ${DEFAULT_USD_SOURCE}, false, '{}'::jsonb, '[]'::jsonb, '[]'::jsonb)
     on conflict (user_id) do nothing
   `;
   return {
@@ -163,6 +172,8 @@ async function ensureSettings(sql: Awaited<ReturnType<typeof getSql>>, userId: s
     activeBookId: "",
     onboarded: false,
     categoryNames: {} as Record<string, string>,
+    hiddenCategoryIds: [] as string[],
+    customCategories: [] as Category[],
   };
 }
 
@@ -432,6 +443,8 @@ export const saveSettings = createServerFn({ method: "POST" })
     activeBookId?: string;
     onboarded?: boolean;
     categoryNames?: Record<string, string>;
+    hiddenCategoryIds?: string[];
+    customCategories?: Category[];
   }) => {
     const globalBudget = Number(input.globalBudget);
     const usdRate = Number(input.usdRate);
@@ -458,14 +471,16 @@ export const saveSettings = createServerFn({ method: "POST" })
       activeBookId: String(input.activeBookId ?? ""),
       onboarded: Boolean(input.onboarded),
       categoryNames,
+      hiddenCategoryIds: parseHiddenIds(input.hiddenCategoryIds),
+      customCategories: parseCustomCategories(input.customCategories),
     };
   })
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
     const sql = await getSql();
     await sql`
-      insert into ledger_settings (user_id, budgets, global_budget, usd_rate, usdt_rate, usd_source, active_book_id, onboarded, category_names)
-      values (${context.userId}, ${JSON.stringify(data.budgets)}::jsonb, ${data.globalBudget}, ${data.usdRate}, ${data.usdtRate}, ${data.usdSource}, ${data.activeBookId}, ${data.onboarded}, ${JSON.stringify(data.categoryNames)}::jsonb)
+      insert into ledger_settings (user_id, budgets, global_budget, usd_rate, usdt_rate, usd_source, active_book_id, onboarded, category_names, hidden_category_ids, custom_categories)
+      values (${context.userId}, ${JSON.stringify(data.budgets)}::jsonb, ${data.globalBudget}, ${data.usdRate}, ${data.usdtRate}, ${data.usdSource}, ${data.activeBookId}, ${data.onboarded}, ${JSON.stringify(data.categoryNames)}::jsonb, ${JSON.stringify(data.hiddenCategoryIds)}::jsonb, ${JSON.stringify(data.customCategories)}::jsonb)
       on conflict (user_id) do update set
         budgets = excluded.budgets,
         global_budget = excluded.global_budget,
@@ -475,6 +490,8 @@ export const saveSettings = createServerFn({ method: "POST" })
         active_book_id = excluded.active_book_id,
         onboarded = excluded.onboarded,
         category_names = excluded.category_names,
+        hidden_category_ids = excluded.hidden_category_ids,
+        custom_categories = excluded.custom_categories,
         updated_at = now()
     `;
     return { ok: true as const };

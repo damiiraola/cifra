@@ -1,9 +1,8 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { CATEGORIES, CATEGORY_MAP } from "@/lib/categories";
 import { money } from "@/lib/format";
 import { toARS } from "@/lib/analytics";
-import { useLedger, useBookTxs } from "@/lib/store";
+import { useAllCategories, useLedger, useBookTxs } from "@/lib/store";
 import { Input } from "@/components/ui/input";
 import { TxRow } from "@/components/tx-row";
 
@@ -12,6 +11,7 @@ export const Route = createFileRoute("/_app/movimientos")({
 });
 
 function Movimientos() {
+  const allCats = useAllCategories();
   const { viewMonth, usdRate, usdtRate, openQuick } = useLedger();
   const transactions = useBookTxs();
   const [q, setQ] = useState("");
@@ -26,7 +26,7 @@ function Movimientos() {
       .filter((t) => (cat === "all" ? true : t.categoryId === cat))
       .filter((t) => {
         if (!query) return true;
-        const hay = `${t.merchant} ${t.note} ${CATEGORY_MAP[t.categoryId]?.name ?? ""}`.toLowerCase();
+        const hay = `${t.merchant} ${t.note} ${allCats.find((c) => c.id === t.categoryId)?.name ?? ""}`.toLowerCase();
         return hay.includes(query);
       })
       .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
@@ -67,7 +67,7 @@ function Movimientos() {
           className="h-11 rounded-lg bg-elevated px-3 text-sm text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)]"
         >
           <option value="all">Categoría</option>
-          {CATEGORIES.map((c) => (
+          {allCats.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
             </option>

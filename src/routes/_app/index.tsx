@@ -5,7 +5,7 @@ import { moneyARS } from "@/lib/format";
 import { CatIcon } from "@/lib/icons";
 import { logStreak } from "@/lib/books";
 import { isPosted } from "@/lib/recurring";
-import { useBookTxs, useLedger } from "@/lib/store";
+import { useAllCategories, useBookTxs, useLedger } from "@/lib/store";
 import { todayISO } from "@/lib/utils";
 import { DailyArea } from "@/components/charts";
 import { HeroSpend, Kpi } from "@/components/kpi";
@@ -23,6 +23,7 @@ function Home() {
   const { viewMonth, setViewMonth, usdRate, usdtRate, budgets, globalBudget, openQuick, recurrings, activeBookId } =
     useLedger();
   const transactions = useBookTxs();
+  const allCats = useAllCategories();
   const fx = { usd: usdRate, usdt: usdtRate };
   const stats = computeMonth(transactions, viewMonth, fx);
   const prev = computeMonth(transactions, shift(viewMonth), fx);
@@ -35,7 +36,7 @@ function Home() {
   const recent = [...stats.txs]
     .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt))
     .slice(0, 6);
-  const cats = categoryRows(stats.byCat, budgets).filter((c) => c.spent > 0).slice(0, 5);
+  const cats = categoryRows(stats.byCat, budgets, allCats).filter((c) => c.spent > 0).slice(0, 5);
   const budgetPct = globalBudget ? (stats.spent / globalBudget) * 100 : 0;
   const over = budgetPct > 100;
   const fijosPendientes = recurrings.filter(

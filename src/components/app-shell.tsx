@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   BarChart3,
@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QuickAdd } from "@/components/quick-add";
-import { SettingsDialog } from "@/components/settings-dialog";
+import { QuotesTicker } from "@/components/quotes-ticker";
 import { Onboarding } from "@/components/onboarding";
 import { BookSwitcher } from "@/components/book-switcher";
 import { Toaster } from "sonner";
@@ -34,6 +34,7 @@ const MORE = [
   { to: "/movimientos", label: "Movimientos", icon: List },
   { to: "/presupuestos", label: "Presupuestos", icon: Target },
   { to: "/fijos", label: "Fijos", icon: Repeat },
+  { to: "/ajustes", label: "Ajustes", icon: Settings },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -43,7 +44,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const hydrate = useLedger((s) => s.hydrate);
   const user = useCurrentUser();
   const userId = user?.id;
-  const [settings, setSettings] = useState(false);
   const onboarded = useLedger((s) => s.onboarded);
 
   useEffect(() => {
@@ -85,14 +85,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               );
             })}
           </nav>
-          <div className="space-y-3">
-            <div className="overflow-hidden px-1 [&_span]:truncate [&_button]:text-muted">
-              <UserButton />
-            </div>
-            <Button variant="ghost" className="w-full justify-start" onClick={() => setSettings(true)}>
-              <Settings className="size-4" />
-              Ajustes
-            </Button>
+          <div className="overflow-hidden px-1 [&_span]:truncate [&_button]:text-muted">
+            <UserButton />
           </div>
         </aside>
 
@@ -100,9 +94,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex items-center justify-between gap-3">
             <p className="font-display text-2xl leading-none tracking-tight">Cifra</p>
             <div className="flex items-center gap-1">
-              <Button variant="ghost" size="icon-sm" aria-label="Ajustes" onClick={() => setSettings(true)}>
+              <Link to="/ajustes" aria-label="Ajustes" className="grid size-9 place-items-center rounded-lg text-muted hover:bg-elevated hover:text-fg">
                 <Settings className="size-4" />
-              </Button>
+              </Link>
               <Button size="icon-sm" aria-label="Nuevo movimiento" onClick={() => openQuick()}>
                 <Plus className="size-4" />
               </Button>
@@ -164,7 +158,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
 
         <QuickAdd />
-        <SettingsDialog open={settings} onOpenChange={setSettings} />
+        <QuotesTicker />
         <Toaster theme="dark" position="top-center" />
       </div>
     </TooltipProvider>

@@ -1,4 +1,5 @@
 import { CATEGORIES, CATEGORY_MAP } from "./categories";
+import type { Category } from "./types";
 import { daysInMonth, monthBounds, prevMonth, todayISO } from "./utils";
 import type { FxRates } from "./fx";
 import type { Currency, Transaction } from "./types";
@@ -103,8 +104,9 @@ export function computeMonth(txs: Transaction[], ym: string, rates: FxRates) {
 export function categoryRows(
   byCat: Record<string, number>,
   budgets: Record<string, number>,
+  cats: Category[] = CATEGORIES.filter((c) => c.kind === "expense"),
 ) {
-  return CATEGORIES.filter((c) => c.kind === "expense")
+  return cats.filter((c) => c.kind === "expense")
     .map((c) => ({
       ...c,
       spent: byCat[c.id] ?? 0,

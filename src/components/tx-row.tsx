@@ -1,8 +1,7 @@
-import { CATEGORY_MAP } from "@/lib/categories";
 import { money, shortDay } from "@/lib/format";
 import { CatIcon } from "@/lib/icons";
 import { cn } from "@/lib/utils";
-import { useLedger } from "@/lib/store";
+import { useAllCategories, useLedger } from "@/lib/store";
 import type { Transaction } from "@/lib/types";
 
 export function TxRow({
@@ -15,18 +14,18 @@ export function TxRow({
   showDate?: boolean;
 }) {
   const accounts = useLedger((s) => s.accounts);
-  const names = useLedger((s) => s.categoryNames);
-  const cat = CATEGORY_MAP[tx.categoryId];
+  const cats = useAllCategories();
+  const cat = cats.find((c) => c.id === tx.categoryId);
   const income = tx.type === "income";
   const transfer = tx.type === "transfer";
   const from = accounts.find((a) => a.id === tx.accountId);
   const to = accounts.find((a) => a.id === tx.counterpartyId);
   const title = transfer
     ? `${from?.name ?? "Caja"} → ${to?.name ?? "Caja"}`
-    : tx.merchant || tx.note || names[tx.categoryId] || cat?.name || "Movimiento";
+    : tx.merchant || tx.note || cat?.name || "Movimiento";
   const sub = transfer
     ? "Cambio · no es gasto"
-    : `${showDate ? `${shortDay(tx.date)} · ` : ""}${names[tx.categoryId] || cat?.name || ""}${tx.note && tx.merchant ? ` · ${tx.note}` : ""}`;
+    : `${showDate ? `${shortDay(tx.date)} · ` : ""}${cat?.name || ""}${tx.note && tx.merchant ? ` · ${tx.note}` : ""}`;
 
   return (
     <button

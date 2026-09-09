@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import { toast } from "sonner";
-import { DEFAULT_BUDGETS, DEFAULT_GLOBAL_BUDGET } from "./categories";
+import { DEFAULT_BUDGETS, DEFAULT_GLOBAL_BUDGET, BUILTIN_IDS, mergedCategories, nextCustomStyle } from "./categories";
 import {
   loadLedger,
   patchTransaction,
@@ -26,7 +26,7 @@ import { inferAccount, stampRate } from "./books";
 import { dueDate, isDue, isPosted, postedTxId } from "./recurring";
 import { buildSeed } from "./seed";
 import { monthISO, todayISO, uid } from "./utils";
-import type { Account, Book, ChatMessage, Recurring, Transaction } from "./types";
+import type { Account, Book, Category, CategoryKind, ChatMessage, Recurring, Transaction } from "./types";
 
 const LOCAL_KEY = "cifra-ledger-v1";
 
@@ -41,6 +41,8 @@ type LedgerState = {
   activeBookId: string;
   onboarded: boolean;
   categoryNames: Record<string, string>;
+  hiddenCategoryIds: string[];
+  customCategories: Category[];
   recurrings: Recurring[];
   budgets: Record<string, number>;
   globalBudget: number;
@@ -58,7 +60,7 @@ type LedgerState = {
   chat: ChatMessage[];
   hydrate: () => Promise<void>;
   resetClient: () => void;
-  refreshQuotes: () => Promise<void>;
+  refreshQuotes: (quiet?: boolean) => Promise<void>;
   setUsdSource: (source: UsdSource) => void;
   setActiveBook: (id: string) => void;
   setViewMonth: (ym: string) => void;
@@ -71,6 +73,9 @@ type LedgerState = {
   setBudget: (categoryId: string, amount: number) => void;
   setGlobalBudget: (amount: number) => void;
   setCategoryName: (id: string, name: string) => void;
+  setCategoryHidden: (id: string, hidden: boolean) => void;
+  addCustomCategory: (input: { name: string; kind: CategoryKind }) => void;
+  removeCustomCategory: (id: string) => void;
   setAccountOpening: (id: string, opening: number) => void;
   completeOnboarding: (input: { globalBudget: number; openings: { id: string; opening: number }[] }) => void;
   upsertRecurring: (row: Recurring) => void;
@@ -123,9 +128,9 @@ function clearLocalSnapshot() {
 let hydrateLock: Promise<void> | null = null;
 
 function pushSettings(get: () => LedgerState) {
-  const { budgets, globalBudget, usdRate, usdtRate, usdSource, activeBookId, onboarded, categoryNames } = get();
+  const { budgets, globalBudget, usdRate, usdtRate, usdSource, activeBookId, onboarded, categoryNames, hiddenCategoryIds, customCategories } = get();
   void saveSettings({
-    data: { budgets, globalBudget, usdRate, usdtRate, usdSource, activeBookId, onboarded, categoryNames },
+    data: { budgets, globalBudget, usdRate, usdtRate, usdSource, activeBookId, onboarded, categoryNames, hiddenCategoryIds, customCategories },
   }).catch(persistFail);
 }
 
@@ -163,6 +168,8 @@ export const useLedger = create<LedgerState>()((set, get) => ({
   activeBookId: "",
   onboarded: false,
   categoryNames: {},
+  hiddenCategoryIds: [],
+  customCategories: [],
   recurrings: [],
   budgets: { ...DEFAULT_BUDGETS },
   globalBudget: DEFAULT_GLOBAL_BUDGET,
@@ -214,6 +221,8 @@ export const useLedger = create<LedgerState>()((set, get) => ({
               activeBookId: remote.activeBookId,
               onboarded: true,
               categoryNames: remote.categoryNames,
+              hiddenCategoryIds: remote.hiddenCategoryIds,
+              customCategories: remote.customCategories,
               recurrings: remote.recurrings,
               budgets: local.budgets,
               globalBudget: local.globalBudget,
@@ -239,6 +248,8 @@ export const useLedger = create<LedgerState>()((set, get) => ({
           activeBookId: remote.activeBookId,
           onboarded: remote.onboarded,
           categoryNames: remote.categoryNames,
+          hiddenCategoryIds: remote.hiddenCategoryIds,
+          customCategories: remote.customCategories,
           recurrings: remote.recurrings,
           budgets: remote.budgets,
           globalBudget: remote.globalBudget,
@@ -273,7 +284,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
       draft: {},
     });
   },
-  refreshQuotes: async () => {
+  refreshQuotes: async (quiet = false) => {
     if (get().quotesBusy) return;
     set({ quotesBusy: true });
     try {
@@ -289,7 +300,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
       pushSettings(get);
     } catch {
       set({ quotesBusy: false });
-      toast.error("No pude actualizar las cotizaciones");
+      if (!quiet) toast.error("No pude actualizar las cotizaciones");
     }
   },
   setUsdSource: (source) => {
@@ -351,6 +362,44 @@ export const useLedger = create<LedgerState>()((set, get) => ({
   },
   setCategoryName: (id, name) => {
     set({ categoryNames: { ...get().categoryNames, [id]: name } });
+    pushSettings(get);
+  },
+  setCategoryHidden: (id, hidden) => {
+    const cur = new Set(get().hiddenCategoryIds);
+    if (hidden) cur.add(id);
+    else cur.delete(id);
+    set({ hiddenCategoryIds: [...cur] });
+    pushSettings(get);
+  },
+  addCustomCategory: ({ name, kind }) => {
+    const trimmed = name.trim().slice(0, 40);
+    if (trimmed.length < 2) return;
+    const custom = get().customCategories;
+    const style = nextCustomStyle(custom.length, kind);
+    const row: Category = {
+      id: `c_${uid().replaceAll("-", "").slice(0, 12)}`,
+      name: trimmed,
+      kind,
+      token: style.token,
+      icon: style.icon,
+    };
+    set({ customCategories: [...custom, row] });
+    pushSettings(get);
+  },
+  removeCustomCategory: (id) => {
+    if (BUILTIN_IDS.has(id)) {
+      get().setCategoryHidden(id, true);
+      return;
+    }
+    const used = get().transactions.some((t) => t.categoryId === id) || get().recurrings.some((r) => r.categoryId === id);
+    if (used) {
+      get().setCategoryHidden(id, true);
+      return;
+    }
+    set({
+      customCategories: get().customCategories.filter((c) => c.id !== id),
+      hiddenCategoryIds: get().hiddenCategoryIds.filter((x) => x !== id),
+    });
     pushSettings(get);
   },
   setAccountOpening: (id, opening) => {
@@ -456,5 +505,19 @@ export function useBookTxs() {
 export function useBookAccounts() {
   return useLedger(
     useShallow((s) => s.accounts.filter((a) => a.bookId === s.activeBookId && !a.archived)),
+  );
+}
+
+export function useAllCategories() {
+  return useLedger(useShallow((s) => mergedCategories(s.customCategories, s.categoryNames)));
+}
+
+export function useVisibleCategories(kind?: CategoryKind) {
+  return useLedger(
+    useShallow((s) => {
+      const hidden = new Set(s.hiddenCategoryIds);
+      const all = mergedCategories(s.customCategories, s.categoryNames).filter((c) => !hidden.has(c.id));
+      return kind ? all.filter((c) => c.kind === kind) : all;
+    }),
   );
 }

@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { CATEGORIES } from "@/lib/categories";
 import { money, parseAmount } from "@/lib/format";
 import { toARS } from "@/lib/analytics";
 import { inferAccount, stampRate } from "@/lib/books";
 import { CatIcon } from "@/lib/icons";
 import { PAY_METHODS, type Currency, type PayMethod, type TxType } from "@/lib/types";
 import { cn, todayISO } from "@/lib/utils";
-import { useBookAccounts, useLedger } from "@/lib/store";
+import { useBookAccounts, useLedger, useVisibleCategories } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
@@ -32,9 +31,9 @@ export function QuickAdd() {
     usdRate,
     usdtRate,
     activeBookId,
-    categoryNames,
   } = useLedger();
   const accounts = useBookAccounts();
+  const visible = useVisibleCategories();
   const editing = editingId ? transactions.find((t) => t.id === editingId) : null;
 
   const [type, setType] = useState<TxType>("expense");
@@ -78,8 +77,8 @@ export function QuickAdd() {
   const liveRate = stampRate(currency, usdRate, usdtRate, customRate ?? undefined);
 
   const cats = useMemo(
-    () => (type === "transfer" ? [] : CATEGORIES.filter((c) => c.kind === (type === "income" ? "income" : "expense"))),
-    [type],
+    () => (type === "transfer" ? [] : visible.filter((c) => c.kind === (type === "income" ? "income" : "expense"))),
+    [type, visible],
   );
 
   function setKind(next: TxType) {
@@ -290,7 +289,7 @@ export function QuickAdd() {
                         )}
                       >
                         <CatIcon name={c.icon} className="size-3.5" />
-                        {categoryNames[c.id] || c.name}
+                        {c.name}
                       </button>
                     );
                   })}
