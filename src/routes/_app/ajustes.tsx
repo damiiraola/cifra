@@ -6,7 +6,7 @@ import { moneyARS, parseAmount } from "@/lib/format";
 import { formatRate, USD_SOURCES } from "@/lib/fx";
 import { CatIcon } from "@/lib/icons";
 import { isArgentineWeekday } from "@/lib/market-hours";
-import { autoBackupHint, downloadLocalVault } from "@/lib/local-vault";
+import { autoBackupHint, downloadLocalVault, shareVaultToIcloud } from "@/lib/local-vault";
 import { useAllCategories, useBookAccounts, useBookTxs, useLedger } from "@/lib/store";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { UserButton } from "@/lib/auth/gates";
@@ -283,6 +283,10 @@ function Ajustes() {
           <li>
             Opcional: agregá <span className="text-fg">&libro=negocio&caja=usdt&nota=</span> y otra pregunta para la nota.
           </li>
+          <li>
+            iCloud: Abrir URL <span className="text-fg">{origin}/?icloud=1</span> → tocá
+            “Guardar respaldo en iCloud” → Guardar en Archivos → iCloud Drive → carpeta Cifra.
+          </li>
         </ol>
       </section>
 
@@ -295,6 +299,18 @@ function Ajustes() {
         <div className="mt-4 grid gap-2 sm:max-w-sm">
           <Button variant="secondary" onClick={() => exportCsv(transactions)}>
             Exportar CSV
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              void shareVaultToIcloud(user?.primaryEmail).then((r) => {
+                if (r === "empty") toast.error("No hay respaldo todavía");
+                else if (r === "shared") toast.success("Elegí Guardar en Archivos → iCloud Drive");
+                else toast.success("Bajé el JSON. Movelo a iCloud Drive");
+              });
+            }}
+          >
+            Guardar en iCloud
           </Button>
           <Button
             variant="secondary"

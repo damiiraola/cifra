@@ -267,3 +267,33 @@ export function remapVaultRecurrings(vault: LocalVault, books: Book[], accounts:
     return { ...rest, bookId, accountId: account?.id || r.accountId };
   });
 }
+
+function vaultFile(email: string | null | undefined): File | null {
+  const v = readLocalVault(email);
+  if (!v) return null;
+  const day = new Date(v.at).toISOString().slice(0, 10);
+  return new File([JSON.stringify(v, null, 2)], `cifra-${day}.json`, {
+    type: "application/json",
+  });
+}
+
+export async function shareVaultToIcloud(email: string | null | undefined): Promise<"shared" | "downloaded" | "empty"> {
+  const file = vaultFile(email);
+  if (!file) return "empty";
+  try {
+    const payload = { files: [file], title: "Cifra", text: "Guardalo en iCloud Drive, carpeta Cifra." };
+    if (typeof navigator.share === "function" && navigator.canShare?.(payload)) {
+      await navigator.share(payload);
+      return "shared";
+    }
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") return "shared";
+  }
+  const url = URL.createObjectURL(file);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = file.name;
+  a.click();
+  URL.revokeObjectURL(url);
+  return "downloaded";
+}

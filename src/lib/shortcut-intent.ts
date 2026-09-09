@@ -19,6 +19,7 @@ export type ShortcutIntent = {
   draft: ShortcutDraft;
   save: boolean;
   open: boolean;
+  icloud: boolean;
 };
 
 const TYPES: Record<string, TxType> = {
@@ -76,7 +77,9 @@ export function parseShortcutSearch(
   const moneda = param(q, "moneda", "currency");
   const fecha = param(q, "fecha", "date");
   const guardar = param(q, "guardar", "save");
-  if (!cargar && !tipo && !monto && !nota && !cat && !caja && !libro) return null;
+  const icloudRaw = param(q, "icloud", "respaldo");
+  const icloud = ["1", "si", "true", "icloud"].includes(fold(icloudRaw));
+  if (!cargar && !tipo && !monto && !nota && !cat && !caja && !libro && !icloud) return null;
 
   const type = TYPES[fold(tipo)] ?? (cargar || monto ? "expense" : undefined);
   const currency = CURRENCIES[fold(moneda)] ?? undefined;
@@ -128,7 +131,8 @@ export function parseShortcutSearch(
     bookId,
     draft,
     save: guardar === "1" || fold(guardar) === "si" || fold(guardar) === "true",
-    open: true,
+    open: Boolean(cargar || tipo || monto || nota || cat || caja),
+    icloud,
   };
 }
 
@@ -140,7 +144,7 @@ export function captureShortcutSearch() {
   const keys = [
     "cargar", "nuevo", "add", "tipo", "type", "monto", "amount", "nota", "note",
     "cat", "categoria", "caja", "cuenta", "libro", "book", "moneda", "currency",
-    "fecha", "date", "guardar", "save",
+    "fecha", "date", "guardar", "save", "icloud", "respaldo",
   ];
   if (!keys.some((k) => q.has(k))) return;
   try {
@@ -187,6 +191,8 @@ export function stripShortcutParams() {
     "date",
     "guardar",
     "save",
+    "icloud",
+    "respaldo",
   ];
   let hit = false;
   for (const k of keys) {
