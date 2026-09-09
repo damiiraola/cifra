@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as BetaRouteImport } from './routes/beta'
+import { Route as LanzarRouteImport } from './routes/lanzar'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as OlvideRouteImport } from './routes/olvide'
 import { Route as ResetRouteImport } from './routes/reset'
@@ -31,6 +32,11 @@ const AppRoute = AppRouteImport.update({
 const BetaRoute = BetaRouteImport.update({
   id: '/beta',
   path: '/beta',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LanzarRoute = LanzarRouteImport.update({
+  id: '/lanzar',
+  path: '/lanzar',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -97,6 +103,7 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/beta': typeof BetaRoute
+  '/lanzar': typeof LanzarRoute
   '/login': typeof LoginRoute
   '/olvide': typeof OlvideRoute
   '/reset': typeof ResetRoute
@@ -111,6 +118,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/beta': typeof BetaRoute
+  '/lanzar': typeof LanzarRoute
   '/login': typeof LoginRoute
   '/olvide': typeof OlvideRoute
   '/reset': typeof ResetRoute
@@ -128,6 +136,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/beta': typeof BetaRoute
+  '/lanzar': typeof LanzarRoute
   '/login': typeof LoginRoute
   '/olvide': typeof OlvideRoute
   '/reset': typeof ResetRoute
@@ -146,6 +155,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/beta'
+    | '/lanzar'
     | '/login'
     | '/olvide'
     | '/reset'
@@ -160,6 +170,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/beta'
+    | '/lanzar'
     | '/login'
     | '/olvide'
     | '/reset'
@@ -176,6 +187,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_app'
     | '/beta'
+    | '/lanzar'
     | '/login'
     | '/olvide'
     | '/reset'
@@ -193,6 +205,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   BetaRoute: typeof BetaRoute
+  LanzarRoute: typeof LanzarRoute
   LoginRoute: typeof LoginRoute
   OlvideRoute: typeof OlvideRoute
   ResetRoute: typeof ResetRoute
@@ -213,6 +226,13 @@ declare module '@tanstack/react-router' {
       path: '/beta'
       fullPath: '/beta'
       preLoaderRoute: typeof BetaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/lanzar': {
+      id: '/lanzar'
+      path: '/lanzar'
+      fullPath: '/lanzar'
+      preLoaderRoute: typeof LanzarRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -329,6 +349,7 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   BetaRoute: BetaRoute,
+  LanzarRoute: LanzarRoute,
   LoginRoute: LoginRoute,
   OlvideRoute: OlvideRoute,
   ResetRoute: ResetRoute,

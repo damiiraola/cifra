@@ -338,8 +338,8 @@ function Ajustes() {
         </div>
         <p className="mt-4 text-xs text-subtle">
           Cotizaciones: DolarApi.{" "}
-          <Link to="/beta" className="underline-offset-4 hover:text-fg hover:underline">
-            Definir la beta
+          <Link to="/lanzar" className="underline-offset-4 hover:text-fg hover:underline">
+            Lanzar la beta
           </Link>
         </p>
       </section>
