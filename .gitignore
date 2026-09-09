@@ -12,7 +12,6 @@ dist
 
 # Embedded preview DB
 data/
-
 # Local / sandbox only
 .grok/
 AGENTS.md
@@ -22,7 +21,6 @@ screenshots/
 .project_id
 .node_modules.lock
 startup.sh
-
 # OS / editor
 .DS_Store
 .idea
@@ -31,3 +29,4 @@ startup.sh
 coverage
 playwright-report
 test-results
+attachments/
