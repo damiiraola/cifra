@@ -2,7 +2,13 @@ import { useMemo } from "react";
 import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import { toast } from "sonner";
-import { applyCajaBackup, readCajaBackup, writeCajaBackup } from "./caja-backup";
+import {
+  applyOpenings,
+  readLocalVault,
+  remapVaultRecurrings,
+  remapVaultTxs,
+  writeLocalVault,
+} from "./local-vault";
 import { DEFAULT_BUDGETS, DEFAULT_GLOBAL_BUDGET, BUILTIN_IDS, mergedCategories, nextCustomStyle } from "./categories";
 import {
   loadLedger,
@@ -98,6 +104,22 @@ function persistFail(err: unknown) {
   toast.error("No pude guardar en tu libro", { description: desc });
 }
 
+function persistLocal(get: () => LedgerState) {
+  const s = get();
+  writeLocalVault({
+    email: s.ownerEmail,
+    books: s.books,
+    accounts: s.accounts,
+    transactions: s.transactions,
+    recurrings: s.recurrings,
+    budgets: s.budgets,
+    globalBudget: s.globalBudget,
+    categoryNames: s.categoryNames,
+    hiddenCategoryIds: s.hiddenCategoryIds,
+    customCategories: s.customCategories,
+  });
+}
+
 function readLocalSnapshot(): {
   transactions: Transaction[];
   budgets: Record<string, number>;
@@ -132,6 +154,7 @@ function clearLocalSnapshot() {
 let hydrateLock: Promise<void> | null = null;
 
 function pushSettings(get: () => LedgerState) {
+  persistLocal(get);
   const { budgets, globalBudget, usdRate, usdtRate, usdSource, activeBookId, onboarded, categoryNames, hiddenCategoryIds, customCategories } = get();
   void saveSettings({
     data: { budgets, globalBudget, usdRate, usdtRate, usdSource, activeBookId, onboarded, categoryNames, hiddenCategoryIds, customCategories },
@@ -165,17 +188,33 @@ function fillTx(get: () => LedgerState, tx: Omit<Transaction, "id" | "createdAt"
 }
 
 
-function restoreOpenings(get: () => LedgerState, set: (p: Partial<LedgerState>) => void) {
-  const { ownerEmail, books, accounts } = get();
-  const restored = applyCajaBackup(books, accounts, readCajaBackup(ownerEmail));
-  if (!restored) {
-    writeCajaBackup(ownerEmail, books, accounts);
+function restoreVault(get: () => LedgerState, set: (p: Partial<LedgerState>) => void) {
+  const state = get();
+  const vault = readLocalVault(state.ownerEmail);
+  if (!vault) {
+    persistLocal(get);
     return;
   }
-  set({ accounts: restored });
-  void saveAccounts({ data: { accounts: restored.map((a) => ({ id: a.id, opening: a.opening })) } }).catch(persistFail);
-  writeCajaBackup(ownerEmail, books, restored);
-  toast.success("Restauré los saldos iniciales que quedaron en este teléfono");
+  const notes: string[] = [];
+  const accounts = applyOpenings(state.books, state.accounts, vault.openings);
+  if (accounts) {
+    set({ accounts });
+    void saveAccounts({ data: { accounts: accounts.map((a) => ({ id: a.id, opening: a.opening })) } }).catch(persistFail);
+    notes.push("saldos");
+  }
+  if (state.transactions.length === 0 && vault.transactions.length) {
+    const txs = remapVaultTxs(vault, state.books, accounts ?? state.accounts);
+    set({ transactions: txs, onboarded: true });
+    void replaceTransactions({ data: txs }).catch(persistFail);
+    notes.push("movimientos");
+  }
+  if (state.recurrings.length === 0 && vault.recurrings.length) {
+    const recs = remapVaultRecurrings(vault, state.books, accounts ?? state.accounts);
+    set({ recurrings: recs });
+    notes.push("fijos");
+  }
+  if (notes.length) toast.success(`Restauré ${notes.join(", ")} de este teléfono`);
+  persistLocal(get);
 }
 
 export const useLedger = create<LedgerState>()((set, get) => ({
@@ -254,7 +293,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
             });
             pushSettings(get);
             clearLocalSnapshot();
-            restoreOpenings(get, set);
+            restoreVault(get, set);
             void get().refreshQuotes();
             const posted = get().postDueRecurrings();
             if (posted > 0) toast.success(posted === 1 ? "Anoté 1 fijo de este mes" : `Anoté ${posted} fijos de este mes`);
@@ -280,7 +319,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
           usdtRate: remote.usdtRate,
           usdSource: remote.usdSource,
         });
-        restoreOpenings(get, set);
+        restoreVault(get, set);
         void get().refreshQuotes();
         const posted = get().postDueRecurrings();
         if (posted > 0) toast.success(posted === 1 ? "Anoté 1 fijo de este mes" : `Anoté ${posted} fijos de este mes`);
@@ -354,10 +393,8 @@ export const useLedger = create<LedgerState>()((set, get) => ({
   addTx: (tx) => {
     const row = fillTx(get, tx);
     set({ transactions: [row, ...get().transactions] });
-    void saveTransaction({ data: row }).catch((err) => {
-      set({ transactions: get().transactions.filter((t) => t.id !== row.id) });
-      persistFail(err);
-    });
+    persistLocal(get);
+    void saveTransaction({ data: row }).catch(persistFail);
   },
   updateTx: (id, patch) => {
     const prev = get().transactions;
@@ -365,18 +402,14 @@ export const useLedger = create<LedgerState>()((set, get) => ({
     if (!current) return;
     const next = fillTx(get, { ...current, ...patch, id });
     set({ transactions: prev.map((t) => (t.id === id ? next : t)) });
-    void patchTransaction({ data: { id, patch: next } }).catch((err) => {
-      set({ transactions: prev });
-      persistFail(err);
-    });
+    persistLocal(get);
+    void patchTransaction({ data: { id, patch: next } }).catch(persistFail);
   },
   deleteTx: (id) => {
     const prev = get().transactions;
     set({ transactions: prev.filter((t) => t.id !== id) });
-    void removeTransaction({ data: id }).catch((err) => {
-      set({ transactions: prev });
-      persistFail(err);
-    });
+    persistLocal(get);
+    void removeTransaction({ data: id }).catch(persistFail);
   },
   setBudget: (categoryId, amount) => {
     set({ budgets: { ...get().budgets, [categoryId]: amount } });
@@ -431,7 +464,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
   setAccountOpening: (id, opening) => {
     const accounts = get().accounts.map((a) => (a.id === id ? { ...a, opening } : a));
     set({ accounts });
-    writeCajaBackup(get().ownerEmail, get().books, accounts);
+    persistLocal(get);
     void saveAccounts({ data: { accounts: [{ id, opening }] } }).catch(persistFail);
   },
   completeOnboarding: ({ globalBudget, openings }) => {
@@ -440,7 +473,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
       return hit ? { ...a, opening: hit.opening } : a;
     });
     set({ accounts, globalBudget, onboarded: true });
-    writeCajaBackup(get().ownerEmail, get().books, accounts);
+    persistLocal(get);
     void saveAccounts({ data: { accounts: openings } }).catch(persistFail);
     pushSettings(get);
   },
@@ -448,18 +481,14 @@ export const useLedger = create<LedgerState>()((set, get) => ({
     const prev = get().recurrings;
     const next = prev.some((r) => r.id === row.id) ? prev.map((r) => (r.id === row.id ? row : r)) : [...prev, row];
     set({ recurrings: next });
-    void saveRecurring({ data: row }).catch((err) => {
-      set({ recurrings: prev });
-      persistFail(err);
-    });
+    persistLocal(get);
+    void saveRecurring({ data: row }).catch(persistFail);
   },
   deleteRecurring: (id) => {
     const prev = get().recurrings;
     set({ recurrings: prev.filter((r) => r.id !== id) });
-    void removeRecurring({ data: id }).catch((err) => {
-      set({ recurrings: prev });
-      persistFail(err);
-    });
+    persistLocal(get);
+    void removeRecurring({ data: id }).catch(persistFail);
   },
   postRecurring: (id, ym = monthISO()) => {
     const r = get().recurrings.find((x) => x.id === id);
@@ -519,6 +548,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
     const { activeBookId, transactions } = get();
     const kept = transactions.filter((t) => t.bookId && t.bookId !== activeBookId);
     set({ transactions: kept, chat: [] });
+    persistLocal(get);
     void replaceTransactions({ data: kept }).catch(persistFail);
   },
 }));
