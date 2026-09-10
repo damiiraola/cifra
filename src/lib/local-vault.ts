@@ -1,8 +1,10 @@
 import type { Account, Book, Category, Recurring, Transaction } from "./types";
+import { parseOutbox, type OutboxOp } from "./outbox";
 
 const KEY = "cifra.local-vault";
 const LEGACY_CAJA = "cifra.caja-backup";
 const LEGACY_LEDGER = "cifra-ledger-v1";
+const VAULT_VERSION = 2;
 
 export type VaultOpening = {
   bookName: string;
@@ -23,17 +25,25 @@ export type VaultRecurring = Recurring & {
 };
 
 export type LocalVault = {
-  v: 1;
+  v: 1 | 2;
   email: string;
   at: number;
+  books: Book[];
+  accounts: Account[];
+  activeBookId: string;
+  onboarded: boolean;
   openings: VaultOpening[];
   transactions: VaultTx[];
+  outbox: OutboxOp[];
   recurrings: VaultRecurring[];
   budgets: Record<string, number>;
   globalBudget: number;
   categoryNames: Record<string, string>;
   hiddenCategoryIds: string[];
   customCategories: Category[];
+  usdRate: number;
+  usdtRate: number;
+  usdSource: string;
 };
 
 function mailOf(email: string | null | undefined) {
@@ -52,20 +62,30 @@ export function buildLocalVault(input: {
   email: string | null | undefined;
   books: Book[];
   accounts: Account[];
+  activeBookId?: string;
+  onboarded?: boolean;
   transactions: Transaction[];
+  outbox?: OutboxOp[];
   recurrings: Recurring[];
   budgets: Record<string, number>;
   globalBudget: number;
   categoryNames: Record<string, string>;
   hiddenCategoryIds: string[];
   customCategories: Category[];
+  usdRate?: number;
+  usdtRate?: number;
+  usdSource?: string;
 }): LocalVault | null {
   const email = mailOf(input.email);
   if (!email) return null;
   return {
-    v: 1,
+    v: VAULT_VERSION,
     email,
     at: Date.now(),
+    books: input.books,
+    accounts: input.accounts,
+    activeBookId: input.activeBookId ?? "",
+    onboarded: Boolean(input.onboarded),
     openings: input.accounts
       .map((a) => ({
         bookName: bookName(input.books, a.bookId),
@@ -80,6 +100,7 @@ export function buildLocalVault(input: {
       accountName: accountName(input.accounts, t.accountId),
       counterpartyName: accountName(input.accounts, t.counterpartyId),
     })),
+    outbox: input.outbox ?? [],
     recurrings: input.recurrings.map((r) => ({
       ...r,
       bookName: bookName(input.books, r.bookId),
@@ -90,16 +111,34 @@ export function buildLocalVault(input: {
     categoryNames: input.categoryNames,
     hiddenCategoryIds: input.hiddenCategoryIds,
     customCategories: input.customCategories,
+    usdRate: input.usdRate ?? 0,
+    usdtRate: input.usdtRate ?? 0,
+    usdSource: input.usdSource ?? "",
   };
 }
 
 export function writeLocalVault(input: Parameters<typeof buildLocalVault>[0]) {
   const vault = buildLocalVault(input);
   if (typeof window === "undefined" || !vault) return;
+  const raw = JSON.stringify(vault);
   try {
-    localStorage.setItem(KEY, JSON.stringify(vault));
+    localStorage.setItem(KEY, raw);
+    return;
   } catch {
-    /* quota */
+    /* quota — keep outbox, drop old confirmed txs */
+  }
+  const slim = {
+    ...vault,
+    transactions: vault.transactions.slice(0, 400),
+  };
+  try {
+    localStorage.setItem(KEY, JSON.stringify(slim));
+  } catch {
+    try {
+      localStorage.setItem(KEY, JSON.stringify({ ...vault, transactions: [], recurrings: [] }));
+    } catch {
+      /* ignore */
+    }
   }
 }
 
@@ -131,20 +170,28 @@ export function autoBackupHint(email: string | null | undefined): { day: string;
 
 export function asVault(raw: unknown): LocalVault | null {
   if (!raw || typeof raw !== "object") return null;
-  const p = raw as Partial<LocalVault>;
-  if (p.v !== 1) return null;
+  const p = raw as Partial<LocalVault> & { v?: number };
+  if (p.v !== 1 && p.v !== 2) return null;
   return {
-    v: 1,
+    v: p.v === 2 ? 2 : 1,
     email: String(p.email ?? ""),
     at: Number(p.at) || Date.now(),
+    books: Array.isArray(p.books) ? p.books : [],
+    accounts: Array.isArray(p.accounts) ? p.accounts : [],
+    activeBookId: String(p.activeBookId ?? ""),
+    onboarded: Boolean(p.onboarded),
     openings: Array.isArray(p.openings) ? p.openings : [],
     transactions: Array.isArray(p.transactions) ? p.transactions : [],
+    outbox: parseOutbox(p.outbox),
     recurrings: Array.isArray(p.recurrings) ? p.recurrings : [],
     budgets: p.budgets && typeof p.budgets === "object" ? p.budgets : {},
     globalBudget: Number(p.globalBudget) || 0,
     categoryNames: p.categoryNames && typeof p.categoryNames === "object" ? p.categoryNames : {},
     hiddenCategoryIds: Array.isArray(p.hiddenCategoryIds) ? p.hiddenCategoryIds : [],
     customCategories: Array.isArray(p.customCategories) ? p.customCategories : [],
+    usdRate: Number(p.usdRate) || 0,
+    usdtRate: Number(p.usdtRate) || 0,
+    usdSource: String(p.usdSource ?? ""),
   };
 }
 
@@ -154,8 +201,8 @@ export function readLocalVault(email: string | null | undefined): LocalVault | n
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) {
-      const parsed = JSON.parse(raw) as LocalVault;
-      if (parsed?.v === 1 && parsed.email === mail) return parsed;
+      const parsed = asVault(JSON.parse(raw));
+      if (parsed && parsed.email === mail) return parsed;
     }
   } catch {
     /* ignore */
@@ -180,14 +227,22 @@ function migrateLegacy(mail: string): LocalVault | null {
       v: 1,
       email: mail,
       at: Date.now(),
+      books: [],
+      accounts: [],
+      activeBookId: "",
+      onboarded: false,
       openings,
       transactions,
+      outbox: [],
       recurrings: [],
       budgets: {},
       globalBudget: 0,
       categoryNames: {},
       hiddenCategoryIds: [],
       customCategories: [],
+      usdRate: 0,
+      usdtRate: 0,
+      usdSource: "",
     };
   } catch {
     return null;

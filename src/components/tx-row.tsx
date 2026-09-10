@@ -14,6 +14,7 @@ export function TxRow({
   showDate?: boolean;
 }) {
   const accounts = useLedger((s) => s.accounts);
+  const pending = useLedger((s) => s.outbox.some((o) => o.id === tx.id && o.action !== "delete"));
   const cats = useAllCategories();
   const cat = cats.find((c) => c.id === tx.categoryId);
   const income = tx.type === "income";
@@ -41,12 +42,16 @@ export function TxRow({
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-medium text-fg">{title}</span>
-        <span className="block truncate text-xs text-muted">{sub}</span>
+        <span className="block truncate text-xs text-muted">
+          {pending ? "Sin guardar" : sub}
+          {pending && sub ? ` · ${sub}` : ""}
+        </span>
       </span>
       <span
         className={cn(
           "shrink-0 text-sm tabular-nums",
           income ? "text-income" : transfer ? "text-muted" : "text-fg",
+          pending && "text-warn",
         )}
       >
         {transfer ? "↔ " : income ? "+" : "−"}

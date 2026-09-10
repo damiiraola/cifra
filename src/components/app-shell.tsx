@@ -20,6 +20,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QuickAdd } from "@/components/quick-add";
 import { ShortcutListener } from "@/components/shortcut-listener";
 import { QuotesTicker } from "@/components/quotes-ticker";
+import { OutboxFlusher } from "@/components/outbox-flusher";
 import { Onboarding } from "@/components/onboarding";
 import { BookSwitcher } from "@/components/book-switcher";
 import { Toaster } from "sonner";
@@ -166,6 +167,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <QuickAdd />
         <ShortcutListener />
         {chrome ? <QuotesTicker /> : null}
+        {chrome ? <OutboxFlusher /> : null}
         <Toaster theme="dark" position="top-center" />
       </div>
     </TooltipProvider>

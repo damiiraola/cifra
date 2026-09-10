@@ -33,6 +33,7 @@ import {
   DEFAULT_USDT_RATE,
   DEFAULT_USD_SOURCE,
   applyQuotes,
+  isUsdSource,
   type Quote,
   type UsdSource,
 } from "./fx";
@@ -40,6 +41,7 @@ import { inferAccount, stampRate } from "./books";
 import { dueDate, isDue, isPosted, postedTxId } from "./recurring";
 import { buildSeed } from "./seed";
 import { monthISO, todayISO, uid } from "./utils";
+import { applyOutbox, enqueue, OUTBOX_MAX_TRIES, pruneOutbox, resetTries, type OutboxOp } from "./outbox";
 import type { Account, Book, Category, CategoryKind, ChatMessage, Recurring, Transaction } from "./types";
 
 const LOCAL_KEY = "cifra-ledger-v1";
@@ -51,6 +53,8 @@ type LedgerState = {
   status: Status;
   ownerId: string;
   ownerEmail: string;
+  confirmed: Transaction[];
+  outbox: OutboxOp[];
   transactions: Transaction[];
   books: Book[];
   accounts: Account[];
@@ -86,6 +90,7 @@ type LedgerState = {
   addTx: (tx: Omit<Transaction, "id" | "createdAt"> & { id?: string; createdAt?: string }) => void;
   updateTx: (id: string, patch: Partial<Transaction>) => void;
   deleteTx: (id: string) => void;
+  flushOutbox: (opts?: { force?: boolean }) => Promise<void>;
   setBudget: (categoryId: string, amount: number) => void;
   setGlobalBudget: (amount: number) => void;
   setCategoryName: (id: string, name: string) => void;
@@ -104,10 +109,23 @@ type LedgerState = {
   wipe: () => void;
 };
 
-function persistFail(err: unknown) {
+function persistFail(err: unknown, retry?: () => void) {
   const msg = err instanceof Error ? err.message : "No pude guardar";
-  const desc = msg === "Unauthorized" ? "Se cayó la sesión. Entrá de nuevo o el libro no se guarda." : msg;
-  toast.error("No pude guardar en tu libro", { description: desc });
+  const session = msg === "Unauthorized";
+  const desc = session
+    ? "Entrá de nuevo. El movimiento sigue acá."
+    : retry
+      ? "El movimiento sigue acá."
+      : msg;
+  toast.error("No pude guardar en tu libro", {
+    description: desc,
+    action: retry
+      ? {
+          label: "Reintentar",
+          onClick: retry,
+        }
+      : undefined,
+  });
 }
 
 function vaultInput(get: () => LedgerState) {
@@ -116,19 +134,35 @@ function vaultInput(get: () => LedgerState) {
     email: s.ownerEmail,
     books: s.books,
     accounts: s.accounts,
-    transactions: s.transactions,
+    activeBookId: s.activeBookId,
+    onboarded: s.onboarded,
+    transactions: s.confirmed,
+    outbox: s.outbox,
     recurrings: s.recurrings,
     budgets: s.budgets,
     globalBudget: s.globalBudget,
     categoryNames: s.categoryNames,
     hiddenCategoryIds: s.hiddenCategoryIds,
     customCategories: s.customCategories,
+    usdRate: s.usdRate,
+    usdtRate: s.usdtRate,
+    usdSource: s.usdSource,
   };
 }
 
 function persistLocal(get: () => LedgerState) {
   writeLocalVault(vaultInput(get));
   queueDailyBackup(get);
+}
+
+function paint(
+  set: (p: Partial<LedgerState>) => void,
+  get: () => LedgerState,
+  next: { confirmed?: Transaction[]; outbox?: OutboxOp[] },
+) {
+  const confirmed = next.confirmed ?? get().confirmed;
+  const outbox = next.outbox ?? get().outbox;
+  set({ confirmed, outbox, transactions: applyOutbox(confirmed, outbox) });
 }
 
 let backupTimer: number | null = null;
@@ -191,13 +225,21 @@ function clearLocalSnapshot() {
 }
 
 let hydrateLock: Promise<void> | null = null;
+let flushBusy = false;
+let flushAgain = false;
 
-function pushSettings(get: () => LedgerState) {
+function pushSettings(get: () => LedgerState, revert?: Partial<LedgerState>, set?: (p: Partial<LedgerState>) => void) {
   persistLocal(get);
   const { budgets, globalBudget, usdRate, usdtRate, usdSource, activeBookId, onboarded, categoryNames, hiddenCategoryIds, customCategories } = get();
   void saveSettings({
     data: { budgets, globalBudget, usdRate, usdtRate, usdSource, activeBookId, onboarded, categoryNames, hiddenCategoryIds, customCategories },
-  }).catch(persistFail);
+  }).catch((err) => {
+    persistFail(err);
+    if (revert && set) {
+      set(revert);
+      persistLocal(get);
+    }
+  });
 }
 
 function fillTx(get: () => LedgerState, tx: Omit<Transaction, "id" | "createdAt"> & { id?: string; createdAt?: string }): Transaction {
@@ -226,11 +268,23 @@ function fillTx(get: () => LedgerState, tx: Omit<Transaction, "id" | "createdAt"
   };
 }
 
+function ackOp(set: (p: Partial<LedgerState>) => void, get: () => LedgerState, op: OutboxOp) {
+  let confirmed = get().confirmed;
+  if (op.action === "delete") {
+    confirmed = confirmed.filter((t) => t.id !== op.id);
+  } else if (op.row) {
+    if (confirmed.some((t) => t.id === op.id)) confirmed = confirmed.map((t) => (t.id === op.id ? op.row! : t));
+    else confirmed = [op.row, ...confirmed];
+  }
+  paint(set, get, { confirmed, outbox: get().outbox.filter((o) => o.id !== op.id) });
+  persistLocal(get);
+}
 
 async function restoreVault(get: () => LedgerState, set: (p: Partial<LedgerState>) => void) {
   const state = get();
   let vault = readLocalVault(state.ownerEmail);
-  const localEmpty = !vault || (!vault.openings.length && !vault.transactions.length && !vault.recurrings.length);
+  const localEmpty =
+    !vault || (!vault.openings.length && !vault.transactions.length && !vault.recurrings.length && !vault.outbox.length);
   if (localEmpty) {
     try {
       const remote = await loadLatestBackup();
@@ -248,28 +302,68 @@ async function restoreVault(get: () => LedgerState, set: (p: Partial<LedgerState
   const accounts = applyOpenings(state.books, state.accounts, vault.openings);
   if (accounts) {
     set({ accounts });
-    void saveAccounts({ data: { accounts: accounts.map((a) => ({ id: a.id, opening: a.opening })) } }).catch(persistFail);
+    void saveAccounts({ data: { accounts: accounts.map((a) => ({ id: a.id, opening: a.opening })) } }).catch((err) =>
+      persistFail(err),
+    );
     notes.push("saldos");
   }
-  if (state.transactions.length === 0 && vault.transactions.length) {
+  if (state.confirmed.length === 0 && vault.transactions.length) {
     const txs = remapVaultTxs(vault, state.books, accounts ?? state.accounts);
-    set({ transactions: txs, onboarded: true });
-    void replaceTransactions({ data: txs }).catch(persistFail);
+    const outbox = pruneOutbox(vault.outbox, txs);
+    paint(set, get, { confirmed: txs, outbox });
+    set({ onboarded: true });
+    void replaceTransactions({ data: txs }).catch((err) => persistFail(err));
     notes.push("movimientos");
+  } else if (vault.outbox.length) {
+    const outbox = pruneOutbox(
+      vault.outbox.reduce((acc, op) => enqueue(acc, op), get().outbox),
+      get().confirmed,
+    );
+    paint(set, get, { outbox });
   }
   if (state.recurrings.length === 0 && vault.recurrings.length) {
     const recs = remapVaultRecurrings(vault, state.books, accounts ?? state.accounts);
     set({ recurrings: recs });
+    for (const row of recs) {
+      void saveRecurring({ data: row }).catch((err) => persistFail(err));
+    }
     notes.push("fijos");
   }
   if (notes.length) toast.success(`Restauré ${notes.join(", ")} de este teléfono`);
   persistLocal(get);
 }
 
+function paintVault(set: (p: Partial<LedgerState>) => void, get: () => LedgerState, vault: NonNullable<ReturnType<typeof readLocalVault>>) {
+  const books = vault.books.length ? vault.books : get().books;
+  const accounts = vault.accounts.length ? vault.accounts : get().accounts;
+  if (!books.length) return false;
+  const confirmed = remapVaultTxs(vault, books, accounts);
+  const outbox = vault.outbox;
+  set({
+    books,
+    accounts,
+    activeBookId: vault.activeBookId || get().activeBookId || books[0]?.id || "",
+    onboarded: vault.onboarded || get().onboarded,
+    recurrings: vault.recurrings.length ? remapVaultRecurrings(vault, books, accounts) : get().recurrings,
+    budgets: Object.keys(vault.budgets).length ? vault.budgets : get().budgets,
+    globalBudget: vault.globalBudget || get().globalBudget,
+    categoryNames: vault.categoryNames,
+    hiddenCategoryIds: vault.hiddenCategoryIds,
+    customCategories: vault.customCategories,
+    usdRate: vault.usdRate || get().usdRate,
+    usdtRate: vault.usdtRate || get().usdtRate,
+    usdSource: isUsdSource(vault.usdSource) ? vault.usdSource : get().usdSource,
+  });
+  paint(set, get, { confirmed, outbox });
+  return true;
+}
+
 export const useLedger = create<LedgerState>()((set, get) => ({
   status: "idle",
   ownerId: "",
   ownerEmail: "",
+  confirmed: [],
+  outbox: [],
   transactions: [],
   books: [],
   accounts: [],
@@ -296,9 +390,16 @@ export const useLedger = create<LedgerState>()((set, get) => ({
   hydrate: (identity) => {
     const ownerId = identity?.id ?? "";
     const ownerEmail = identity?.email ?? "";
-    if (get().status === "ready" && get().ownerId && get().ownerId === ownerId) return Promise.resolve();
+    if (get().status === "ready" && get().ownerId && get().ownerId === ownerId && !hydrateLock) {
+      return Promise.resolve();
+    }
     if (hydrateLock) return hydrateLock;
     set({ status: "loading", ownerId, ownerEmail });
+    const local = readLocalVault(ownerEmail);
+    if (local?.books.length) {
+      paintVault(set, get, local);
+      set({ status: "ready" });
+    }
     hydrateLock = (async () => {
       try {
         const remote = await Promise.race([
@@ -314,18 +415,26 @@ export const useLedger = create<LedgerState>()((set, get) => ({
           }),
         ]);
         if (remote.transactions.length === 0) {
-          const local = readLocalSnapshot();
-          if (local) {
-            const stamped = local.transactions.map((t) =>
+          const legacy = readLocalSnapshot();
+          if (legacy) {
+            const stamped = legacy.transactions.map((t) =>
               fillTx(
-                () => ({ ...get(), accounts: remote.accounts, activeBookId: remote.activeBookId, usdRate: remote.usdRate, usdtRate: remote.usdtRate }) as LedgerState,
+                () =>
+                  ({
+                    ...get(),
+                    accounts: remote.accounts,
+                    activeBookId: remote.activeBookId,
+                    usdRate: remote.usdRate,
+                    usdtRate: remote.usdtRate,
+                  }) as LedgerState,
                 t,
               ),
             );
             await replaceTransactions({ data: stamped });
+            const vaultNow = readLocalVault(ownerEmail);
+            const outbox = pruneOutbox(resetTries(get().outbox.length ? get().outbox : (vaultNow?.outbox ?? [])), stamped);
             set({
               status: "ready",
-              transactions: stamped,
               books: remote.books,
               accounts: remote.accounts,
               activeBookId: remote.activeBookId,
@@ -334,26 +443,30 @@ export const useLedger = create<LedgerState>()((set, get) => ({
               hiddenCategoryIds: remote.hiddenCategoryIds,
               customCategories: remote.customCategories,
               recurrings: remote.recurrings,
-              budgets: local.budgets,
-              globalBudget: local.globalBudget,
+              budgets: legacy.budgets,
+              globalBudget: legacy.globalBudget,
               usdRate: remote.usdRate,
               usdtRate: remote.usdtRate,
               usdSource: remote.usdSource,
             });
+            paint(set, get, { confirmed: stamped, outbox });
             pushSettings(get);
             clearLocalSnapshot();
             await restoreVault(get, set);
             void get().refreshQuotes();
             const posted = get().postDueRecurrings();
             if (posted > 0) toast.success(posted === 1 ? "Anoté 1 fijo de este mes" : `Anoté ${posted} fijos de este mes`);
+            void get().flushOutbox({ force: true });
             return;
           }
         } else {
           clearLocalSnapshot();
         }
+        const vaultNow = readLocalVault(ownerEmail);
+        const seed = get().outbox.length ? get().outbox : (vaultNow?.outbox ?? []);
+        const outbox = pruneOutbox(resetTries(seed), remote.transactions);
         set({
           status: "ready",
-          transactions: remote.transactions,
           books: remote.books,
           accounts: remote.accounts,
           activeBookId: remote.activeBookId,
@@ -368,13 +481,20 @@ export const useLedger = create<LedgerState>()((set, get) => ({
           usdtRate: remote.usdtRate,
           usdSource: remote.usdSource,
         });
+        paint(set, get, { confirmed: remote.transactions, outbox });
         await restoreVault(get, set);
         void get().refreshQuotes();
         const posted = get().postDueRecurrings();
         if (posted > 0) toast.success(posted === 1 ? "Anoté 1 fijo de este mes" : `Anoté ${posted} fijos de este mes`);
+        void get().flushOutbox({ force: true });
       } catch (err) {
-        persistFail(err);
-        set({ status: "error" });
+        if (get().books.length || get().confirmed.length || get().outbox.length) {
+          set({ status: "ready" });
+          toast.error("Sin conexión. Estás viendo el último libro de este teléfono.");
+        } else {
+          persistFail(err);
+          set({ status: "error" });
+        }
       } finally {
         hydrateLock = null;
       }
@@ -387,6 +507,8 @@ export const useLedger = create<LedgerState>()((set, get) => ({
       status: "idle",
       ownerId: "",
       ownerEmail: "",
+      confirmed: [],
+      outbox: [],
       transactions: [],
       books: [],
       accounts: [],
@@ -420,17 +542,21 @@ export const useLedger = create<LedgerState>()((set, get) => ({
     }
   },
   setUsdSource: (source) => {
+    const prev = get().usdSource;
+    const prevUsd = get().usdRate;
+    const prevUsdt = get().usdtRate;
     const quotes = get().quotes;
     const rates = quotes.length ? applyQuotes(quotes, source) : null;
     set({
       usdSource: source,
       ...(rates ? { usdRate: rates.usd, usdtRate: rates.usdt } : {}),
     });
-    pushSettings(get);
+    pushSettings(get, { usdSource: prev, usdRate: prevUsd, usdtRate: prevUsdt }, set);
   },
   setActiveBook: (id) => {
+    const prev = get().activeBookId;
     set({ activeBookId: id, selectedDay: null });
-    pushSettings(get);
+    pushSettings(get, { activeBookId: prev }, set);
   },
   setViewMonth: (ym) => set({ viewMonth: ym, selectedDay: null }),
   setSelectedDay: (day) => set({ selectedDay: day }),
@@ -443,43 +569,87 @@ export const useLedger = create<LedgerState>()((set, get) => ({
   closeQuick: () => set({ quickOpen: false, editingId: null, draft: {} }),
   addTx: (tx) => {
     const row = fillTx(get, tx);
-    set({ transactions: [row, ...get().transactions] });
+    paint(set, get, { outbox: enqueue(get().outbox, { id: row.id, action: "add", row, at: Date.now(), tries: 0 }) });
     persistLocal(get);
-    void saveTransaction({ data: row }).catch(persistFail);
+    void get().flushOutbox();
   },
   updateTx: (id, patch) => {
-    const prev = get().transactions;
-    const current = prev.find((t) => t.id === id);
+    const current = get().transactions.find((t) => t.id === id);
     if (!current) return;
     const next = fillTx(get, { ...current, ...patch, id });
-    set({ transactions: prev.map((t) => (t.id === id ? next : t)) });
+    paint(set, get, { outbox: enqueue(get().outbox, { id, action: "update", row: next, at: Date.now(), tries: 0 }) });
     persistLocal(get);
-    void patchTransaction({ data: { id, patch: next } }).catch(persistFail);
+    void get().flushOutbox();
   },
   deleteTx: (id) => {
-    const prev = get().transactions;
-    set({ transactions: prev.filter((t) => t.id !== id) });
+    paint(set, get, { outbox: enqueue(get().outbox, { id, action: "delete", at: Date.now(), tries: 0 }) });
     persistLocal(get);
-    void removeTransaction({ data: id }).catch(persistFail);
+    void get().flushOutbox();
+  },
+  flushOutbox: async (opts) => {
+    if (flushBusy) {
+      flushAgain = true;
+      return;
+    }
+    flushBusy = true;
+    try {
+      do {
+        flushAgain = false;
+        let ops = get().outbox;
+        if (opts?.force) {
+          ops = resetTries(ops);
+          paint(set, get, { outbox: ops });
+        }
+        let failed = false;
+        for (const op of ops) {
+          if (!get().outbox.some((o) => o.id === op.id && o.action === op.action)) continue;
+          const live = get().outbox.find((o) => o.id === op.id);
+          if (!live) continue;
+          if (!opts?.force && live.tries >= OUTBOX_MAX_TRIES) continue;
+          try {
+            if (live.action === "add" && live.row) await saveTransaction({ data: live.row });
+            else if (live.action === "update" && live.row) await patchTransaction({ data: { id: live.id, patch: live.row } });
+            else if (live.action === "delete") await removeTransaction({ data: live.id });
+            ackOp(set, get, live);
+          } catch (err) {
+            const tries = live.tries + 1;
+            paint(set, get, {
+              outbox: get().outbox.map((o) => (o.id === live.id ? { ...o, tries } : o)),
+            });
+            persistLocal(get);
+            if (!failed) {
+              failed = true;
+              persistFail(err, () => void get().flushOutbox({ force: true }));
+            }
+          }
+        }
+      } while (flushAgain);
+    } finally {
+      flushBusy = false;
+    }
   },
   setBudget: (categoryId, amount) => {
-    set({ budgets: { ...get().budgets, [categoryId]: amount } });
-    pushSettings(get);
+    const prev = get().budgets;
+    set({ budgets: { ...prev, [categoryId]: amount } });
+    pushSettings(get, { budgets: prev }, set);
   },
   setGlobalBudget: (amount) => {
+    const prev = get().globalBudget;
     set({ globalBudget: amount });
-    pushSettings(get);
+    pushSettings(get, { globalBudget: prev }, set);
   },
   setCategoryName: (id, name) => {
-    set({ categoryNames: { ...get().categoryNames, [id]: name } });
-    pushSettings(get);
+    const prev = get().categoryNames;
+    set({ categoryNames: { ...prev, [id]: name } });
+    pushSettings(get, { categoryNames: prev }, set);
   },
   setCategoryHidden: (id, hidden) => {
-    const cur = new Set(get().hiddenCategoryIds);
+    const prev = get().hiddenCategoryIds;
+    const cur = new Set(prev);
     if (hidden) cur.add(id);
     else cur.delete(id);
     set({ hiddenCategoryIds: [...cur] });
-    pushSettings(get);
+    pushSettings(get, { hiddenCategoryIds: prev }, set);
   },
   addCustomCategory: ({ name, kind }) => {
     const trimmed = name.trim().slice(0, 40);
@@ -502,7 +672,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
       icon: style.icon,
     };
     set({ customCategories: [...custom, row] });
-    pushSettings(get);
+    pushSettings(get, { customCategories: custom }, set);
     return true;
   },
   removeCustomCategory: (id) => {
@@ -516,40 +686,62 @@ export const useLedger = create<LedgerState>()((set, get) => ({
       toast.message("La oculté. Hay movimientos con esta categoría.");
       return;
     }
+    const prevCustom = get().customCategories;
+    const prevHidden = get().hiddenCategoryIds;
     set({
-      customCategories: get().customCategories.filter((c) => c.id !== id),
-      hiddenCategoryIds: get().hiddenCategoryIds.filter((x) => x !== id),
+      customCategories: prevCustom.filter((c) => c.id !== id),
+      hiddenCategoryIds: prevHidden.filter((x) => x !== id),
     });
-    pushSettings(get);
+    pushSettings(get, { customCategories: prevCustom, hiddenCategoryIds: prevHidden }, set);
   },
   setAccountOpening: (id, opening) => {
-    const accounts = get().accounts.map((a) => (a.id === id ? { ...a, opening } : a));
+    const prev = get().accounts;
+    const accounts = prev.map((a) => (a.id === id ? { ...a, opening } : a));
     set({ accounts });
     persistLocal(get);
-    void saveAccounts({ data: { accounts: [{ id, opening }] } }).catch(persistFail);
+    void saveAccounts({ data: { accounts: [{ id, opening }] } }).catch((err) => {
+      persistFail(err);
+      set({ accounts: prev });
+      persistLocal(get);
+    });
   },
   completeOnboarding: ({ globalBudget, openings }) => {
-    const accounts = get().accounts.map((a) => {
+    const prevAccounts = get().accounts;
+    const prevBudget = get().globalBudget;
+    const prevOnboarded = get().onboarded;
+    const accounts = prevAccounts.map((a) => {
       const hit = openings.find((o) => o.id === a.id);
       return hit ? { ...a, opening: hit.opening } : a;
     });
     set({ accounts, globalBudget, onboarded: true });
     persistLocal(get);
-    void saveAccounts({ data: { accounts: openings } }).catch(persistFail);
-    pushSettings(get);
+    void saveAccounts({ data: { accounts: openings } }).catch((err) => {
+      persistFail(err);
+      set({ accounts: prevAccounts });
+      persistLocal(get);
+    });
+    pushSettings(get, { globalBudget: prevBudget, onboarded: prevOnboarded }, set);
   },
   upsertRecurring: (row) => {
     const prev = get().recurrings;
     const next = prev.some((r) => r.id === row.id) ? prev.map((r) => (r.id === row.id ? row : r)) : [...prev, row];
     set({ recurrings: next });
     persistLocal(get);
-    void saveRecurring({ data: row }).catch(persistFail);
+    void saveRecurring({ data: row }).catch((err) => {
+      persistFail(err);
+      set({ recurrings: prev });
+      persistLocal(get);
+    });
   },
   deleteRecurring: (id) => {
     const prev = get().recurrings;
     set({ recurrings: prev.filter((r) => r.id !== id) });
     persistLocal(get);
-    void removeRecurring({ data: id }).catch(persistFail);
+    void removeRecurring({ data: id }).catch((err) => {
+      persistFail(err);
+      set({ recurrings: prev });
+      persistLocal(get);
+    });
   },
   postRecurring: (id, ym = monthISO()) => {
     const r = get().recurrings.find((x) => x.id === id);
@@ -594,23 +786,33 @@ export const useLedger = create<LedgerState>()((set, get) => ({
     const transactions = buildSeed().map((t) =>
       fillTx(() => ({ ...get(), activeBookId, accounts, usdRate, usdtRate }) as LedgerState, t),
     );
+    paint(set, get, { confirmed: transactions, outbox: [] });
     set({
-      transactions,
       budgets: { ...DEFAULT_BUDGETS },
       globalBudget: DEFAULT_GLOBAL_BUDGET,
       chat: [],
       viewMonth: monthISO(),
       onboarded: true,
     });
-    void replaceTransactions({ data: transactions }).catch(persistFail);
+    persistLocal(get);
+    void replaceTransactions({ data: transactions }).catch((err) => persistFail(err));
     pushSettings(get);
   },
   wipe: () => {
-    const { activeBookId, transactions } = get();
-    const kept = transactions.filter((t) => t.bookId && t.bookId !== activeBookId);
-    set({ transactions: kept, chat: [] });
+    const { activeBookId, confirmed, outbox, transactions } = get();
+    const kept = confirmed.filter((t) => t.bookId && t.bookId !== activeBookId);
+    const nextOutbox = outbox.filter((o) => {
+      const row = o.row ?? transactions.find((t) => t.id === o.id);
+      return row?.bookId && row.bookId !== activeBookId;
+    });
+    paint(set, get, { confirmed: kept, outbox: nextOutbox });
+    set({ chat: [] });
     persistLocal(get);
-    void replaceTransactions({ data: kept }).catch(persistFail);
+    void replaceTransactions({ data: kept }).catch((err) => {
+      persistFail(err);
+      paint(set, get, { confirmed, outbox });
+      persistLocal(get);
+    });
   },
 }));
 
