@@ -21,7 +21,7 @@ import {
   removeTransaction,
   replaceTransactions,
   saveAccounts,
-  saveRecurring,
+  replaceRecurrings,
   loadLatestBackup,
   saveDailyBackup,
   saveSettings,
@@ -42,6 +42,7 @@ import { dueDate, isDue, isPosted, postedTxId } from "./recurring";
 import { buildSeed } from "./seed";
 import { monthISO, todayISO, uid } from "./utils";
 import { applyOutbox, enqueue, OUTBOX_MAX_TRIES, pruneOutbox, resetTries, type OutboxOp } from "./outbox";
+import { mergeRecurrings } from "./recurring-sync";
 import type { Account, Book, Category, CategoryKind, ChatMessage, Recurring, Transaction } from "./types";
 
 const LOCAL_KEY = "cifra-ledger-v1";
@@ -64,6 +65,7 @@ type LedgerState = {
   hiddenCategoryIds: string[];
   customCategories: Category[];
   recurrings: Recurring[];
+  pendingRecurringIds: string[];
   budgets: Record<string, number>;
   globalBudget: number;
   usdRate: number;
@@ -103,6 +105,7 @@ type LedgerState = {
   deleteRecurring: (id: string) => void;
   postRecurring: (id: string, ym?: string) => boolean;
   postDueRecurrings: () => number;
+  flushRecurrings: (opts?: { force?: boolean }) => Promise<void>;
   pushChat: (msg: ChatMessage) => void;
   clearChat: () => void;
   loadDemo: () => void;
@@ -139,6 +142,7 @@ function vaultInput(get: () => LedgerState) {
     transactions: s.confirmed,
     outbox: s.outbox,
     recurrings: s.recurrings,
+    pendingRecurringIds: s.pendingRecurringIds,
     budgets: s.budgets,
     globalBudget: s.globalBudget,
     categoryNames: s.categoryNames,
@@ -147,6 +151,7 @@ function vaultInput(get: () => LedgerState) {
     usdRate: s.usdRate,
     usdtRate: s.usdtRate,
     usdSource: s.usdSource,
+    chat: s.chat,
   };
 }
 
@@ -321,13 +326,14 @@ async function restoreVault(get: () => LedgerState, set: (p: Partial<LedgerState
     );
     paint(set, get, { outbox });
   }
-  if (state.recurrings.length === 0 && vault.recurrings.length) {
+  if (vault.recurrings.length) {
     const recs = remapVaultRecurrings(vault, state.books, accounts ?? state.accounts);
-    set({ recurrings: recs });
-    for (const row of recs) {
-      void saveRecurring({ data: row }).catch((err) => persistFail(err));
+    const { merged, added } = mergeRecurrings(get().recurrings, recs);
+    if (added.length) {
+      const pending = [...new Set([...get().pendingRecurringIds, ...added.map((r) => r.id)])];
+      set({ recurrings: merged, pendingRecurringIds: pending });
+      notes.push("fijos");
     }
-    notes.push("fijos");
   }
   if (notes.length) toast.success(`Restauré ${notes.join(", ")} de este teléfono`);
   persistLocal(get);
@@ -353,6 +359,8 @@ function paintVault(set: (p: Partial<LedgerState>) => void, get: () => LedgerSta
     usdRate: vault.usdRate || get().usdRate,
     usdtRate: vault.usdtRate || get().usdtRate,
     usdSource: isUsdSource(vault.usdSource) ? vault.usdSource : get().usdSource,
+    chat: vault.chat.length ? vault.chat : get().chat,
+    pendingRecurringIds: vault.pendingRecurringIds.length ? vault.pendingRecurringIds : get().pendingRecurringIds,
   });
   paint(set, get, { confirmed, outbox });
   return true;
@@ -373,6 +381,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
   hiddenCategoryIds: [],
   customCategories: [],
   recurrings: [],
+  pendingRecurringIds: [],
   budgets: { ...DEFAULT_BUDGETS },
   globalBudget: DEFAULT_GLOBAL_BUDGET,
   usdRate: DEFAULT_USD_RATE,
@@ -443,6 +452,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
               hiddenCategoryIds: remote.hiddenCategoryIds,
               customCategories: remote.customCategories,
               recurrings: remote.recurrings,
+              pendingRecurringIds: get().pendingRecurringIds,
               budgets: legacy.budgets,
               globalBudget: legacy.globalBudget,
               usdRate: remote.usdRate,
@@ -453,6 +463,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
             pushSettings(get);
             clearLocalSnapshot();
             await restoreVault(get, set);
+            void get().flushRecurrings({ force: true });
             void get().refreshQuotes();
             const posted = get().postDueRecurrings();
             if (posted > 0) toast.success(posted === 1 ? "Anoté 1 fijo de este mes" : `Anoté ${posted} fijos de este mes`);
@@ -475,6 +486,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
           hiddenCategoryIds: remote.hiddenCategoryIds,
           customCategories: remote.customCategories,
           recurrings: remote.recurrings,
+          pendingRecurringIds: get().pendingRecurringIds,
           budgets: remote.budgets,
           globalBudget: remote.globalBudget,
           usdRate: remote.usdRate,
@@ -483,6 +495,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
         });
         paint(set, get, { confirmed: remote.transactions, outbox });
         await restoreVault(get, set);
+        void get().flushRecurrings({ force: true });
         void get().refreshQuotes();
         const posted = get().postDueRecurrings();
         if (posted > 0) toast.success(posted === 1 ? "Anoté 1 fijo de este mes" : `Anoté ${posted} fijos de este mes`);
@@ -513,6 +526,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
       books: [],
       accounts: [],
       recurrings: [],
+      pendingRecurringIds: [],
       chat: [],
       selectedDay: null,
       quickOpen: false,
@@ -725,21 +739,22 @@ export const useLedger = create<LedgerState>()((set, get) => ({
   upsertRecurring: (row) => {
     const prev = get().recurrings;
     const next = prev.some((r) => r.id === row.id) ? prev.map((r) => (r.id === row.id ? row : r)) : [...prev, row];
-    set({ recurrings: next });
+    const pending = [...new Set([...get().pendingRecurringIds, row.id])];
+    set({ recurrings: next, pendingRecurringIds: pending });
     persistLocal(get);
-    void saveRecurring({ data: row }).catch((err) => {
-      persistFail(err);
-      set({ recurrings: prev });
-      persistLocal(get);
-    });
+    void get().flushRecurrings();
   },
   deleteRecurring: (id) => {
     const prev = get().recurrings;
-    set({ recurrings: prev.filter((r) => r.id !== id) });
+    const prevPending = get().pendingRecurringIds;
+    set({
+      recurrings: prev.filter((r) => r.id !== id),
+      pendingRecurringIds: prevPending.filter((x) => x !== id),
+    });
     persistLocal(get);
     void removeRecurring({ data: id }).catch((err) => {
       persistFail(err);
-      set({ recurrings: prev });
+      set({ recurrings: prev, pendingRecurringIds: prevPending });
       persistLocal(get);
     });
   },
@@ -779,8 +794,32 @@ export const useLedger = create<LedgerState>()((set, get) => ({
     }
     return n;
   },
-  pushChat: (msg) => set({ chat: [...get().chat, msg].slice(-24) }),
-  clearChat: () => set({ chat: [] }),
+  flushRecurrings: async () => {
+    const ids = get().pendingRecurringIds;
+    if (!ids.length) return;
+    const rows = get().recurrings.filter((r) => ids.includes(r.id));
+    if (!rows.length) {
+      set({ pendingRecurringIds: [] });
+      persistLocal(get);
+      return;
+    }
+    try {
+      await replaceRecurrings({ data: rows });
+      const left = get().pendingRecurringIds.filter((id) => !ids.includes(id));
+      set({ pendingRecurringIds: left });
+      persistLocal(get);
+    } catch (err) {
+      persistFail(err, () => void get().flushRecurrings());
+    }
+  },
+  pushChat: (msg) => {
+    set({ chat: [...get().chat, msg].slice(-24) });
+    persistLocal(get);
+  },
+  clearChat: () => {
+    set({ chat: [] });
+    persistLocal(get);
+  },
   loadDemo: () => {
     const { activeBookId, accounts, usdRate, usdtRate } = get();
     const transactions = buildSeed().map((t) =>

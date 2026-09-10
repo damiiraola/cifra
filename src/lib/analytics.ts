@@ -125,8 +125,10 @@ export function snapshotText(
   budgets: Record<string, number>,
   globalBudget: number,
   rates?: FxRates,
+  cats: Category[] = CATEGORIES.filter((c) => c.kind === "expense"),
 ) {
-  const catLines = categoryRows(current.byCat, budgets)
+  const names = Object.fromEntries(cats.map((c) => [c.id, c.name]));
+  const catLines = categoryRows(current.byCat, budgets, cats)
     .filter((c) => c.spent > 0 || c.budget > 0)
     .map((c) => {
       const pct = c.budget ? Math.round((c.spent / c.budget) * 100) : 0;
@@ -139,7 +141,7 @@ export function snapshotText(
     .slice(0, 40)
     .map((t) => {
       const sign = t.type === "expense" ? "-" : t.type === "income" ? "+" : "~";
-      const cat = CATEGORY_MAP[t.categoryId]?.name ?? t.categoryId;
+      const cat = names[t.categoryId] ?? CATEGORY_MAP[t.categoryId]?.name ?? t.categoryId;
       const detail = t.merchant || t.note || "";
       return `${t.date} ${sign}${t.amount} ${t.currency} ${cat} ${detail} [${t.method}]`;
     })

@@ -14,6 +14,7 @@ import { Route as BetaRouteImport } from './routes/beta'
 import { Route as LanzarRouteImport } from './routes/lanzar'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as OlvideRouteImport } from './routes/olvide'
+import { Route as PrivacidadRouteImport } from './routes/privacidad'
 import { Route as ResetRouteImport } from './routes/reset'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppAjustesRouteImport } from './routes/_app/ajustes'
@@ -47,6 +48,11 @@ const LoginRoute = LoginRouteImport.update({
 const OlvideRoute = OlvideRouteImport.update({
   id: '/olvide',
   path: '/olvide',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacidadRoute = PrivacidadRouteImport.update({
+  id: '/privacidad',
+  path: '/privacidad',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ResetRoute = ResetRouteImport.update({
@@ -106,6 +112,7 @@ export interface FileRoutesByFullPath {
   '/lanzar': typeof LanzarRoute
   '/login': typeof LoginRoute
   '/olvide': typeof OlvideRoute
+  '/privacidad': typeof PrivacidadRoute
   '/reset': typeof ResetRoute
   '/ajustes': typeof AppAjustesRoute
   '/analitica': typeof AppAnaliticaRoute
@@ -121,6 +128,7 @@ export interface FileRoutesByTo {
   '/lanzar': typeof LanzarRoute
   '/login': typeof LoginRoute
   '/olvide': typeof OlvideRoute
+  '/privacidad': typeof PrivacidadRoute
   '/reset': typeof ResetRoute
   '/ajustes': typeof AppAjustesRoute
   '/analitica': typeof AppAnaliticaRoute
@@ -139,6 +147,7 @@ export interface FileRoutesById {
   '/lanzar': typeof LanzarRoute
   '/login': typeof LoginRoute
   '/olvide': typeof OlvideRoute
+  '/privacidad': typeof PrivacidadRoute
   '/reset': typeof ResetRoute
   '/_app/ajustes': typeof AppAjustesRoute
   '/_app/analitica': typeof AppAnaliticaRoute
@@ -158,6 +167,7 @@ export interface FileRouteTypes {
     | '/lanzar'
     | '/login'
     | '/olvide'
+    | '/privacidad'
     | '/reset'
     | '/ajustes'
     | '/analitica'
@@ -173,6 +183,7 @@ export interface FileRouteTypes {
     | '/lanzar'
     | '/login'
     | '/olvide'
+    | '/privacidad'
     | '/reset'
     | '/ajustes'
     | '/analitica'
@@ -190,6 +201,7 @@ export interface FileRouteTypes {
     | '/lanzar'
     | '/login'
     | '/olvide'
+    | '/privacidad'
     | '/reset'
     | '/_app/ajustes'
     | '/_app/analitica'
@@ -208,6 +220,7 @@ export interface RootRouteChildren {
   LanzarRoute: typeof LanzarRoute
   LoginRoute: typeof LoginRoute
   OlvideRoute: typeof OlvideRoute
+  PrivacidadRoute: typeof PrivacidadRoute
   ResetRoute: typeof ResetRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
@@ -247,6 +260,13 @@ declare module '@tanstack/react-router' {
       path: '/olvide'
       fullPath: '/olvide'
       preLoaderRoute: typeof OlvideRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacidad': {
+      id: '/privacidad'
+      path: '/privacidad'
+      fullPath: '/privacidad'
+      preLoaderRoute: typeof PrivacidadRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reset': {
@@ -352,9 +372,19 @@ const rootRouteChildren: RootRouteChildren = {
   LanzarRoute: LanzarRoute,
   LoginRoute: LoginRoute,
   OlvideRoute: OlvideRoute,
+  PrivacidadRoute: PrivacidadRoute,
   ResetRoute: ResetRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+  }
+}

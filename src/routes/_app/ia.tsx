@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { askCifra } from "@/lib/ai";
 import { computeMonth, snapshotText } from "@/lib/analytics";
 import { todayISO, uid } from "@/lib/utils";
-import { useLedger, useBookTxs } from "@/lib/store";
+import { useLedger, useBookTxs, useAllCategories } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
 import type { PayMethod, TxType, Currency } from "@/lib/types";
@@ -35,6 +35,7 @@ export function Asistente() {
     openQuick,
   } = useLedger();
   const transactions = useBookTxs();
+  const allCats = useAllCategories();
   const [text, setText] = useState("");
   const [pending, setPending] = useState(false);
   const [parseMode, setParseMode] = useState(false);
@@ -44,8 +45,8 @@ export function Asistente() {
     const cur = computeMonth(transactions, viewMonth, fx);
     const prevYm = shift(viewMonth);
     const prev = computeMonth(transactions, prevYm, fx);
-    return snapshotText(cur, prev, budgets, globalBudget, fx);
-  }, [transactions, viewMonth, usdRate, usdtRate, budgets, globalBudget]);
+    return snapshotText(cur, prev, budgets, globalBudget, fx, allCats);
+  }, [transactions, viewMonth, usdRate, usdtRate, budgets, globalBudget, allCats]);
 
   async function send(message: string, mode: "chat" | "parse" | "report" = "chat") {
     const trimmed = message.trim();
@@ -65,14 +66,23 @@ export function Asistente() {
     try {
       const history = chat.map((m) => ({ role: m.role, content: m.content }));
       const res = await askCifra({
-        data: { mode, message: trimmed, snapshot, history },
+        data: {
+          mode,
+          message: trimmed,
+          snapshot,
+          history,
+          categories: allCats.map((c) => ({ id: c.id, name: c.name, kind: c.kind })),
+        },
       });
       if (!res.ok) {
         toast.error(res.error);
         return;
       }
       if (mode === "parse") {
-        const parsed = parseTx(res.text);
+        const parsed = parseTx(
+          res.text,
+          new Set(allCats.map((c) => c.id)),
+        );
         if (!parsed) {
           toast.error("No pude armar el movimiento. Probá ser más específico.");
           return;
@@ -201,7 +211,7 @@ function shift(ym: string) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-function parseTx(raw: string) {
+function parseTx(raw: string, allowed: Set<string>) {
   const match = raw.match(/\{[\s\S]*\}/);
   if (!match) return null;
   try {
@@ -218,7 +228,7 @@ function parseTx(raw: string) {
     if (!j.amount || j.amount <= 0) return null;
     const type: TxType = j.type === "income" ? "income" : "expense";
     const categoryId =
-      j.categoryId && CATEGORY_MAP[j.categoryId]
+      j.categoryId && (allowed.has(j.categoryId) || CATEGORY_MAP[j.categoryId])
         ? j.categoryId
         : type === "income"
           ? "otros-ing"

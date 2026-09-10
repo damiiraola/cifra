@@ -228,10 +228,10 @@ function Login() {
       ) : null}
 
       <Link
-        to="/beta"
-        className="mt-6 block text-center text-sm text-muted underline-offset-4 hover:text-fg hover:underline"
+        to="/privacidad"
+        className="mt-6 block text-center text-xs text-subtle underline-offset-4 hover:text-muted hover:underline"
       >
-        Definir la beta — 20 toques
+        Privacidad
       </Link>
     </AuthScreen>
   );

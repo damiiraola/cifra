@@ -98,7 +98,7 @@ export function UserButton() {
     noGateSessionOnServer,
   );
   if (!user) return null;
-  const label = user.displayName ?? user.primaryEmail ?? "Account";
+  const label = user.displayName ?? user.primaryEmail ?? "Cuenta";
   return (
     <div className="flex items-center gap-2">
       {user.profileImageUrl ? (
@@ -124,7 +124,7 @@ export function UserButton() {
           }}
           className="cursor-pointer text-sm underline-offset-4 opacity-70 hover:underline disabled:cursor-wait disabled:no-underline"
         >
-          {signingOut ? "Signing out…" : "Sign out"}
+          {signingOut ? "Cerrando…" : "Cerrar sesión"}
         </button>
       )}
     </div>

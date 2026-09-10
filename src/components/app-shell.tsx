@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   BarChart3,
@@ -6,6 +6,7 @@ import {
   CalendarDays,
   LayoutDashboard,
   List,
+  Menu,
   Plus,
   Repeat,
   Settings,
@@ -23,6 +24,7 @@ import { QuotesTicker } from "@/components/quotes-ticker";
 import { OutboxFlusher } from "@/components/outbox-flusher";
 import { Onboarding } from "@/components/onboarding";
 import { BookSwitcher } from "@/components/book-switcher";
+import { MoreSheet } from "@/components/more-sheet";
 import { Toaster } from "sonner";
 
 const NAV = [
@@ -39,6 +41,15 @@ const MORE = [
   { to: "/ajustes", label: "Ajustes", icon: Settings },
 ];
 
+const TAB = [
+  { to: "/", label: "Inicio", icon: LayoutDashboard },
+  { to: "/movimientos", label: "Movs", icon: List },
+  { to: "/fijos", label: "Fijos", icon: Repeat },
+  { to: "/presupuestos", label: "Tope", icon: Target },
+];
+
+const MORE_PATHS = new Set(["/diario", "/analitica", "/ia", "/ajustes"]);
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const openQuick = useLedger((s) => s.openQuick);
@@ -48,6 +59,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const userId = user?.id;
   const onboarded = useLedger((s) => s.onboarded);
   const chrome = status === "ready" && onboarded;
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreActive = moreOpen || MORE_PATHS.has(pathname);
 
   useEffect(() => {
     if (!userId) return;
@@ -142,9 +155,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           )}
         </div>
 
-        {chrome ? <nav className="cifra-tabbar fixed inset-x-0 bottom-0 z-40 border-t border-border bg-bg/95 px-2 pt-1 backdrop-blur-sm md:hidden">
-          <div className="grid grid-cols-4">
-            {NAV.map((item) => {
+        {chrome ? <nav className="cifra-tabbar fixed inset-x-0 bottom-0 z-40 border-t border-border bg-bg/95 px-1 pt-1 backdrop-blur-sm md:hidden">
+          <div className="grid grid-cols-5">
+            {TAB.map((item) => {
               const active = pathname === item.to;
               const Icon = item.icon;
               return (
@@ -152,7 +165,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   key={item.to}
                   to={item.to}
                   className={cn(
-                    "flex min-h-12 flex-col items-center justify-center gap-0.5 text-[11px] font-medium",
+                    "flex min-h-12 flex-col items-center justify-center gap-0.5 text-[10px] font-medium leading-tight",
                     active ? "text-fg" : "text-muted",
                   )}
                 >
@@ -161,9 +174,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </Link>
               );
             })}
+            <button
+              type="button"
+              onClick={() => setMoreOpen(true)}
+              className={cn(
+                "flex min-h-12 flex-col items-center justify-center gap-0.5 text-[10px] font-medium leading-tight",
+                moreActive ? "text-fg" : "text-muted",
+              )}
+            >
+              <Menu className="size-4" />
+              Más
+            </button>
           </div>
         </nav> : null}
 
+        <MoreSheet open={moreOpen} onOpenChange={setMoreOpen} pathname={pathname} />
         <QuickAdd />
         <ShortcutListener />
         {chrome ? <QuotesTicker /> : null}

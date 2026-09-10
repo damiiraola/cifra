@@ -1,4 +1,4 @@
-import type { Account, Book, Category, Recurring, Transaction } from "./types";
+import type { Account, Book, Category, ChatMessage, Recurring, Transaction } from "./types";
 import { parseOutbox, type OutboxOp } from "./outbox";
 
 const KEY = "cifra.local-vault";
@@ -44,6 +44,8 @@ export type LocalVault = {
   usdRate: number;
   usdtRate: number;
   usdSource: string;
+  chat: ChatMessage[];
+  pendingRecurringIds: string[];
 };
 
 function mailOf(email: string | null | undefined) {
@@ -75,6 +77,8 @@ export function buildLocalVault(input: {
   usdRate?: number;
   usdtRate?: number;
   usdSource?: string;
+  chat?: ChatMessage[];
+  pendingRecurringIds?: string[];
 }): LocalVault | null {
   const email = mailOf(input.email);
   if (!email) return null;
@@ -114,6 +118,8 @@ export function buildLocalVault(input: {
     usdRate: input.usdRate ?? 0,
     usdtRate: input.usdtRate ?? 0,
     usdSource: input.usdSource ?? "",
+    chat: (input.chat ?? []).slice(-24),
+    pendingRecurringIds: [...new Set(input.pendingRecurringIds ?? [])],
   };
 }
 
@@ -168,6 +174,27 @@ export function autoBackupHint(email: string | null | undefined): { day: string;
   }
 }
 
+function parseChat(raw: unknown): ChatMessage[] {
+  if (!Array.isArray(raw)) return [];
+  const out: ChatMessage[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const o = item as Record<string, unknown>;
+    const id = String(o.id ?? "");
+    const role = o.role === "assistant" ? "assistant" : o.role === "user" ? "user" : "";
+    const content = String(o.content ?? "");
+    if (!id || !role || !content) continue;
+    out.push({
+      id,
+      role,
+      content: content.slice(0, 8000),
+      createdAt: String(o.createdAt ?? ""),
+    });
+    if (out.length >= 24) break;
+  }
+  return out;
+}
+
 export function asVault(raw: unknown): LocalVault | null {
   if (!raw || typeof raw !== "object") return null;
   const p = raw as Partial<LocalVault> & { v?: number };
@@ -192,6 +219,10 @@ export function asVault(raw: unknown): LocalVault | null {
     usdRate: Number(p.usdRate) || 0,
     usdtRate: Number(p.usdtRate) || 0,
     usdSource: String(p.usdSource ?? ""),
+    chat: parseChat(p.chat),
+    pendingRecurringIds: Array.isArray(p.pendingRecurringIds)
+      ? p.pendingRecurringIds.map(String).filter(Boolean)
+      : [],
   };
 }
 
@@ -243,6 +274,8 @@ function migrateLegacy(mail: string): LocalVault | null {
       usdRate: 0,
       usdtRate: 0,
       usdSource: "",
+      chat: [],
+      pendingRecurringIds: [],
     };
   } catch {
     return null;

@@ -554,33 +554,52 @@ function asRecurring(input: Recurring): Recurring {
   };
 }
 
+async function upsertRecurringRow(
+  sql: Awaited<ReturnType<typeof getSql>>,
+  userId: string,
+  data: Recurring,
+) {
+  await sql`
+    insert into ledger_recurring (
+      id, user_id, book_id, type, name, amount, currency, category_id, account_id, method, day, note, active
+    ) values (
+      ${data.id}, ${userId}, ${data.bookId}, ${data.type}, ${data.name}, ${data.amount},
+      ${data.currency}, ${data.categoryId}, ${data.accountId}, ${data.method}, ${data.day}, ${data.note}, ${data.active}
+    )
+    on conflict (id) do update set
+      book_id = excluded.book_id,
+      type = excluded.type,
+      name = excluded.name,
+      amount = excluded.amount,
+      currency = excluded.currency,
+      category_id = excluded.category_id,
+      account_id = excluded.account_id,
+      method = excluded.method,
+      day = excluded.day,
+      note = excluded.note,
+      active = excluded.active
+    where ledger_recurring.user_id = ${userId}
+  `;
+}
+
 export const saveRecurring = createServerFn({ method: "POST" })
   .validator((input: Recurring) => asRecurring(input))
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
     const sql = await getSql();
-    await sql`
-      insert into ledger_recurring (
-        id, user_id, book_id, type, name, amount, currency, category_id, account_id, method, day, note, active
-      ) values (
-        ${data.id}, ${context.userId}, ${data.bookId}, ${data.type}, ${data.name}, ${data.amount},
-        ${data.currency}, ${data.categoryId}, ${data.accountId}, ${data.method}, ${data.day}, ${data.note}, ${data.active}
-      )
-      on conflict (id) do update set
-        book_id = excluded.book_id,
-        type = excluded.type,
-        name = excluded.name,
-        amount = excluded.amount,
-        currency = excluded.currency,
-        category_id = excluded.category_id,
-        account_id = excluded.account_id,
-        method = excluded.method,
-        day = excluded.day,
-        note = excluded.note,
-        active = excluded.active
-      where ledger_recurring.user_id = ${context.userId}
-    `;
+    await upsertRecurringRow(sql, context.userId, data);
     return { ok: true as const };
+  });
+
+export const replaceRecurrings = createServerFn({ method: "POST" })
+  .validator((input: Recurring[]) => (Array.isArray(input) ? input.map(asRecurring) : []))
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    for (const row of data) {
+      await upsertRecurringRow(sql, context.userId, row);
+    }
+    return { ok: true as const, count: data.length };
   });
 
 export const removeRecurring = createServerFn({ method: "POST" })
@@ -640,4 +659,29 @@ export const loadLatestBackup = createServerFn({ method: "GET" })
       at: rows[0].created_at,
       payloadJson: rows[0].payload,
     };
+  });
+
+export const deleteAccount = createServerFn({ method: "POST" })
+  .validator((input: { email: string }) => {
+    const email = String(input?.email ?? "").trim().toLowerCase();
+    if (!email.includes("@")) throw new Error("Mail inválido");
+    return { email };
+  })
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    const sql = await getSql();
+    const rows = await sql<{ email: string }>`
+      select email from "user" where id = ${context.userId} limit 1
+    `;
+    const actual = String(rows[0]?.email ?? "").trim().toLowerCase();
+    if (!actual || actual !== data.email) throw new Error("El mail no coincide");
+    await sql`delete from ledger_transactions where user_id = ${context.userId}`;
+    await sql`delete from ledger_recurring where user_id = ${context.userId}`;
+    await sql`delete from ledger_accounts where user_id = ${context.userId}`;
+    await sql`delete from ledger_books where user_id = ${context.userId}`;
+    await sql`delete from ledger_settings where user_id = ${context.userId}`;
+    await sql`delete from ledger_backups where user_id = ${context.userId}`;
+    await sql`delete from "verification" where "identifier" = ${actual}`;
+    await sql`delete from "user" where "id" = ${context.userId}`;
+    return { ok: true as const };
   });

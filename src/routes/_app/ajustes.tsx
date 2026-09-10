@@ -7,8 +7,10 @@ import { moneyARS, parseAmount } from "@/lib/format";
 import { formatRate, USD_SOURCES } from "@/lib/fx";
 import { CatIcon } from "@/lib/icons";
 import { isArgentineWeekday, quotesAgeLabel } from "@/lib/market-hours";
-import { autoBackupHint, downloadLocalVault, shareVaultToIcloud } from "@/lib/local-vault";
+import { autoBackupHint, clearLocalVault, downloadLocalVault, shareVaultToIcloud } from "@/lib/local-vault";
+import { deleteAccount } from "@/lib/ledger-api";
 import { useAllCategories, useBookAccounts, useBookTxs, useLedger } from "@/lib/store";
+import { signOut } from "@/lib/auth/client";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { UserButton } from "@/lib/auth/gates";
 import { Button } from "@/components/ui/button";
@@ -66,6 +68,7 @@ function Ajustes() {
     hiddenCategoryIds,
     wipe,
     setAccountOpening,
+    resetClient,
   } = useLedger();
   const hidden = useMemo(() => new Set(hiddenCategoryIds), [hiddenCategoryIds]);
   const book = books.find((b) => b.id === activeBookId);
@@ -73,6 +76,9 @@ function Ajustes() {
   const [newName, setNewName] = useState("");
   const [newKind, setNewKind] = useState<CategoryKind>("expense");
   const [confirmWipe, setConfirmWipe] = useState(false);
+  const [deleteEmail, setDeleteEmail] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [, setTick] = useState(0);
   const live = isArgentineWeekday();
   const auto = autoBackupHint(user?.primaryEmail);
@@ -105,6 +111,59 @@ function Ajustes() {
             <p className="mt-1 text-xs text-subtle">El libro está atado a este mail. Otro mail = otro libro vacío.</p>
           </div>
           <UserButton />
+        </div>
+        <p className="mt-4 text-xs text-subtle">
+          <Link to="/privacidad" className="underline-offset-4 hover:text-fg hover:underline">
+            Privacidad
+          </Link>
+          : qué se guarda y cómo se borra.
+        </p>
+        <div className="mt-4 grid gap-2 sm:max-w-sm">
+          <Label htmlFor="delete-email">Borrar cuenta</Label>
+          <p className="text-xs text-subtle">
+            Escribí tu mail para confirmar. Se van movimientos, fijos, respaldos y el login. No hay
+            vuelta atrás.
+          </p>
+          <Input
+            id="delete-email"
+            type="email"
+            autoComplete="off"
+            placeholder={user?.primaryEmail ?? "tu@mail.com"}
+            value={deleteEmail}
+            onChange={(e) => {
+              setDeleteEmail(e.target.value);
+              setConfirmDelete(false);
+            }}
+          />
+          <Button
+            variant="danger"
+            disabled={deleting}
+            onClick={() => {
+              const expected = (user?.primaryEmail ?? "").trim().toLowerCase();
+              if (deleteEmail.trim().toLowerCase() !== expected) {
+                toast.error("El mail no coincide");
+                return;
+              }
+              if (!confirmDelete) {
+                setConfirmDelete(true);
+                return;
+              }
+              setDeleting(true);
+              void deleteAccount({ data: { email: deleteEmail.trim() } })
+                .then(async () => {
+                  clearLocalVault();
+                  resetClient();
+                  toast.success("Cuenta borrada");
+                  await signOut("/login");
+                })
+                .catch((err) => {
+                  setDeleting(false);
+                  toast.error(err instanceof Error ? err.message : "No pude borrar la cuenta");
+                });
+            }}
+          >
+            {deleting ? "Borrando…" : confirmDelete ? "¿Seguro? Borrar cuenta para siempre" : "Borrar cuenta"}
+          </Button>
         </div>
       </section>
 
@@ -341,12 +400,7 @@ function Ajustes() {
             {confirmWipe ? "¿Seguro? Borrar este libro" : "Borrar movimientos de este libro"}
           </Button>
         </div>
-        <p className="mt-4 text-xs text-subtle">
-          Cotizaciones: DolarApi.{" "}
-          <Link to="/lanzar" className="underline-offset-4 hover:text-fg hover:underline">
-            Lanzar la beta
-          </Link>
-        </p>
+        <p className="mt-4 text-xs text-subtle">Cotizaciones: DolarApi.</p>
       </section>
     </div>
   );
