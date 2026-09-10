@@ -48,7 +48,7 @@ const TAB = [
   { to: "/presupuestos", label: "Tope", icon: Target },
 ];
 
-const MORE_PATHS = new Set(["/diario", "/analitica", "/ia", "/ajustes"]);
+const MORE_PATHS = new Set(["/diario", "/analitica", "/ia", "/ajustes", "/privacidad"]);
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });

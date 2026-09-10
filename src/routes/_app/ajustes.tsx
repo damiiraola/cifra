@@ -12,7 +12,6 @@ import { deleteAccount } from "@/lib/ledger-api";
 import { useAllCategories, useBookAccounts, useBookTxs, useLedger } from "@/lib/store";
 import { signOut } from "@/lib/auth/client";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
-import { UserButton } from "@/lib/auth/gates";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -79,6 +78,7 @@ function Ajustes() {
   const [deleteEmail, setDeleteEmail] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const [, setTick] = useState(0);
   const live = isArgentineWeekday();
   const auto = autoBackupHint(user?.primaryEmail);
@@ -104,22 +104,31 @@ function Ajustes() {
 
       <section className="rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
         <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Cuenta</p>
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-sm">{user?.displayName || "Cifra"}</p>
-            <p className="text-xs text-muted">{user?.primaryEmail}</p>
-            <p className="mt-1 text-xs text-subtle">El libro está atado a este mail. Otro mail = otro libro vacío.</p>
-          </div>
-          <UserButton />
+        <div className="mt-3">
+          <p className="text-sm">{user?.displayName || "Cifra"}</p>
+          <p className="text-xs text-muted">{user?.primaryEmail}</p>
+          <p className="mt-1 text-xs text-subtle">El libro está atado a este mail. Otro mail = otro libro vacío.</p>
         </div>
-        <p className="mt-4 text-xs text-subtle">
-          <Link to="/privacidad" className="underline-offset-4 hover:text-fg hover:underline">
-            Privacidad
-          </Link>
-          : qué se guarda y cómo se borra.
-        </p>
         <div className="mt-4 grid gap-2 sm:max-w-sm">
-          <Label htmlFor="delete-email">Borrar cuenta</Label>
+          <Button
+            variant="secondary"
+            disabled={signingOut}
+            onClick={() => {
+              setSigningOut(true);
+              void signOut("/login").catch(() => {
+                setSigningOut(false);
+                toast.error("No pude cerrar sesión. Reintentá.");
+              });
+            }}
+          >
+            {signingOut ? "Cerrando…" : "Cerrar sesión"}
+          </Button>
+          <Button variant="secondary" asChild>
+            <Link to="/privacidad">Privacidad</Link>
+          </Button>
+        </div>
+        <div className="mt-6 grid gap-2 sm:max-w-sm">
+          <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Borrar cuenta</p>
           <p className="text-xs text-subtle">
             Escribí tu mail para confirmar. Se van movimientos, fijos, respaldos y el login. No hay
             vuelta atrás.
@@ -153,8 +162,11 @@ function Ajustes() {
                 .then(async () => {
                   clearLocalVault();
                   resetClient();
-                  toast.success("Cuenta borrada");
-                  await signOut("/login");
+                  try {
+                    await signOut("/login");
+                  } catch {
+                    window.location.replace("/login");
+                  }
                 })
                 .catch((err) => {
                   setDeleting(false);

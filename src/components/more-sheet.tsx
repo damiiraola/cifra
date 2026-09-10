@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { BarChart3, Brain, CalendarDays, LogOut, Settings } from "lucide-react";
+import { BarChart3, Brain, CalendarDays, LogOut, Settings, Shield } from "lucide-react";
 import { signOut } from "@/lib/auth/client";
 import { cn } from "@/lib/utils";
 import {
@@ -50,6 +50,17 @@ export function MoreSheet({
                 </Link>
               );
             })}
+            <Link
+              to="/privacidad"
+              onClick={() => onOpenChange(false)}
+              className={cn(
+                "flex h-12 items-center gap-3 rounded-xl px-3 text-sm font-medium",
+                pathname === "/privacidad" ? "bg-elevated text-fg" : "text-muted hover:bg-elevated hover:text-fg",
+              )}
+            >
+              <Shield className="size-4" />
+              Privacidad
+            </Link>
             <button
               type="button"
               className="mt-2 flex h-12 items-center gap-3 rounded-xl px-3 text-sm font-medium text-muted hover:bg-elevated hover:text-fg"

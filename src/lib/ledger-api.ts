@@ -681,6 +681,8 @@ export const deleteAccount = createServerFn({ method: "POST" })
     await sql`delete from ledger_books where user_id = ${context.userId}`;
     await sql`delete from ledger_settings where user_id = ${context.userId}`;
     await sql`delete from ledger_backups where user_id = ${context.userId}`;
+    await sql`delete from "session" where "userId" = ${context.userId}`;
+    await sql`delete from "account" where "userId" = ${context.userId}`;
     await sql`delete from "verification" where "identifier" = ${actual}`;
     await sql`delete from "user" where "id" = ${context.userId}`;
     return { ok: true as const };

@@ -306,6 +306,7 @@ export function clearLocalVault() {
     localStorage.removeItem(KEY);
     localStorage.removeItem(LEGACY_CAJA);
     localStorage.removeItem(LEGACY_LEDGER);
+    localStorage.removeItem(AUTO_KEY);
   } catch {
     /* ignore */
   }

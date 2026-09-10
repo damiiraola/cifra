@@ -208,6 +208,15 @@ function Login() {
         <Button type="submit" className="mt-1 w-full" disabled={busy || !authEnabled}>
           {busy ? "Un segundo…" : mode === "up" ? "Crear cuenta" : "Entrar"}
         </Button>
+        {mode === "up" ? (
+          <p className="text-center text-xs text-subtle">
+            Al crear la cuenta, Cifra guarda tu mail y el libro.{" "}
+            <Link to="/privacidad" className="underline-offset-4 hover:text-muted hover:underline">
+              Privacidad
+            </Link>
+            .
+          </p>
+        ) : null}
       </form>
 
       {onGrok && authEnabled ? (
@@ -226,13 +235,6 @@ function Login() {
           ))}
         </div>
       ) : null}
-
-      <Link
-        to="/privacidad"
-        className="mt-6 block text-center text-xs text-subtle underline-offset-4 hover:text-muted hover:underline"
-      >
-        Privacidad
-      </Link>
     </AuthScreen>
   );
 }
