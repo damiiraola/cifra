@@ -232,6 +232,8 @@ function clearLocalSnapshot() {
 let hydrateLock: Promise<void> | null = null;
 let flushBusy = false;
 let flushAgain = false;
+let recFlushBusy = false;
+let recFlushAgain = false;
 
 function pushSettings(get: () => LedgerState, revert?: Partial<LedgerState>, set?: (p: Partial<LedgerState>) => void) {
   persistLocal(get);
@@ -288,23 +290,22 @@ function ackOp(set: (p: Partial<LedgerState>) => void, get: () => LedgerState, o
 async function restoreVault(get: () => LedgerState, set: (p: Partial<LedgerState>) => void) {
   const state = get();
   let vault = readLocalVault(state.ownerEmail);
+  let backup: ReturnType<typeof asVault> = null;
+  try {
+    const remote = await loadLatestBackup();
+    backup = asVault(remote?.payloadJson ? JSON.parse(remote.payloadJson) : null);
+  } catch {
+    /* ignore */
+  }
   const localEmpty =
     !vault || (!vault.openings.length && !vault.transactions.length && !vault.recurrings.length && !vault.outbox.length);
-  if (localEmpty) {
-    try {
-      const remote = await loadLatestBackup();
-      const parsed = asVault(remote?.payloadJson ? JSON.parse(remote.payloadJson) : null);
-      if (parsed) vault = parsed;
-    } catch {
-      /* ignore */
-    }
-  }
-  if (!vault) {
+  if (localEmpty && backup) vault = backup;
+  if (!vault && !backup) {
     persistLocal(get);
     return;
   }
   const notes: string[] = [];
-  const accounts = applyOpenings(state.books, state.accounts, vault.openings);
+  const accounts = vault ? applyOpenings(state.books, state.accounts, vault.openings) : null;
   if (accounts) {
     set({ accounts });
     void saveAccounts({ data: { accounts: accounts.map((a) => ({ id: a.id, opening: a.opening })) } }).catch((err) =>
@@ -312,23 +313,29 @@ async function restoreVault(get: () => LedgerState, set: (p: Partial<LedgerState
     );
     notes.push("saldos");
   }
-  if (state.confirmed.length === 0 && vault.transactions.length) {
+  if (vault && state.confirmed.length === 0 && vault.transactions.length) {
     const txs = remapVaultTxs(vault, state.books, accounts ?? state.accounts);
     const outbox = pruneOutbox(vault.outbox, txs);
     paint(set, get, { confirmed: txs, outbox });
     set({ onboarded: true });
     void replaceTransactions({ data: txs }).catch((err) => persistFail(err));
     notes.push("movimientos");
-  } else if (vault.outbox.length) {
+  } else if (vault?.outbox.length) {
     const outbox = pruneOutbox(
       vault.outbox.reduce((acc, op) => enqueue(acc, op), get().outbox),
       get().confirmed,
     );
     paint(set, get, { outbox });
   }
-  if (vault.recurrings.length) {
-    const recs = remapVaultRecurrings(vault, state.books, accounts ?? state.accounts);
-    const { merged, added } = mergeRecurrings(get().recurrings, recs);
+  const booksNow = get().books;
+  const accsNow = accounts ?? get().accounts;
+  const incoming = [
+    ...(vault ? remapVaultRecurrings(vault, booksNow, accsNow) : []),
+    ...(backup && backup !== vault ? remapVaultRecurrings(backup, booksNow, accsNow) : []),
+  ];
+  if (incoming.length) {
+    const nameOf = (id: string) => booksNow.find((b) => b.id === id)?.name ?? id;
+    const { merged, added } = mergeRecurrings(get().recurrings, incoming, nameOf);
     if (added.length) {
       const pending = [...new Set([...get().pendingRecurringIds, ...added.map((r) => r.id)])];
       set({ recurrings: merged, pendingRecurringIds: pending });
@@ -337,6 +344,7 @@ async function restoreVault(get: () => LedgerState, set: (p: Partial<LedgerState
   }
   if (notes.length) toast.success(`Restauré ${notes.join(", ")} de este teléfono`);
   persistLocal(get);
+  if (get().pendingRecurringIds.length) void get().flushRecurrings();
 }
 
 function paintVault(set: (p: Partial<LedgerState>) => void, get: () => LedgerState, vault: NonNullable<ReturnType<typeof readLocalVault>>) {
@@ -795,21 +803,33 @@ export const useLedger = create<LedgerState>()((set, get) => ({
     return n;
   },
   flushRecurrings: async () => {
-    const ids = get().pendingRecurringIds;
-    if (!ids.length) return;
-    const rows = get().recurrings.filter((r) => ids.includes(r.id));
-    if (!rows.length) {
-      set({ pendingRecurringIds: [] });
-      persistLocal(get);
+    if (recFlushBusy) {
+      recFlushAgain = true;
       return;
     }
+    recFlushBusy = true;
     try {
-      await replaceRecurrings({ data: rows });
-      const left = get().pendingRecurringIds.filter((id) => !ids.includes(id));
-      set({ pendingRecurringIds: left });
-      persistLocal(get);
-    } catch (err) {
-      persistFail(err, () => void get().flushRecurrings());
+      do {
+        recFlushAgain = false;
+        const ids = get().pendingRecurringIds;
+        if (!ids.length) continue;
+        const rows = get().recurrings.filter((r) => ids.includes(r.id));
+        if (!rows.length) {
+          set({ pendingRecurringIds: [] });
+          persistLocal(get);
+          continue;
+        }
+        try {
+          await replaceRecurrings({ data: rows });
+          const left = get().pendingRecurringIds.filter((id) => !ids.includes(id));
+          set({ pendingRecurringIds: left });
+          persistLocal(get);
+        } catch (err) {
+          persistFail(err, () => void get().flushRecurrings());
+        }
+      } while (recFlushAgain);
+    } finally {
+      recFlushBusy = false;
     }
   },
   pushChat: (msg) => {

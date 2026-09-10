@@ -25,10 +25,12 @@ function Fijos() {
     upsertRecurring,
     deleteRecurring,
     postRecurring,
+    pendingRecurringIds,
   } = useLedger();
   const accounts = useBookAccounts();
   const txs = useBookTxs();
   const mine = recurrings.filter((r) => r.bookId === activeBookId);
+  const unsaved = useMemo(() => new Set(pendingRecurringIds), [pendingRecurringIds]);
   const pending = mine.filter((r) => r.active && !isPosted(r, txs, viewMonth));
   const [editing, setEditing] = useState<Recurring | null>(null);
 
@@ -90,6 +92,7 @@ function Fijos() {
                   {" · "}
                   {allCats.find((c) => c.id === r.categoryId)?.name}
                   {posted ? " · cargado" : due ? " · pendiente" : " · programado"}
+                  {unsaved.has(r.id) ? " · sin guardar" : ""}
                   {!r.active ? " · pausado" : ""}
                 </span>
               </span>

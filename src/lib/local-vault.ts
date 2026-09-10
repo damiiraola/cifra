@@ -1,5 +1,6 @@
 import type { Account, Book, Category, ChatMessage, Recurring, Transaction } from "./types";
 import { parseOutbox, type OutboxOp } from "./outbox";
+import { remapRecurrings } from "./recurring-sync";
 
 const KEY = "cifra.local-vault";
 const LEGACY_CAJA = "cifra.caja-backup";
@@ -346,15 +347,7 @@ export function remapVaultTxs(vault: LocalVault, books: Book[], accounts: Accoun
 }
 
 export function remapVaultRecurrings(vault: LocalVault, books: Book[], accounts: Account[]): Recurring[] {
-  return vault.recurrings.map((r) => {
-    const book = books.find((b) => b.name === r.bookName) ?? books.find((b) => b.id === r.bookId);
-    const bookId = book?.id || r.bookId;
-    const account =
-      accounts.find((a) => a.bookId === bookId && a.name === r.accountName) ??
-      accounts.find((a) => a.id === r.accountId);
-    const { bookName: _b, accountName: _a, ...rest } = r;
-    return { ...rest, bookId, accountId: account?.id || r.accountId };
-  });
+  return remapRecurrings(vault.recurrings, books, accounts);
 }
 
 function vaultFile(email: string | null | undefined): File | null {
