@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { authMiddleware } from "@/lib/auth/middleware";
 
 type Mode = "chat" | "parse" | "report";
 
@@ -12,8 +13,12 @@ type AskInput = {
   categories?: CatHint[];
 };
 
+export const AI_UNAVAILABLE = "El asistente no está activo en este entorno.";
+export const AI_TIMEOUT = "El asistente no respondió. Reintentá.";
+const ASK_MS = 20_000;
+
 const BASE_CHAT = `Sos el analista financiero de Cifra, una app de control de gastos personales. Hablás en español rioplatense, claro y directo. No uses emojis.
-Trabajás SOLO con el snapshot del libro que te pasan. No inventes movimientos que no estén. Si falta data, decilo.
+Trabajás SOLO con el snapshot del libro que te pasan (totales, categorías, fijos, presupuestos). No hay tickets ni comercios. No inventes movimientos. Si falta data, decilo.
 Respondé breve: diagnóstico + 2 o 3 acciones concretas. Números en ARS con separador de miles.
 No des consejos ilegales ni de evasión. Tono: socio de confianza, no coach motivacional.`;
 
@@ -28,7 +33,7 @@ const BASE_REPORT = `Sos el analista de Cifra. Redactá un informe mensual en es
 3) Alertas (desvíos, proyección de cierre, vs mes anterior)
 4) Tres recortes concretos y realistas (en ARS)
 5) Una pregunta para el usuario
-Máximo 280 palabras. No inventes movimientos.`;
+Máximo 280 palabras. No inventes movimientos ni comercios.`;
 
 function catBlock(cats: CatHint[] | undefined) {
   if (!cats?.length) {
@@ -44,16 +49,28 @@ function systemFor(mode: Mode, cats?: CatHint[]) {
   return `${BASE_CHAT}\n${catBlock(cats)}`;
 }
 
+function isAbort(err: unknown) {
+  const name = err instanceof Error ? err.name : "";
+  return name === "TimeoutError" || name === "AbortError";
+}
+
+export const aiStatus = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async () => ({ active: Boolean(process.env.XAI_API_KEY?.trim()) }));
+
 export const askCifra = createServerFn({ method: "POST" })
   .validator((input: AskInput) => input)
+  .middleware([authMiddleware])
   .handler(async ({ data }) => {
-    const apiKey = process.env.XAI_API_KEY;
-    if (!apiKey) return { ok: false as const, error: "La IA no está disponible en este entorno." };
+    const apiKey = process.env.XAI_API_KEY?.trim();
+    if (!apiKey) return { ok: false as const, error: AI_UNAVAILABLE };
 
     const messages: { role: "system" | "user" | "assistant"; content: string }[] = [
       { role: "system", content: systemFor(data.mode, data.categories) },
-      { role: "user", content: `LIBRO (snapshot):\n${data.snapshot.slice(0, 8000)}` },
     ];
+    if (data.mode !== "parse" && data.snapshot.trim()) {
+      messages.push({ role: "user", content: `LIBRO (snapshot):\n${data.snapshot.slice(0, 4000)}` });
+    }
 
     if (data.mode === "chat" && data.history?.length) {
       for (const h of data.history.slice(-8)) {
@@ -66,27 +83,37 @@ export const askCifra = createServerFn({ method: "POST" })
       content: data.message.slice(0, 2000) || (data.mode === "report" ? "Generá el informe del mes." : ""),
     });
 
-    const res = await fetch("https://api.x.ai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: "grok-4.5",
-        messages,
-        max_tokens: data.mode === "parse" ? 400 : 900,
-        temperature: data.mode === "parse" ? 0.1 : 0.5,
-      }),
-    });
+    try {
+      const res = await fetch("https://api.x.ai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: "grok-4.5",
+          messages,
+          max_tokens: data.mode === "parse" ? 400 : 900,
+          temperature: data.mode === "parse" ? 0.1 : 0.5,
+        }),
+        signal: AbortSignal.timeout(ASK_MS),
+      });
 
-    if (!res.ok) {
-      return { ok: false as const, error: `No pude consultar la IA (${res.status}).` };
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          return { ok: false as const, error: AI_UNAVAILABLE };
+        }
+        return { ok: false as const, error: AI_TIMEOUT };
+      }
+
+      const body = (await res.json()) as {
+        choices: { message: { content: string } }[];
+      };
+      const text = body.choices[0]?.message.content ?? "";
+      if (!text.trim()) return { ok: false as const, error: AI_TIMEOUT };
+      return { ok: true as const, text };
+    } catch (err) {
+      if (isAbort(err)) return { ok: false as const, error: AI_TIMEOUT };
+      return { ok: false as const, error: AI_TIMEOUT };
     }
-
-    const body = (await res.json()) as {
-      choices: { message: { content: string } }[];
-    };
-    const text = body.choices[0]?.message.content ?? "";
-    return { ok: true as const, text };
   });

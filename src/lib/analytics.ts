@@ -1,8 +1,10 @@
-import { CATEGORIES, CATEGORY_MAP } from "./categories";
-import type { Category } from "./types";
-import { daysInMonth, monthBounds, prevMonth, todayISO } from "./utils";
+import { monthBounds, prevMonth, todayISO } from "./utils";
 import type { FxRates } from "./fx";
 import type { Currency, Transaction } from "./types";
+import { categoryRows, snapshotText } from "./snapshot-text";
+
+export { categoryRows, snapshotText };
+export type { SnapshotFijo } from "./snapshot-text";
 
 export function toARS(tx: Transaction, rates: FxRates) {
   if (tx.currency === "ARS") return tx.amount;
@@ -101,71 +103,8 @@ export function computeMonth(txs: Transaction[], ym: string, rates: FxRates) {
   };
 }
 
-export function categoryRows(
-  byCat: Record<string, number>,
-  budgets: Record<string, number>,
-  cats: Category[] = CATEGORIES.filter((c) => c.kind === "expense"),
-) {
-  return cats.filter((c) => c.kind === "expense")
-    .map((c) => ({
-      ...c,
-      spent: byCat[c.id] ?? 0,
-      budget: budgets[c.id] ?? 0,
-    }))
-    .sort((a, b) => b.spent - a.spent);
-}
-
 export function heatmapMax(byDay: { spent: number }[]) {
   return Math.max(1, ...byDay.map((d) => d.spent));
-}
-
-export function snapshotText(
-  current: MonthStats,
-  previous: MonthStats,
-  budgets: Record<string, number>,
-  globalBudget: number,
-  rates?: FxRates,
-  cats: Category[] = CATEGORIES.filter((c) => c.kind === "expense"),
-) {
-  const names = Object.fromEntries(cats.map((c) => [c.id, c.name]));
-  const catLines = categoryRows(current.byCat, budgets, cats)
-    .filter((c) => c.spent > 0 || c.budget > 0)
-    .map((c) => {
-      const pct = c.budget ? Math.round((c.spent / c.budget) * 100) : 0;
-      return `- ${c.name}: ${Math.round(c.spent)} / ${c.budget || "s/p"} (${pct}%)`;
-    })
-    .join("\n");
-
-  const recent = [...current.txs]
-    .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt))
-    .slice(0, 40)
-    .map((t) => {
-      const sign = t.type === "expense" ? "-" : t.type === "income" ? "+" : "~";
-      const cat = names[t.categoryId] ?? CATEGORY_MAP[t.categoryId]?.name ?? t.categoryId;
-      const detail = t.merchant || t.note || "";
-      return `${t.date} ${sign}${t.amount} ${t.currency} ${cat} ${detail} [${t.method}]`;
-    })
-    .join("\n");
-
-  const deltaSpent = previous.spent ? ((current.spent - previous.spent) / previous.spent) * 100 : 0;
-  const fxLine = rates
-    ? `FX USD: ${Math.round(rates.usd)} ARS · USDT: ${Math.round(rates.usdt)} ARS\n`
-    : "";
-
-  return `MES ${current.ym}
-${fxLine}GASTOS: ${Math.round(current.spent)} ARS
-INGRESOS: ${Math.round(current.earned)} ARS
-NETO: ${Math.round(current.net)} ARS
-PRESUPUESTO GLOBAL: ${Math.round(current.spent)} / ${globalBudget} (${globalBudget ? Math.round((current.spent / globalBudget) * 100) : 0}%)
-PROMEDIO DIARIO: ${Math.round(current.avgDaily)}
-PROYECCION CIERRE: ${Math.round(current.projected)}
-VS MES ANTERIOR (${previous.ym}): ${deltaSpent.toFixed(1)}%
-CATEGORIAS:
-${catLines}
-TOP COMERCIOS:
-${current.topMerchants.map((m) => `- ${m.name}: ${Math.round(m.amount)}`).join("\n")}
-MOVIMIENTOS RECIENTES:
-${recent}`;
 }
 
 export function compareDelta(current: number, previous: number) {

@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { askCifra } from "@/lib/ai";
+import { AI_TIMEOUT, AI_UNAVAILABLE, aiStatus, askCifra } from "@/lib/ai";
 import { computeMonth, snapshotText } from "@/lib/analytics";
 import { todayISO, uid } from "@/lib/utils";
 import { useLedger, useBookTxs, useAllCategories } from "@/lib/store";
@@ -22,6 +22,8 @@ const SUGGESTIONS = [
   "Gasté 15 mil en Coto con Mercado Pago",
 ];
 
+const CLIENT_MS = 22_000;
+
 export function Asistente() {
   const {
     viewMonth,
@@ -33,56 +35,100 @@ export function Asistente() {
     pushChat,
     clearChat,
     openQuick,
+    recurrings,
+    activeBookId,
   } = useLedger();
   const transactions = useBookTxs();
   const allCats = useAllCategories();
   const [text, setText] = useState("");
   const [pending, setPending] = useState(false);
   const [parseMode, setParseMode] = useState(false);
+  const [aiActive, setAiActive] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    void aiStatus()
+      .then((s) => {
+        if (live) setAiActive(s.active);
+      })
+      .catch(() => {
+        if (live) setAiActive(true);
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
 
   const snapshot = useMemo(() => {
     const fx = { usd: usdRate, usdt: usdtRate };
     const cur = computeMonth(transactions, viewMonth, fx);
     const prevYm = shift(viewMonth);
     const prev = computeMonth(transactions, prevYm, fx);
-    return snapshotText(cur, prev, budgets, globalBudget, fx, allCats);
-  }, [transactions, viewMonth, usdRate, usdtRate, budgets, globalBudget, allCats]);
+    const fijos = recurrings
+      .filter((r) => r.bookId === activeBookId)
+      .map((r) => ({
+        name: r.name,
+        day: r.day,
+        type: r.type,
+        amount: r.amount,
+        currency: r.currency,
+        active: r.active,
+      }));
+    return snapshotText(cur, prev, budgets, globalBudget, fx, allCats, fijos);
+  }, [transactions, viewMonth, usdRate, usdtRate, budgets, globalBudget, allCats, recurrings, activeBookId]);
+
+  function fail(message: string, mode: "chat" | "parse" | "report") {
+    toast.error(message);
+    if (mode !== "parse") {
+      pushChat({
+        id: uid(),
+        role: "assistant",
+        content: message,
+        createdAt: new Date().toISOString(),
+      });
+    }
+  }
 
   async function send(message: string, mode: "chat" | "parse" | "report" = "chat") {
     const trimmed = message.trim();
     if (!trimmed && mode === "chat") return;
     if (pending) return;
+    if (aiActive === false) {
+      toast.error(AI_UNAVAILABLE);
+      return;
+    }
     setPending(true);
     if (mode !== "parse") {
       pushChat({
         id: uid(),
         role: "user",
-        content:
-          mode === "report" ? "Informe del mes" : trimmed,
+        content: mode === "report" ? "Informe del mes" : trimmed,
         createdAt: new Date().toISOString(),
       });
     }
     setText("");
     try {
       const history = chat.map((m) => ({ role: m.role, content: m.content }));
-      const res = await askCifra({
-        data: {
-          mode,
-          message: trimmed,
-          snapshot,
-          history,
-          categories: allCats.map((c) => ({ id: c.id, name: c.name, kind: c.kind })),
-        },
-      });
+      const res = await Promise.race([
+        askCifra({
+          data: {
+            mode,
+            message: trimmed,
+            snapshot,
+            history,
+            categories: allCats.map((c) => ({ id: c.id, name: c.name, kind: c.kind })),
+          },
+        }),
+        new Promise<never>((_, reject) => {
+          window.setTimeout(() => reject(new Error("TIMEOUT")), CLIENT_MS);
+        }),
+      ]);
       if (!res.ok) {
-        toast.error(res.error);
+        fail(res.error, mode);
         return;
       }
       if (mode === "parse") {
-        const parsed = parseTx(
-          res.text,
-          new Set(allCats.map((c) => c.id)),
-        );
+        const parsed = parseTx(res.text, new Set(allCats.map((c) => c.id)));
         if (!parsed) {
           toast.error("No pude armar el movimiento. Probá ser más específico.");
           return;
@@ -98,11 +144,14 @@ export function Asistente() {
         createdAt: new Date().toISOString(),
       });
     } catch {
-      toast.error("Falló la consulta a la IA.");
+      fail(AI_TIMEOUT, mode);
     } finally {
       setPending(false);
     }
   }
+
+  const blocked = aiActive === false;
+  const busy = pending || aiActive === null;
 
   return (
     <div className="grid gap-5">
@@ -112,7 +161,7 @@ export function Asistente() {
           <h1 className="font-display text-4xl tracking-tight">Asistente</h1>
         </div>
         <div className="flex gap-2">
-          <Button variant="secondary" size="sm" disabled={pending} onClick={() => send("informe", "report")}>
+          <Button variant="secondary" size="sm" disabled={busy || blocked} onClick={() => send("informe", "report")}>
             Informe del mes
           </Button>
           {chat.length > 0 ? (
@@ -124,18 +173,22 @@ export function Asistente() {
       </div>
 
       <p className="max-w-xl text-sm text-muted">
-        Analiza tu libro del mes en curso: desvíos, proyección y recortes. También podés dictar un
-        gasto o pegar un mensaje de WhatsApp.
+        Totales, categorías, fijos y presupuestos del mes. No se mandan comercios, notas ni cada
+        movimiento.
       </p>
+
+      {blocked ? (
+        <p className="rounded-2xl bg-elevated px-4 py-3 text-sm text-fg">{AI_UNAVAILABLE}</p>
+      ) : null}
 
       <div className="flex flex-wrap gap-1.5">
         {SUGGESTIONS.map((s) => (
           <button
             key={s}
             type="button"
-            disabled={pending}
+            disabled={busy || blocked}
             onClick={() => send(s)}
-            className="h-9 rounded-full bg-elevated px-3 text-[13px] text-muted transition-colors duration-150 hover:text-fg"
+            className="h-9 rounded-full bg-elevated px-3 text-[13px] text-muted transition-colors duration-150 hover:text-fg disabled:opacity-50"
           >
             {s}
           </button>
@@ -147,8 +200,8 @@ export function Asistente() {
           <div className="flex h-56 flex-col items-center justify-center text-center">
             <p className="font-display text-2xl tracking-tight">Preguntale a tu libro</p>
             <p className="mt-2 max-w-sm text-sm text-muted">
-              No se envía tu historial completo: solo un resumen del mes y los últimos movimientos,
-              cuando vos lo pedís.
+              Si no responde en 20 segundos, el input se habilita y podés reintentar. La plata fina
+              queda en el libro.
             </p>
           </div>
         ) : (
@@ -187,6 +240,7 @@ export function Asistente() {
             type="checkbox"
             checked={parseMode}
             onChange={(e) => setParseMode(e.target.checked)}
+            disabled={busy || blocked}
             className="size-4 accent-accent"
           />
           Interpretar como movimiento (ej. “15 mil en el super ayer con débito”)
@@ -196,9 +250,10 @@ export function Asistente() {
           onChange={(e) => setText(e.target.value)}
           placeholder={parseMode ? "Gasté 12.400 en YPF con Mercado Pago" : "Escribí una pregunta sobre tus gastos"}
           rows={3}
+          disabled={busy || blocked}
         />
-        <Button type="submit" disabled={pending || !text.trim()}>
-          {parseMode ? "Armar movimiento" : "Preguntar"}
+        <Button type="submit" disabled={busy || blocked || !text.trim()}>
+          {pending ? "Pensando…" : parseMode ? "Armar movimiento" : "Preguntar"}
         </Button>
       </form>
     </div>
