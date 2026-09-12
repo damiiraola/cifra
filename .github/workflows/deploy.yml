@@ -3,11 +3,12 @@ name: Deploy
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
+
+permissions:
+  contents: read
 
 concurrency:
-  group: deploy-${{ github.ref }}
+  group: deploy-main
   cancel-in-progress: true
 
 env:
@@ -30,8 +31,7 @@ jobs:
         run: |
           if [ -z "$TOKEN" ] || [ -z "$ORG" ] || [ -z "$PROJECT" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "Faltan VERCEL_TOKEN, VERCEL_ORG_ID o VERCEL_PROJECT_ID."
-            echo "Importá el repo en vercel.com/new y pegá los 3 secretos en GitHub → Settings → Secrets."
+            echo "Faltan secretos de Vercel. El deploy lo hace Vercel al pushear main."
             exit 0
           fi
           echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -52,18 +52,16 @@ jobs:
         run: npm install --global vercel@latest
       - name: Pull entorno
         if: steps.gate.outputs.skip != 'true'
-        run: vercel pull --yes --environment=${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'production' || 'preview' }} --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
       - name: Build
         if: steps.gate.outputs.skip != 'true'
-        run: vercel build ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel build --prod --token="$VERCEL_TOKEN"
       - name: Deploy
         if: steps.gate.outputs.skip != 'true'
-        id: deploy
-        run: |
-          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            url=$(vercel deploy --prebuilt --prod --token="${{ secrets.VERCEL_TOKEN }}")
-          else
-            url=$(vercel deploy --prebuilt --token="${{ secrets.VERCEL_TOKEN }}")
-          fi
-          echo "url=$url" >> "$GITHUB_OUTPUT"
-          echo "Publicado: $url"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"

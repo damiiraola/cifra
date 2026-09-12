@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -23,5 +26,4 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
-      - name: Tests de auth
-        run: node --experimental-strip-types --test src/lib/auth/gate-identity.test.ts src/lib/auth/sign-in-gate.test.ts
+      - run: npm test

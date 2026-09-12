@@ -9,6 +9,13 @@ dist
 .env
 .env.*
 !.env.example
+.envrc
+*.pem
+*.key
+id_rsa
+id_ed25519
+credentials.json
+
 
 # Embedded preview DB
 data/
