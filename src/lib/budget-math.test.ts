@@ -5,6 +5,7 @@ import {
   budgetsFromSpend,
   effectiveCategoryBudget,
   liveCategoryRows,
+  unsetBudgetPatch,
 } from "./budget-math.ts";
 import type { Category } from "./types.ts";
 
@@ -88,5 +89,21 @@ describe("budgetsFromSpend", () => {
     assert.deepEqual(budgetsFromSpend({ vivienda: 1_550_000, alimentos: 0 }), {
       vivienda: 1_550_000,
     });
+  });
+});
+
+describe("unsetBudgetPatch", () => {
+  it("persists spend as tope only for categories still on factory defaults", () => {
+    const patch = unsetBudgetPatch(
+      { vivienda: 1_550_000, salud: 700_000, alimentos: 0 },
+      { vivienda: 480_000, salud: 40_000, alimentos: 220_000 },
+      SEED,
+    );
+    assert.deepEqual(patch, { vivienda: 1_550_000, salud: 700_000 });
+  });
+
+  it("does not overwrite a tope the user already set", () => {
+    const patch = unsetBudgetPatch({ vivienda: 1_550_000 }, { vivienda: 1_800_000 }, SEED);
+    assert.equal(patch, null);
   });
 });

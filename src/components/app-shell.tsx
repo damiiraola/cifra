@@ -20,6 +20,7 @@ import { QuickAdd } from "@/components/quick-add";
 import { ShortcutListener } from "@/components/shortcut-listener";
 import { QuotesTicker } from "@/components/quotes-ticker";
 import { OutboxFlusher } from "@/components/outbox-flusher";
+import { BudgetSeeder } from "@/components/budget-seeder";
 import { Onboarding } from "@/components/onboarding";
 import { BookSwitcher } from "@/components/book-switcher";
 import { MoreSheet } from "@/components/more-sheet";
@@ -228,6 +229,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <ShortcutListener />
         {chrome ? <QuotesTicker /> : null}
         {chrome ? <OutboxFlusher /> : null}
+        {chrome ? <BudgetSeeder /> : null}
         <Toaster theme="dark" position="top-center" />
       </div>
     </TooltipProvider>

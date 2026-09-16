@@ -103,7 +103,7 @@ function Presupuestos() {
           </p>
         </div>
         <p className="mt-3 text-xs text-subtle">
-          Si no escribís un tope, Cifra usa lo que ya cargaste en esa categoría.
+          Si no escribís un tope, Cifra usa lo que ya cargaste y lo guarda en tu cuenta.
         </p>
       </section>
 

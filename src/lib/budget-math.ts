@@ -63,3 +63,17 @@ export function budgetsFromSpend(byCat: Record<string, number>): Record<string, 
   }
   return patch;
 }
+
+export function unsetBudgetPatch(
+  byCat: Record<string, number>,
+  budgets: Record<string, number>,
+  seedDefaults: Record<string, number> = {},
+): Record<string, number> | null {
+  const patch: Record<string, number> = {};
+  for (const [id, spent] of Object.entries(byCat)) {
+    if (!(spent > 0)) continue;
+    if (isUserSetTope(id, budgets[id] ?? 0, seedDefaults)) continue;
+    patch[id] = Math.round(spent);
+  }
+  return Object.keys(patch).length ? patch : null;
+}
