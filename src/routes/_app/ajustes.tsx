@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Eye, EyeOff, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { BUILTIN_IDS } from "@/lib/categories";
+import { BUILTIN_IDS, DEFAULT_BUDGETS } from "@/lib/categories";
+import { computeMonth } from "@/lib/analytics";
+import { effectiveCategoryBudget } from "@/lib/budget-math";
 import { moneyARS, parseAmount } from "@/lib/format";
 import { formatRate, USD_SOURCES } from "@/lib/fx";
 import { CatIcon } from "@/lib/icons";
@@ -48,6 +50,7 @@ function Ajustes() {
   const {
     books,
     activeBookId,
+    viewMonth,
     usdRate,
     usdtRate,
     usdSource,
@@ -91,6 +94,7 @@ function Ajustes() {
 
   const gastos = categories.filter((c) => c.kind === "expense");
   const ingresos = categories.filter((c) => c.kind === "income");
+  const spentByCat = computeMonth(transactions, viewMonth, { usd: usdRate, usdt: usdtRate }).byCat;
 
   return (
     <div className="grid gap-5">
@@ -248,7 +252,7 @@ function Ajustes() {
       <section className="rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
         <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Categorías</p>
         <p className="mt-1 text-xs text-subtle">
-          Nombre, visibilidad y tope. Oculta no sale en Nuevo. Los movimientos viejos quedan.
+          Nombre, visibilidad y tope. El tope es el mismo que en Presupuestos: solo cuenta si la categoría tiene gasto o si lo escribiste vos. Oculta no sale en Nuevo.
         </p>
         <div className="mt-4">
           <Label htmlFor="gbudget">Tope de gasto del mes (ARS)</Label>
@@ -271,6 +275,7 @@ function Ajustes() {
           rows={gastos}
           hidden={hidden}
           budgets={budgets}
+          spentByCat={spentByCat}
           onName={setCategoryName}
           onHide={setCategoryHidden}
           onBudget={setBudget}
@@ -281,6 +286,7 @@ function Ajustes() {
           rows={ingresos}
           hidden={hidden}
           budgets={budgets}
+          spentByCat={spentByCat}
           hideBudget
           onName={setCategoryName}
           onHide={setCategoryHidden}
@@ -423,6 +429,7 @@ function CatGroup({
   rows,
   hidden,
   budgets,
+  spentByCat,
   hideBudget,
   onName,
   onHide,
@@ -433,6 +440,7 @@ function CatGroup({
   rows: Category[];
   hidden: Set<string>;
   budgets: Record<string, number>;
+  spentByCat: Record<string, number>;
   hideBudget?: boolean;
   onName: (id: string, name: string) => void;
   onHide: (id: string, hidden: boolean) => void;
@@ -458,6 +466,7 @@ function CatGroup({
         {rows.map((c) => {
           const off = hidden.has(c.id);
           const custom = !BUILTIN_IDS.has(c.id);
+          const tope = effectiveCategoryBudget(c.id, budgets[c.id] ?? 0, spentByCat[c.id] ?? 0, DEFAULT_BUDGETS);
           return (
             <div
               key={c.id}
@@ -486,8 +495,9 @@ function CatGroup({
                 <span className="hidden sm:block" />
               ) : (
                 <Input
+                  key={`${c.id}-${tope}`}
                   inputMode="decimal"
-                  defaultValue={budgets[c.id] ? String(budgets[c.id]) : ""}
+                  defaultValue={tope ? String(tope) : ""}
                   placeholder="Tope"
                   aria-label={`Tope de ${c.name}`}
                   onBlur={(e) => {

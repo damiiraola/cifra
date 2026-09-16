@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { categoryRows, computeMonth, isFixedExpense, prevMonth, splitFixedVariable } from "@/lib/analytics";
-import { catColorVar } from "@/lib/categories";
+import { computeMonth, isFixedExpense, prevMonth, splitFixedVariable } from "@/lib/analytics";
+import { budgetAllocation, liveCategoryRows } from "@/lib/budget-math";
+import { catColorVar, DEFAULT_BUDGETS } from "@/lib/categories";
 import { moneyARS, monthLabel } from "@/lib/format";
 import { CatIcon } from "@/lib/icons";
 import { useAllCategories, useBookTxs, useLedger } from "@/lib/store";
@@ -27,8 +28,9 @@ function Analitica() {
   const prevSlice = prev.byDay.slice(0, stats.elapsed);
   const prevMtdSpent = prevSlice.reduce((s, d) => s + d.spent, 0);
   const split = splitFixedVariable(stats.txs, fx);
-  const cats = categoryRows(stats.byCat, budgets, allCats).filter((c) => c.spent > 0);
-  const maxCat = Math.max(1, ...cats.map((c) => c.spent));
+  const rows = liveCategoryRows(stats.byCat, budgets, allCats, DEFAULT_BUDGETS);
+  const cats = rows.filter((c) => c.spent > 0);
+  const { assigned, unassigned, overAssigned } = budgetAllocation(rows, globalBudget);
   const spentDelta = prevMtdSpent ? ((stats.spent - prevMtdSpent) / prevMtdSpent) * 100 : 0;
   const [drill, setDrill] = useState<Drill>(null);
 
@@ -87,6 +89,10 @@ function Analitica() {
             {over
               ? `Te pasaste ${moneyARS(stats.spent - globalBudget)} del tope.`
               : `Quedan ${moneyARS(remain)}. Proyección ${moneyARS(stats.projected)}.`}
+            {" · "}
+            {overAssigned
+              ? `categorías ${moneyARS(assigned)} (de más ${moneyARS(overAssigned)})`
+              : `categorías ${moneyARS(assigned)} · sin repartir ${moneyARS(unassigned)}`}
           </p>
         ) : null}
       </section>
@@ -143,7 +149,10 @@ function Analitica() {
         </div>
         <div className="grid gap-2">
           {cats.map((c) => {
-            const width = (c.spent / maxCat) * 100;
+            const hasTope = c.budget > 0;
+            const pct = hasTope ? (c.spent / c.budget) * 100 : 0;
+            const overCat = hasTope && c.spent > c.budget;
+            const width = hasTope ? Math.min(100, pct) : 0;
             return (
               <button
                 key={c.id}
@@ -158,12 +167,18 @@ function Analitica() {
                     </span>
                     <span className="truncate">{c.name}</span>
                   </span>
-                  <span className="tabular-nums text-muted">{moneyARS(c.spent)}</span>
+                  <span className={cn("tabular-nums", overCat ? "text-expense" : "text-muted")}>
+                    {moneyARS(c.spent)}
+                    {hasTope ? ` / ${moneyARS(c.budget)}` : " · sin tope"}
+                  </span>
                 </div>
                 <span className="h-1.5 overflow-hidden rounded-full bg-elevated">
                   <span
-                    className="block h-full rounded-full"
-                    style={{ width: `${width}%`, background: catColorVar(c.token) }}
+                    className={cn("block h-full rounded-full", overCat && "bg-expense")}
+                    style={{
+                      width: `${hasTope ? width : 8}%`,
+                      background: overCat ? undefined : catColorVar(c.token),
+                    }}
                   />
                 </span>
               </button>

@@ -94,6 +94,7 @@ type LedgerState = {
   deleteTx: (id: string) => void;
   flushOutbox: (opts?: { force?: boolean }) => Promise<void>;
   setBudget: (categoryId: string, amount: number) => void;
+  replaceBudgets: (patch: Record<string, number>) => void;
   setGlobalBudget: (amount: number) => void;
   setCategoryName: (id: string, name: string) => void;
   setCategoryHidden: (id: string, hidden: boolean) => void;
@@ -653,6 +654,11 @@ export const useLedger = create<LedgerState>()((set, get) => ({
   setBudget: (categoryId, amount) => {
     const prev = get().budgets;
     set({ budgets: { ...prev, [categoryId]: amount } });
+    pushSettings(get, { budgets: prev }, set);
+  },
+  replaceBudgets: (patch) => {
+    const prev = get().budgets;
+    set({ budgets: { ...prev, ...patch } });
     pushSettings(get, { budgets: prev }, set);
   },
   setGlobalBudget: (amount) => {

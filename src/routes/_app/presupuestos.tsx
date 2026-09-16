@@ -1,11 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { categoryRows, computeMonth } from "@/lib/analytics";
+import { toast } from "sonner";
+import { budgetAllocation, budgetsFromSpend, liveCategoryRows } from "@/lib/budget-math";
+import { DEFAULT_BUDGETS } from "@/lib/categories";
+import { computeMonth } from "@/lib/analytics";
 import { moneyARS, parseAmount } from "@/lib/format";
 import { CatIcon } from "@/lib/icons";
-import { useLedger, useBookTxs, useAllCategories } from "@/lib/store";
+import { useAllCategories, useBookTxs, useLedger } from "@/lib/store";
 import { MonthSwitcher } from "@/components/month-switcher";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Progress } from "@/components/ui/progress";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/presupuestos")({
   component: Presupuestos,
@@ -19,17 +23,32 @@ function Presupuestos() {
     usdtRate,
     budgets,
     setBudget,
+    replaceBudgets,
     globalBudget,
     setGlobalBudget,
   } = useLedger();
   const transactions = useBookTxs();
   const allCats = useAllCategories();
   const stats = computeMonth(transactions, viewMonth, { usd: usdRate, usdt: usdtRate });
-  const cats = categoryRows(stats.byCat, budgets, allCats);
+  const rows = liveCategoryRows(stats.byCat, budgets, allCats, DEFAULT_BUDGETS);
+  const live = rows.filter((c) => c.spent > 0);
+  const idle = rows.filter((c) => c.spent <= 0);
+  const { assigned, unassigned, overAssigned } = budgetAllocation(rows, globalBudget);
   const used = globalBudget ? (stats.spent / globalBudget) * 100 : 0;
+  const assignedPct = globalBudget ? Math.min(100, (assigned / globalBudget) * 100) : 0;
+
+  function applyMonth() {
+    const patch = budgetsFromSpend(stats.byCat);
+    if (Object.keys(patch).length === 0) {
+      toast.error("No hay gastos este mes para copiar.");
+      return;
+    }
+    replaceBudgets(patch);
+    toast.success("Cada categoría tomó el gasto de este mes como tope.");
+  }
 
   return (
-    <div className="grid gap-5">
+    <div className="grid gap-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Límites</p>
@@ -38,67 +57,168 @@ function Presupuestos() {
         <MonthSwitcher value={viewMonth} onChange={setViewMonth} />
       </div>
 
-      <section className="rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_rgba(244,244,240,0.06)] sm:p-5">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Tope global</p>
-            <p className="font-display text-3xl tabular-nums">{moneyARS(globalBudget)}</p>
-          </div>
-          <div className="w-40">
-            <Input
-              inputMode="decimal"
-              defaultValue={String(globalBudget)}
-              onBlur={(e) => {
-                const n = parseAmount(e.target.value);
-                if (n && n > 0) setGlobalBudget(n);
-              }}
-            />
-          </div>
+      <section>
+        <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Tope del mes</p>
+        <div className="mt-1 flex flex-wrap items-end justify-between gap-3">
+          <p className="font-display text-5xl tabular-nums tracking-tight">{moneyARS(globalBudget)}</p>
+          <Input
+            className="w-40"
+            inputMode="decimal"
+            defaultValue={globalBudget ? String(globalBudget) : ""}
+            aria-label="Tope global"
+            onBlur={(e) => {
+              const n = parseAmount(e.target.value);
+              if (n && n > 0) setGlobalBudget(n);
+            }}
+          />
         </div>
-        <Progress className="mt-4" value={used} barClassName={used > 100 ? "bg-expense" : undefined} />
-        <p className="mt-2 text-xs text-subtle">
-          Consumido {moneyARS(stats.spent)} ({used.toFixed(0)}%)
+        <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-elevated">
+          <span
+            className={cn("block h-full rounded-full", used > 100 ? "bg-expense" : "bg-accent")}
+            style={{ width: `${Math.min(100, used)}%` }}
+          />
+        </div>
+        <p className="mt-2 text-sm text-muted">
+          Gastado {moneyARS(stats.spent)}
+          {globalBudget ? ` · ${used.toFixed(0)}% del tope` : ""}
         </p>
       </section>
 
-      <section className="rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_rgba(244,244,240,0.06)] sm:p-5">
-        <h2 className="mb-4 text-sm font-medium">Por categoría</h2>
-        <div className="grid gap-5">
-          {cats.map((c) => {
-            const pct = c.budget ? (c.spent / c.budget) * 100 : 0;
-            return (
-              <div key={c.id} className="grid gap-2 sm:grid-cols-[1fr_8rem] sm:items-center">
-                <div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="flex items-center gap-2 text-sm">
-                      <CatIcon name={c.icon} className="size-3.5 text-muted" />
-                      {c.name}
-                    </span>
-                    <span className="text-xs tabular-nums text-muted">
-                      {moneyARS(c.spent)}
-                      {c.budget ? ` / ${moneyARS(c.budget)}` : ""}
-                    </span>
-                  </div>
-                  <Progress
-                    className="mt-2"
-                    value={c.budget ? pct : 0}
-                    barClassName={pct > 100 ? "bg-expense" : pct > 85 ? "bg-warn" : undefined}
-                  />
-                </div>
-                <Input
-                  inputMode="decimal"
-                  defaultValue={c.budget ? String(c.budget) : ""}
-                  placeholder="Sin tope"
-                  onBlur={(e) => {
-                    const n = parseAmount(e.target.value);
-                    setBudget(c.id, n && n > 0 ? n : 0);
-                  }}
-                />
-              </div>
-            );
-          })}
+      <section>
+        <div className="mb-2 flex items-baseline justify-between gap-3">
+          <h2 className="text-sm font-medium">Contra las categorías de este mes</h2>
+          <p className="text-xs text-subtle">
+            {overAssigned
+              ? `Las categorías superan el tope por ${moneyARS(overAssigned)}`
+              : `Sin repartir ${moneyARS(unassigned)}`}
+          </p>
         </div>
+        <div className="flex h-2 overflow-hidden rounded-full bg-elevated">
+          {globalBudget ? (
+            <>
+              <span className="bg-accent" style={{ width: `${assignedPct}%` }} />
+              <span className="bg-border-strong" style={{ width: `${Math.max(0, 100 - assignedPct)}%` }} />
+            </>
+          ) : null}
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+          <p>
+            <span className="block text-[11px] uppercase text-muted">Asignado</span>
+            <span className="font-display text-2xl tabular-nums">{moneyARS(assigned)}</span>
+          </p>
+          <p>
+            <span className="block text-[11px] uppercase text-muted">
+              {overAssigned ? "De más" : "Libre"}
+            </span>
+            <span className="font-display text-2xl tabular-nums">
+              {moneyARS(overAssigned || unassigned)}
+            </span>
+          </p>
+        </div>
+        <Button variant="secondary" className="mt-4 w-full sm:w-auto" onClick={applyMonth}>
+          Usar el gasto de este mes como tope
+        </Button>
+        <p className="mt-2 text-xs text-subtle">
+          Copia lo que ya cargaste en Vivienda, Salud, etc. El tope global no se toca.
+        </p>
       </section>
+
+      <section>
+        <h2 className="mb-3 text-sm font-medium">Este mes</h2>
+        {live.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted">Todavía no hay gastos. Cargá un movimiento y aparece acá.</p>
+        ) : (
+          <div className="grid gap-4">
+            {live.map((c) => (
+              <EnvelopeRow
+                key={`${c.id}-${c.budget}`}
+                spent={c.spent}
+                budget={c.budget}
+                name={c.name}
+                icon={c.icon}
+                token={c.token}
+                onSave={(n) => setBudget(c.id, n)}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {idle.length > 0 ? (
+        <section>
+          <h2 className="mb-1 text-sm font-medium">Sin movimiento este mes</h2>
+          <p className="mb-3 text-xs text-subtle">No cuentan como asignadas hasta que les pongas un tope o cargues un gasto.</p>
+          <div className="grid gap-3">
+            {idle.map((c) => (
+              <EnvelopeRow
+                key={`${c.id}-${c.budget}`}
+                spent={0}
+                budget={c.budget}
+                name={c.name}
+                icon={c.icon}
+                token={c.token}
+                quiet
+                onSave={(n) => setBudget(c.id, n)}
+              />
+            ))}
+          </div>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+function EnvelopeRow({
+  name,
+  icon,
+  token,
+  spent,
+  budget,
+  quiet,
+  onSave,
+}: {
+  name: string;
+  icon: string;
+  token: string;
+  spent: number;
+  budget: number;
+  quiet?: boolean;
+  onSave: (n: number) => void;
+}) {
+  const pct = budget ? (spent / budget) * 100 : 0;
+  const over = budget > 0 && spent > budget;
+  return (
+    <div className={cn("grid gap-2 sm:grid-cols-[1fr_8rem] sm:items-center", quiet && "opacity-80")}>
+      <div>
+        <div className="flex items-center justify-between gap-3">
+          <span className="flex min-w-0 items-center gap-2 text-sm">
+            <span style={{ color: `var(--color-${token})` }}>
+              <CatIcon name={icon} className="size-3.5" />
+            </span>
+            {name}
+          </span>
+          <span className={cn("text-xs tabular-nums", over ? "text-expense" : "text-muted")}>
+            {spent > 0 ? moneyARS(spent) : "—"}
+            {budget ? ` / ${moneyARS(budget)}` : " · sin tope"}
+          </span>
+        </div>
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-elevated">
+          <span
+            className={cn("block h-full rounded-full", over ? "bg-expense" : "bg-accent")}
+            style={{ width: `${budget ? Math.min(100, pct) : 0}%` }}
+          />
+        </div>
+      </div>
+      <Input
+        inputMode="decimal"
+        defaultValue={budget ? String(budget) : ""}
+        placeholder="Sin tope"
+        aria-label={`Tope de ${name}`}
+        onBlur={(e) => {
+          const n = parseAmount(e.target.value);
+          onSave(n && n > 0 ? n : 0);
+        }}
+      />
     </div>
   );
 }
