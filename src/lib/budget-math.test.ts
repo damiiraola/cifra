@@ -4,7 +4,9 @@ import {
   budgetAllocation,
   budgetsFromSpend,
   effectiveCategoryBudget,
+  hydrateBookMoney,
   liveCategoryRows,
+  moneyForBook,
   unsetBudgetPatch,
 } from "./budget-math.ts";
 import type { Category } from "./types.ts";
@@ -105,5 +107,38 @@ describe("unsetBudgetPatch", () => {
   it("does not overwrite a tope the user already set", () => {
     const patch = unsetBudgetPatch({ vivienda: 1_550_000 }, { vivienda: 1_800_000 }, SEED);
     assert.equal(patch, null);
+  });
+});
+
+describe("hydrateBookMoney", () => {
+  it("copies legacy envelopes only onto the personal book", () => {
+    const { bookBudgets, bookGlobals } = hydrateBookMoney({
+      books: [
+        { id: "p1", kind: "personal" },
+        { id: "n1", kind: "business" },
+      ],
+      legacyBudgets: { vivienda: 1_550_000 },
+      legacyGlobal: 3_050_000,
+      bookBudgets: {},
+      bookGlobals: {},
+    });
+    assert.deepEqual(bookBudgets.p1, { vivienda: 1_550_000 });
+    assert.equal(bookGlobals.p1, 3_050_000);
+    assert.equal(bookBudgets.n1, undefined);
+    assert.equal(bookGlobals.n1, undefined);
+    const biz = moneyForBook("n1", bookBudgets, bookGlobals);
+    assert.deepEqual(biz.budgets, {});
+    assert.equal(biz.globalBudget, 0);
+  });
+
+  it("does not overwrite a book that already has its own envelopes", () => {
+    const { bookBudgets } = hydrateBookMoney({
+      books: [{ id: "p1", kind: "personal" }],
+      legacyBudgets: { vivienda: 1 },
+      legacyGlobal: 1,
+      bookBudgets: { p1: { vivienda: 9 } },
+      bookGlobals: { p1: 8 },
+    });
+    assert.deepEqual(bookBudgets.p1, { vivienda: 9 });
   });
 });

@@ -43,6 +43,7 @@ import { buildSeed } from "./seed";
 import { monthISO, todayISO, uid } from "./utils";
 import { applyOutbox, enqueue, OUTBOX_MAX_TRIES, pruneOutbox, resetTries, type OutboxOp } from "./outbox";
 import { mergeRecurrings } from "./recurring-sync";
+import { hydrateBookMoney, moneyForBook } from "./budget-math";
 import type { Account, Book, Category, CategoryKind, ChatMessage, Recurring, Transaction } from "./types";
 
 const LOCAL_KEY = "cifra-ledger-v1";
@@ -68,6 +69,8 @@ type LedgerState = {
   pendingRecurringIds: string[];
   budgets: Record<string, number>;
   globalBudget: number;
+  bookBudgets: Record<string, Record<string, number>>;
+  bookGlobals: Record<string, number>;
   usdRate: number;
   usdtRate: number;
   usdSource: UsdSource;
@@ -146,6 +149,8 @@ function vaultInput(get: () => LedgerState) {
     pendingRecurringIds: s.pendingRecurringIds,
     budgets: s.budgets,
     globalBudget: s.globalBudget,
+    bookBudgets: s.bookBudgets,
+    bookGlobals: s.bookGlobals,
     categoryNames: s.categoryNames,
     hiddenCategoryIds: s.hiddenCategoryIds,
     customCategories: s.customCategories,
@@ -238,9 +243,25 @@ let recFlushAgain = false;
 
 function pushSettings(get: () => LedgerState, revert?: Partial<LedgerState>, set?: (p: Partial<LedgerState>) => void) {
   persistLocal(get);
-  const { budgets, globalBudget, usdRate, usdtRate, usdSource, activeBookId, onboarded, categoryNames, hiddenCategoryIds, customCategories } = get();
+  const s = get();
+  const bookBudgets = { ...s.bookBudgets, [s.activeBookId]: s.budgets };
+  const bookGlobals = { ...s.bookGlobals, [s.activeBookId]: s.globalBudget };
+  const personal = s.books.find((b) => b.kind === "personal")?.id;
   void saveSettings({
-    data: { budgets, globalBudget, usdRate, usdtRate, usdSource, activeBookId, onboarded, categoryNames, hiddenCategoryIds, customCategories },
+    data: {
+      budgets: personal ? (bookBudgets[personal] ?? {}) : s.budgets,
+      globalBudget: personal ? (bookGlobals[personal] ?? 0) : s.globalBudget,
+      bookBudgets,
+      bookGlobals,
+      usdRate: s.usdRate,
+      usdtRate: s.usdtRate,
+      usdSource: s.usdSource,
+      activeBookId: s.activeBookId,
+      onboarded: s.onboarded,
+      categoryNames: s.categoryNames,
+      hiddenCategoryIds: s.hiddenCategoryIds,
+      customCategories: s.customCategories,
+    },
   }).catch((err) => {
     persistFail(err);
     if (revert && set) {
@@ -354,14 +375,25 @@ function paintVault(set: (p: Partial<LedgerState>) => void, get: () => LedgerSta
   if (!books.length) return false;
   const confirmed = remapVaultTxs(vault, books, accounts);
   const outbox = vault.outbox;
+  const activeBookId = vault.activeBookId || get().activeBookId || books[0]?.id || "";
+  const money = hydrateBookMoney({
+    books,
+    legacyBudgets: vault.budgets,
+    legacyGlobal: vault.globalBudget,
+    bookBudgets: vault.bookBudgets ?? {},
+    bookGlobals: vault.bookGlobals ?? {},
+  });
+  const scoped = moneyForBook(activeBookId, money.bookBudgets, money.bookGlobals);
   set({
     books,
     accounts,
-    activeBookId: vault.activeBookId || get().activeBookId || books[0]?.id || "",
+    activeBookId,
     onboarded: vault.onboarded || get().onboarded,
     recurrings: vault.recurrings.length ? remapVaultRecurrings(vault, books, accounts) : get().recurrings,
-    budgets: Object.keys(vault.budgets).length ? vault.budgets : get().budgets,
-    globalBudget: vault.globalBudget || get().globalBudget,
+    budgets: scoped.budgets,
+    globalBudget: scoped.globalBudget,
+    bookBudgets: money.bookBudgets,
+    bookGlobals: money.bookGlobals,
     categoryNames: vault.categoryNames,
     hiddenCategoryIds: vault.hiddenCategoryIds,
     customCategories: vault.customCategories,
@@ -393,6 +425,8 @@ export const useLedger = create<LedgerState>()((set, get) => ({
   pendingRecurringIds: [],
   budgets: { ...DEFAULT_BUDGETS },
   globalBudget: DEFAULT_GLOBAL_BUDGET,
+  bookBudgets: {},
+  bookGlobals: {},
   usdRate: DEFAULT_USD_RATE,
   usdtRate: DEFAULT_USDT_RATE,
   usdSource: DEFAULT_USD_SOURCE,
@@ -464,6 +498,8 @@ export const useLedger = create<LedgerState>()((set, get) => ({
               pendingRecurringIds: get().pendingRecurringIds,
               budgets: legacy.budgets,
               globalBudget: legacy.globalBudget,
+              bookBudgets: {},
+              bookGlobals: {},
               usdRate: remote.usdRate,
               usdtRate: remote.usdtRate,
               usdSource: remote.usdSource,
@@ -498,6 +534,8 @@ export const useLedger = create<LedgerState>()((set, get) => ({
           pendingRecurringIds: get().pendingRecurringIds,
           budgets: remote.budgets,
           globalBudget: remote.globalBudget,
+          bookBudgets: remote.bookBudgets ?? {},
+          bookGlobals: remote.bookGlobals ?? {},
           usdRate: remote.usdRate,
           usdtRate: remote.usdtRate,
           usdSource: remote.usdSource,
@@ -577,9 +615,29 @@ export const useLedger = create<LedgerState>()((set, get) => ({
     pushSettings(get, { usdSource: prev, usdRate: prevUsd, usdtRate: prevUsdt }, set);
   },
   setActiveBook: (id) => {
-    const prev = get().activeBookId;
-    set({ activeBookId: id, selectedDay: null });
-    pushSettings(get, { activeBookId: prev }, set);
+    const prevId = get().activeBookId;
+    const prevBudgets = get().budgets;
+    const prevGlobal = get().globalBudget;
+    const prevBookBudgets = get().bookBudgets;
+    const prevBookGlobals = get().bookGlobals;
+    const bookBudgets = { ...prevBookBudgets, [prevId]: prevBudgets };
+    const bookGlobals = { ...prevBookGlobals, [prevId]: prevGlobal };
+    const scoped = moneyForBook(id, bookBudgets, bookGlobals);
+    set({
+      activeBookId: id,
+      selectedDay: null,
+      bookBudgets,
+      bookGlobals,
+      budgets: scoped.budgets,
+      globalBudget: scoped.globalBudget,
+    });
+    pushSettings(get, {
+      activeBookId: prevId,
+      budgets: prevBudgets,
+      globalBudget: prevGlobal,
+      bookBudgets: prevBookBudgets,
+      bookGlobals: prevBookGlobals,
+    }, set);
   },
   setViewMonth: (ym) => set({ viewMonth: ym, selectedDay: null }),
   setSelectedDay: (day) => set({ selectedDay: day }),
@@ -653,18 +711,26 @@ export const useLedger = create<LedgerState>()((set, get) => ({
   },
   setBudget: (categoryId, amount) => {
     const prev = get().budgets;
-    set({ budgets: { ...prev, [categoryId]: amount } });
-    pushSettings(get, { budgets: prev }, set);
+    const prevMaps = get().bookBudgets;
+    const bookId = get().activeBookId;
+    const budgets = { ...prev, [categoryId]: amount };
+    set({ budgets, bookBudgets: { ...prevMaps, [bookId]: budgets } });
+    pushSettings(get, { budgets: prev, bookBudgets: prevMaps }, set);
   },
   replaceBudgets: (patch) => {
     const prev = get().budgets;
-    set({ budgets: { ...prev, ...patch } });
-    pushSettings(get, { budgets: prev }, set);
+    const prevMaps = get().bookBudgets;
+    const bookId = get().activeBookId;
+    const budgets = { ...prev, ...patch };
+    set({ budgets, bookBudgets: { ...prevMaps, [bookId]: budgets } });
+    pushSettings(get, { budgets: prev, bookBudgets: prevMaps }, set);
   },
   setGlobalBudget: (amount) => {
     const prev = get().globalBudget;
-    set({ globalBudget: amount });
-    pushSettings(get, { globalBudget: prev }, set);
+    const prevMaps = get().bookGlobals;
+    const bookId = get().activeBookId;
+    set({ globalBudget: amount, bookGlobals: { ...prevMaps, [bookId]: amount } });
+    pushSettings(get, { globalBudget: prev, bookGlobals: prevMaps }, set);
   },
   setCategoryName: (id, name) => {
     const prev = get().categoryNames;
@@ -737,11 +803,18 @@ export const useLedger = create<LedgerState>()((set, get) => ({
     const prevAccounts = get().accounts;
     const prevBudget = get().globalBudget;
     const prevOnboarded = get().onboarded;
+    const prevGlobals = get().bookGlobals;
     const accounts = prevAccounts.map((a) => {
       const hit = openings.find((o) => o.id === a.id);
       return hit ? { ...a, opening: hit.opening } : a;
     });
-    set({ accounts, globalBudget, onboarded: true });
+    const personal = get().books.find((b) => b.kind === "personal")?.id ?? get().activeBookId;
+    set({
+      accounts,
+      globalBudget,
+      bookGlobals: { ...prevGlobals, [personal]: globalBudget },
+      onboarded: true,
+    });
     persistLocal(get);
     void saveAccounts({ data: { accounts: openings } }).catch((err) => {
       persistFail(err);
@@ -855,6 +928,8 @@ export const useLedger = create<LedgerState>()((set, get) => ({
     set({
       budgets: { ...DEFAULT_BUDGETS },
       globalBudget: DEFAULT_GLOBAL_BUDGET,
+      bookBudgets: {},
+      bookGlobals: {},
       chat: [],
       viewMonth: monthISO(),
       onboarded: true,

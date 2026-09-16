@@ -47,6 +47,8 @@ export type LocalVault = {
   usdSource: string;
   chat: ChatMessage[];
   pendingRecurringIds: string[];
+  bookBudgets?: Record<string, Record<string, number>>;
+  bookGlobals?: Record<string, number>;
 };
 
 function mailOf(email: string | null | undefined) {
@@ -80,6 +82,8 @@ export function buildLocalVault(input: {
   usdSource?: string;
   chat?: ChatMessage[];
   pendingRecurringIds?: string[];
+  bookBudgets?: Record<string, Record<string, number>>;
+  bookGlobals?: Record<string, number>;
 }): LocalVault | null {
   const email = mailOf(input.email);
   if (!email) return null;
@@ -121,6 +125,8 @@ export function buildLocalVault(input: {
     usdSource: input.usdSource ?? "",
     chat: (input.chat ?? []).slice(-24),
     pendingRecurringIds: [...new Set(input.pendingRecurringIds ?? [])],
+    bookBudgets: input.bookBudgets ?? {},
+    bookGlobals: input.bookGlobals ?? {},
   };
 }
 
@@ -224,6 +230,8 @@ export function asVault(raw: unknown): LocalVault | null {
     pendingRecurringIds: Array.isArray(p.pendingRecurringIds)
       ? p.pendingRecurringIds.map(String).filter(Boolean)
       : [],
+    bookBudgets: p.bookBudgets && typeof p.bookBudgets === "object" ? p.bookBudgets : {},
+    bookGlobals: p.bookGlobals && typeof p.bookGlobals === "object" ? p.bookGlobals : {},
   };
 }
 

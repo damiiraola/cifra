@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { getSql } from "@/lib/db";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { DEFAULT_BUDGETS, DEFAULT_GLOBAL_BUDGET, parseCustomCategories, parseHiddenIds } from "@/lib/categories";
+import { hydrateBookMoney, moneyForBook, parseBookBudgets, parseBookGlobals } from "@/lib/budget-math";
 import {
   ACCOUNT_TEMPLATES,
   BOOK_SPECS,
@@ -17,6 +18,8 @@ export type LedgerSnapshot = {
   accounts: Account[];
   budgets: Record<string, number>;
   globalBudget: number;
+  bookBudgets: Record<string, Record<string, number>>;
+  bookGlobals: Record<string, number>;
   usdRate: number;
   usdtRate: number;
   usdSource: UsdSource;
@@ -133,9 +136,13 @@ async function ensureSettings(sql: Awaited<ReturnType<typeof getSql>>, userId: s
     category_names: Record<string, string> | string | null;
     hidden_category_ids: unknown;
     custom_categories: unknown;
+    book_budgets: unknown;
+    book_globals: unknown;
   }>`select budgets, global_budget, usd_rate, usdt_rate, usd_source, active_book_id, onboarded, category_names,
              coalesce(hidden_category_ids, '[]'::jsonb) as hidden_category_ids,
-             coalesce(custom_categories, '[]'::jsonb) as custom_categories
+             coalesce(custom_categories, '[]'::jsonb) as custom_categories,
+             coalesce(book_budgets, '{}'::jsonb) as book_budgets,
+             coalesce(book_globals, '{}'::jsonb) as book_globals
       from ledger_settings where user_id = ${userId} limit 1`;
   if (existing[0]) {
     const budgets =
@@ -148,6 +155,8 @@ async function ensureSettings(sql: Awaited<ReturnType<typeof getSql>>, userId: s
     return {
       budgets: { ...DEFAULT_BUDGETS, ...budgets },
       globalBudget: Number(existing[0].global_budget) || DEFAULT_GLOBAL_BUDGET,
+      bookBudgets: parseBookBudgets(existing[0].book_budgets),
+      bookGlobals: parseBookGlobals(existing[0].book_globals),
       usdRate: Number(existing[0].usd_rate) || DEFAULT_USD_RATE,
       usdtRate: Number(existing[0].usdt_rate) || DEFAULT_USDT_RATE,
       usdSource: isUsdSource(existing[0].usd_source) ? existing[0].usd_source : DEFAULT_USD_SOURCE,
@@ -166,6 +175,8 @@ async function ensureSettings(sql: Awaited<ReturnType<typeof getSql>>, userId: s
   return {
     budgets: { ...DEFAULT_BUDGETS },
     globalBudget: DEFAULT_GLOBAL_BUDGET,
+    bookBudgets: {},
+    bookGlobals: {},
     usdRate: DEFAULT_USD_RATE,
     usdtRate: DEFAULT_USDT_RATE,
     usdSource: DEFAULT_USD_SOURCE,
@@ -378,10 +389,20 @@ export const loadLedger = createServerFn({ method: "GET" })
       note: r.note ?? "",
       active: Boolean(r.active),
     }));
+    const money = hydrateBookMoney({
+      books: books.books,
+      legacyBudgets: settings.budgets,
+      legacyGlobal: settings.globalBudget,
+      bookBudgets: settings.bookBudgets,
+      bookGlobals: settings.bookGlobals,
+    });
+    const scoped = moneyForBook(books.activeBookId, money.bookBudgets, money.bookGlobals);
     return {
       transactions,
       ...settings,
       ...books,
+      ...money,
+      ...scoped,
       recurrings,
     };
   });
@@ -445,6 +466,8 @@ export const saveSettings = createServerFn({ method: "POST" })
     categoryNames?: Record<string, string>;
     hiddenCategoryIds?: string[];
     customCategories?: Category[];
+    bookBudgets?: Record<string, Record<string, number>>;
+    bookGlobals?: Record<string, number>;
   }) => {
     const globalBudget = Number(input.globalBudget);
     const usdRate = Number(input.usdRate);
@@ -473,14 +496,16 @@ export const saveSettings = createServerFn({ method: "POST" })
       categoryNames,
       hiddenCategoryIds: parseHiddenIds(input.hiddenCategoryIds),
       customCategories: parseCustomCategories(input.customCategories),
+      bookBudgets: parseBookBudgets(input.bookBudgets),
+      bookGlobals: parseBookGlobals(input.bookGlobals),
     };
   })
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
     const sql = await getSql();
     await sql`
-      insert into ledger_settings (user_id, budgets, global_budget, usd_rate, usdt_rate, usd_source, active_book_id, onboarded, category_names, hidden_category_ids, custom_categories)
-      values (${context.userId}, ${JSON.stringify(data.budgets)}::jsonb, ${data.globalBudget}, ${data.usdRate}, ${data.usdtRate}, ${data.usdSource}, ${data.activeBookId}, ${data.onboarded}, ${JSON.stringify(data.categoryNames)}::jsonb, ${JSON.stringify(data.hiddenCategoryIds)}::jsonb, ${JSON.stringify(data.customCategories)}::jsonb)
+      insert into ledger_settings (user_id, budgets, global_budget, usd_rate, usdt_rate, usd_source, active_book_id, onboarded, category_names, hidden_category_ids, custom_categories, book_budgets, book_globals)
+      values (${context.userId}, ${JSON.stringify(data.budgets)}::jsonb, ${data.globalBudget}, ${data.usdRate}, ${data.usdtRate}, ${data.usdSource}, ${data.activeBookId}, ${data.onboarded}, ${JSON.stringify(data.categoryNames)}::jsonb, ${JSON.stringify(data.hiddenCategoryIds)}::jsonb, ${JSON.stringify(data.customCategories)}::jsonb, ${JSON.stringify(data.bookBudgets)}::jsonb, ${JSON.stringify(data.bookGlobals)}::jsonb)
       on conflict (user_id) do update set
         budgets = excluded.budgets,
         global_budget = excluded.global_budget,
@@ -492,6 +517,8 @@ export const saveSettings = createServerFn({ method: "POST" })
         category_names = excluded.category_names,
         hidden_category_ids = excluded.hidden_category_ids,
         custom_categories = excluded.custom_categories,
+        book_budgets = excluded.book_budgets,
+        book_globals = excluded.book_globals,
         updated_at = now()
     `;
     return { ok: true as const };

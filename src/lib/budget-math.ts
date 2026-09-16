@@ -77,3 +77,58 @@ export function unsetBudgetPatch(
   }
   return Object.keys(patch).length ? patch : null;
 }
+
+export function hydrateBookMoney(input: {
+  books: { id: string; kind: string }[];
+  legacyBudgets: Record<string, number>;
+  legacyGlobal: number;
+  bookBudgets: Record<string, Record<string, number>>;
+  bookGlobals: Record<string, number>;
+}) {
+  const personal = input.books.find((b) => b.kind === "personal")?.id;
+  const bookBudgets = { ...input.bookBudgets };
+  const bookGlobals = { ...input.bookGlobals };
+  if (personal && !bookBudgets[personal]) {
+    bookBudgets[personal] = { ...input.legacyBudgets };
+  }
+  if (personal && bookGlobals[personal] == null) {
+    bookGlobals[personal] = input.legacyGlobal;
+  }
+  return { bookBudgets, bookGlobals };
+}
+
+export function moneyForBook(
+  bookId: string,
+  bookBudgets: Record<string, Record<string, number>>,
+  bookGlobals: Record<string, number>,
+) {
+  return {
+    budgets: bookBudgets[bookId] ?? {},
+    globalBudget: bookGlobals[bookId] ?? 0,
+  };
+}
+
+export function parseBookBudgets(raw: unknown): Record<string, Record<string, number>> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: Record<string, Record<string, number>> = {};
+  for (const [bookId, val] of Object.entries(raw as Record<string, unknown>)) {
+    if (!bookId || !val || typeof val !== "object" || Array.isArray(val)) continue;
+    const inner: Record<string, number> = {};
+    for (const [k, n] of Object.entries(val as Record<string, unknown>)) {
+      const num = Number(n);
+      if (k && Number.isFinite(num) && num >= 0) inner[k] = num;
+    }
+    out[bookId] = inner;
+  }
+  return out;
+}
+
+export function parseBookGlobals(raw: unknown): Record<string, number> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: Record<string, number> = {};
+  for (const [bookId, val] of Object.entries(raw as Record<string, unknown>)) {
+    const n = Number(val);
+    if (bookId && Number.isFinite(n) && n >= 0) out[bookId] = n;
+  }
+  return out;
+}
