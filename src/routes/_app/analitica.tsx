@@ -1,18 +1,21 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { categoryRows, computeMonth } from "@/lib/analytics";
-import { moneyARS } from "@/lib/format";
+import { useMemo, useState } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { categoryRows, computeMonth, isFixedExpense, prevMonth, splitFixedVariable } from "@/lib/analytics";
+import { catColorVar } from "@/lib/categories";
+import { moneyARS, monthLabel } from "@/lib/format";
 import { CatIcon } from "@/lib/icons";
-import { PAY_METHODS } from "@/lib/types";
-import { useAllCategories, useLedger, useBookTxs } from "@/lib/store";
-import { CatDonut, WeekdayBars } from "@/components/charts";
+import { useAllCategories, useBookTxs, useLedger } from "@/lib/store";
+import { RhythmChart } from "@/components/charts";
+import { DrillSheet } from "@/components/drill-sheet";
 import { MonthSwitcher } from "@/components/month-switcher";
-import { Progress } from "@/components/ui/progress";
-
-const WD = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+import { cn } from "@/lib/utils";
+import type { Transaction } from "@/lib/types";
 
 export const Route = createFileRoute("/_app/analitica")({
   component: Analitica,
 });
+
+type Drill = { title: string; txs: Transaction[] } | null;
 
 function Analitica() {
   const { viewMonth, setViewMonth, usdRate, usdtRate, budgets, globalBudget } = useLedger();
@@ -20,146 +23,192 @@ function Analitica() {
   const allCats = useAllCategories();
   const fx = { usd: usdRate, usdt: usdtRate };
   const stats = computeMonth(transactions, viewMonth, fx);
-  const prev = computeMonth(transactions, prevYm(viewMonth), fx);
+  const prev = computeMonth(transactions, prevMonth(viewMonth), fx);
   const prevSlice = prev.byDay.slice(0, stats.elapsed);
   const prevMtdSpent = prevSlice.reduce((s, d) => s + d.spent, 0);
-  const prevMtdEarned = prevSlice.reduce((s, d) => s + d.earned, 0);
-  const cats = categoryRows(stats.byCat, budgets, allCats);
-  const donut = cats
-    .filter((c) => c.spent > 0)
-    .map((c) => ({
-      name: c.name,
-      value: c.spent,
-      color: cssColor(`--color-${c.token}`),
-    }));
-  const weekday = stats.weekdayAvg.map((v, i) => ({ name: WD[i]!, value: Math.round(v) }));
-  // Monday-first for AR
-  const weekdayMon = [...weekday.slice(1), weekday[0]!];
+  const split = splitFixedVariable(stats.txs, fx);
+  const cats = categoryRows(stats.byCat, budgets, allCats).filter((c) => c.spent > 0);
+  const maxCat = Math.max(1, ...cats.map((c) => c.spent));
+  const spentDelta = prevMtdSpent ? ((stats.spent - prevMtdSpent) / prevMtdSpent) * 100 : 0;
+  const [drill, setDrill] = useState<Drill>(null);
 
-  const methods = PAY_METHODS.map((m) => ({
-    ...m,
-    amount: stats.byMethod[m.id] ?? 0,
-  })).filter((m) => m.amount > 0);
+  const over = globalBudget > 0 && stats.spent > globalBudget;
+  const remain = globalBudget - stats.spent;
+  const fixedPct = stats.spent ? Math.round((split.fixed / stats.spent) * 100) : 0;
+
+  const merchantRows = stats.topMerchants;
+
+  function openCat(id: string, name: string) {
+    setDrill({
+      title: name,
+      txs: stats.txs
+        .filter((t) => t.categoryId === id && t.type === "expense")
+        .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt)),
+    });
+  }
+
+  function openMerchant(name: string) {
+    setDrill({
+      title: name,
+      txs: stats.txs
+        .filter((t) => t.type === "expense" && (t.merchant.trim() || t.note.trim() || "Sin detalle") === name)
+        .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt)),
+    });
+  }
+
+  const splitHint = useMemo(() => {
+    if (!stats.spent) return "Sin gastos este mes.";
+    return `${fixedPct}% fijo · ${100 - fixedPct}% variable`;
+  }, [stats.spent, fixedPct]);
 
   return (
-    <div className="grid gap-5">
+    <div className="grid gap-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Estadística</p>
-          <h1 className="font-display text-4xl tracking-tight">Analítica</h1>
+          <p className="text-[11px] font-medium tracking-wide text-muted uppercase">El mes</p>
+          <h1 className="font-display text-4xl tracking-tight capitalize">{monthLabel(viewMonth, "LLLL")}</h1>
         </div>
         <MonthSwitcher value={viewMonth} onChange={setViewMonth} />
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Stat label="Gasto" a={stats.spent} b={prevMtdSpent} />
-        <Stat label="Ingresos" a={stats.earned} b={prevMtdEarned} invert />
-        <Stat label="Neto" a={stats.earned - stats.spent} b={prevMtdEarned - prevMtdSpent} invert />
-      </div>
+      <section>
+        <p className="font-display text-5xl tabular-nums tracking-tight sm:text-6xl">{moneyARS(stats.spent)}</p>
+        <p className="mt-2 text-sm text-muted">
+          {spentDelta === 0
+            ? "Igual al mes previo"
+            : `${spentDelta > 0 ? "+" : ""}${spentDelta.toFixed(0)}% vs ${monthLabel(prevMonth(viewMonth), "LLL")}`}
+          {" · "}
+          ingresos {moneyARS(stats.earned)}
+          {" · "}
+          neto {moneyARS(stats.net)}
+        </p>
+        {globalBudget ? (
+          <p className={cn("mt-1 text-sm", over ? "text-expense" : "text-subtle")}>
+            {over
+              ? `Te pasaste ${moneyARS(stats.spent - globalBudget)} del tope.`
+              : `Quedan ${moneyARS(remain)}. Proyección ${moneyARS(stats.projected)}.`}
+          </p>
+        ) : null}
+      </section>
 
-      <section className="grid gap-5 lg:grid-cols-2">
-        <div className="rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_rgba(244,244,240,0.06)] sm:p-5">
-          <h2 className="text-sm font-medium">Por categoría</h2>
-          <CatDonut data={donut} />
+      <section>
+        <div className="mb-2 flex items-baseline justify-between gap-3">
+          <h2 className="text-sm font-medium">Fijo vs variable</h2>
+          <p className="text-xs text-subtle">{splitHint}</p>
         </div>
-        <div className="rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_rgba(244,244,240,0.06)] sm:p-5">
-          <h2 className="text-sm font-medium">Promedio por día de semana</h2>
-          <WeekdayBars data={weekdayMon} />
+        <div className="flex h-2 overflow-hidden rounded-full bg-elevated">
+          {stats.spent ? (
+            <>
+              <span className="bg-accent" style={{ width: `${fixedPct}%` }} />
+              <span className="bg-border-strong" style={{ width: `${100 - fixedPct}%` }} />
+            </>
+          ) : null}
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            className="rounded-2xl bg-elevated px-3 py-3 text-left"
+            onClick={() =>
+              setDrill({
+                title: "Fijos",
+                txs: stats.txs.filter((t) => isFixedExpense(t)),
+              })
+            }
+          >
+            <p className="text-[11px] uppercase text-muted">Fijo</p>
+            <p className="mt-1 font-display text-2xl tabular-nums">{moneyARS(split.fixed)}</p>
+          </button>
+          <button
+            type="button"
+            className="rounded-2xl bg-elevated px-3 py-3 text-left"
+            onClick={() =>
+              setDrill({
+                title: "Variable",
+                txs: stats.txs.filter((t) => t.type === "expense" && !isFixedExpense(t)),
+              })
+            }
+          >
+            <p className="text-[11px] uppercase text-muted">Variable</p>
+            <p className="mt-1 font-display text-2xl tabular-nums">{moneyARS(split.variable)}</p>
+          </button>
         </div>
       </section>
 
-      <section className="rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_rgba(244,244,240,0.06)] sm:p-5">
-        <h2 className="mb-4 text-sm font-medium">Desglose y presupuesto</h2>
-        <div className="grid gap-4">
+      <section>
+        <div className="mb-3 flex items-baseline justify-between">
+          <h2 className="text-sm font-medium">Categorías</h2>
+          <Link to="/presupuestos" className="text-xs text-muted hover:text-fg">
+            Editar tope
+          </Link>
+        </div>
+        <div className="grid gap-2">
           {cats.map((c) => {
-            const pct = c.budget ? (c.spent / c.budget) * 100 : 0;
+            const width = (c.spent / maxCat) * 100;
             return (
-              <div key={c.id} className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1">
-                <div className="flex items-center gap-2 text-sm">
-                  <CatIcon name={c.icon} className="size-3.5 text-muted" />
-                  {c.name}
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => openCat(c.id, c.name)}
+                className="grid gap-1 rounded-xl px-1 py-1.5 text-left hover:bg-elevated"
+              >
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span style={{ color: catColorVar(c.token) }}>
+                      <CatIcon name={c.icon} className="size-3.5" />
+                    </span>
+                    <span className="truncate">{c.name}</span>
+                  </span>
+                  <span className="tabular-nums text-muted">{moneyARS(c.spent)}</span>
                 </div>
-                <p className="text-sm tabular-nums text-muted">
-                  {moneyARS(c.spent)}
-                  {c.budget ? ` / ${moneyARS(c.budget)}` : ""}
-                </p>
-                <Progress
-                  className="col-span-2"
-                  value={c.budget ? pct : c.spent ? 8 : 0}
-                  barClassName={pct > 100 ? "bg-expense" : pct > 85 ? "bg-warn" : undefined}
-                />
-              </div>
+                <span className="h-1.5 overflow-hidden rounded-full bg-elevated">
+                  <span
+                    className="block h-full rounded-full"
+                    style={{ width: `${width}%`, background: catColorVar(c.token) }}
+                  />
+                </span>
+              </button>
             );
           })}
+          {cats.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted">Todavía no hay gastos este mes.</p>
+          ) : null}
         </div>
-        <p className="mt-4 text-xs text-subtle">
-          Tope global {moneyARS(globalBudget)} · proyección de cierre {moneyARS(stats.projected)}
-        </p>
       </section>
 
-      <section className="grid gap-5 lg:grid-cols-2">
-        <div className="rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_rgba(244,244,240,0.06)] sm:p-5">
-          <h2 className="mb-3 text-sm font-medium">Comercios</h2>
-          <ul className="grid gap-2">
-            {stats.topMerchants.map((m) => (
-              <li key={m.name} className="flex items-center justify-between text-sm">
+      <section>
+        <h2 className="mb-2 text-sm font-medium">Ritmo vs tope</h2>
+        <RhythmChart byDay={stats.byDay} budget={globalBudget} />
+      </section>
+
+      <section>
+        <h2 className="mb-3 text-sm font-medium">Comercios</h2>
+        <ul className="grid gap-1">
+          {merchantRows.map((m) => (
+            <li key={m.name}>
+              <button
+                type="button"
+                onClick={() => openMerchant(m.name)}
+                className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-2 text-left text-sm hover:bg-elevated"
+              >
                 <span className="truncate text-fg">{m.name}</span>
                 <span className="tabular-nums text-muted">{moneyARS(m.amount)}</span>
-              </li>
-            ))}
-            {stats.topMerchants.length === 0 ? (
-              <li className="text-sm text-muted">Sin datos.</li>
-            ) : null}
-          </ul>
-        </div>
-        <div className="rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_rgba(244,244,240,0.06)] sm:p-5">
-          <h2 className="mb-3 text-sm font-medium">Medio de pago</h2>
-          <ul className="grid gap-2">
-            {methods.map((m) => (
-              <li key={m.id} className="flex items-center justify-between text-sm">
-                <span>{m.label}</span>
-                <span className="tabular-nums text-muted">{moneyARS(m.amount)}</span>
-              </li>
-            ))}
-            {methods.length === 0 ? <li className="text-sm text-muted">Sin datos.</li> : null}
-          </ul>
-        </div>
+              </button>
+            </li>
+          ))}
+          {merchantRows.length === 0 ? (
+            <li className="py-6 text-center text-sm text-muted">Sin comercios todavía.</li>
+          ) : null}
+        </ul>
       </section>
+
+      <DrillSheet
+        title={drill?.title ?? ""}
+        txs={drill?.txs ?? []}
+        open={Boolean(drill)}
+        onOpenChange={(open) => {
+          if (!open) setDrill(null);
+        }}
+      />
     </div>
   );
-}
-
-function Stat({
-  label,
-  a,
-  b,
-  invert = false,
-}: {
-  label: string;
-  a: number;
-  b: number;
-  invert?: boolean;
-}) {
-  const pct = b ? ((a - b) / Math.abs(b)) * 100 : 0;
-  const good = invert ? pct >= 0 : pct <= 0;
-  return (
-    <div className="rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
-      <p className="text-[11px] font-medium tracking-wide text-muted uppercase">{label}</p>
-      <p className="mt-1 font-display text-3xl tabular-nums tracking-tight">{moneyARS(a)}</p>
-      <p className={`mt-1 text-xs tabular-nums ${good ? "text-income" : "text-expense"}`}>
-        {pct === 0 ? "Igual al mes previo" : `${pct > 0 ? "+" : ""}${pct.toFixed(0)}% vs mes previo`}
-      </p>
-    </div>
-  );
-}
-
-function prevYm(ym: string) {
-  const [y, m] = ym.split("-").map(Number);
-  const d = new Date(y, m - 2, 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function cssColor(name: string) {
-  if (typeof document === "undefined") return "#8c8c86";
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "#8c8c86";
 }

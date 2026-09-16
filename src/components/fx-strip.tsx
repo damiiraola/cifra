@@ -20,18 +20,14 @@ export function FxStrip() {
     <button
       type="button"
       onClick={() => void refreshQuotes()}
-      className="flex w-full flex-wrap items-baseline justify-between gap-x-4 gap-y-1 rounded-2xl bg-surface px-4 py-3 text-left shadow-[0_0_0_1px_rgba(244,244,240,0.06)]"
+      className="flex w-full items-baseline justify-between gap-3 text-left"
     >
-      <span className="text-xs text-muted">
-        {quotesBusy
-          ? "Actualizando cotizaciones…"
-          : live
-            ? `Cotizaciones en vivo · ${age}`
-            : `Fin de semana · ${age}`}
+      <span className="text-[11px] text-muted">
+        {quotesBusy ? "Actualizando…" : live ? `En vivo · ${age}` : `Fin de semana · ${age}`}
       </span>
-      <span className="text-sm tabular-nums text-fg">
+      <span className="text-xs tabular-nums text-fg">
         USD {usdLabel} ${formatRate(usdRate)}
-        <span className="mx-2 text-subtle">·</span>
+        <span className="mx-1.5 text-subtle">·</span>
         USDT ${formatRate(usdtRate)}
       </span>
     </button>

@@ -1,208 +1,197 @@
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { categoryRows, compareDelta, computeMonth } from "@/lib/analytics";
-import { catColorVar } from "@/lib/categories";
-import { moneyARS } from "@/lib/format";
-import { CatIcon } from "@/lib/icons";
-import { logStreak } from "@/lib/books";
+import { Plus, Search, X } from "lucide-react";
+import { computeMonth, pickDiaryDay, toARS } from "@/lib/analytics";
+import { dayLabel, moneyARS } from "@/lib/format";
 import { isPosted } from "@/lib/recurring";
 import { useAllCategories, useBookTxs, useLedger } from "@/lib/store";
-import { todayISO } from "@/lib/utils";
-import { DailyArea } from "@/components/charts";
-import { HeroSpend, Kpi } from "@/components/kpi";
+import { monthISO, shiftMonth, todayISO } from "@/lib/utils";
+import { Heatmap } from "@/components/heatmap";
 import { MonthSwitcher } from "@/components/month-switcher";
 import { TxRow } from "@/components/tx-row";
-import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { FxStrip } from "@/components/fx-strip";
 import { WalletStrip } from "@/components/wallet-strip";
 
 export const Route = createFileRoute("/_app/")({
-  component: Home,
+  component: Diario,
 });
 
-function Home() {
-  const { viewMonth, setViewMonth, usdRate, usdtRate, budgets, globalBudget, openQuick, recurrings, activeBookId } =
-    useLedger();
+function Diario() {
+  const {
+    viewMonth,
+    setViewMonth,
+    usdRate,
+    usdtRate,
+    selectedDay,
+    setSelectedDay,
+    openQuick,
+    recurrings,
+    activeBookId,
+  } = useLedger();
   const transactions = useBookTxs();
   const allCats = useAllCategories();
   const fx = { usd: usdRate, usdt: usdtRate };
   const stats = computeMonth(transactions, viewMonth, fx);
-  const prev = computeMonth(transactions, shift(viewMonth), fx);
-  const prevMtd = prev.byDay.slice(0, stats.elapsed).reduce((s, d) => s + d.spent, 0);
-  const spentDelta = compareDelta(stats.spent, prevMtd);
-  const today = todayISO();
-  const todaySpend = stats.byDay.find((d) => d.date === today)?.spent ?? 0;
-  const loggedToday = transactions.some((t) => t.date === today && t.type !== "transfer");
-  const streak = logStreak(transactions, today);
-  const recent = [...stats.txs]
-    .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt))
-    .slice(0, 6);
-  const cats = categoryRows(stats.byCat, budgets, allCats).filter((c) => c.spent > 0).slice(0, 5);
-  const budgetPct = globalBudget ? (stats.spent / globalBudget) * 100 : 0;
-  const over = budgetPct > 100;
+  const prevYm = useRef(viewMonth);
+  const [q, setQ] = useState("");
+  const [searching, setSearching] = useState(false);
+
+  useEffect(() => {
+    if (prevYm.current !== viewMonth || !selectedDay || !selectedDay.startsWith(viewMonth)) {
+      prevYm.current = viewMonth;
+      setSelectedDay(pickDiaryDay(viewMonth, stats.byDay, todayISO()));
+    }
+    // byDay is derived; only resync when the month changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMonth]);
+
+  const day =
+    selectedDay && selectedDay.startsWith(viewMonth)
+      ? selectedDay
+      : pickDiaryDay(viewMonth, stats.byDay, todayISO());
+  const dayTx = stats.txs
+    .filter((t) => t.date === day)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const spent = dayTx.filter((t) => t.type === "expense").reduce((s, t) => s + toARS(t, fx), 0);
+  const earned = dayTx.filter((t) => t.type === "income").reduce((s, t) => s + toARS(t, fx), 0);
+  const vsAvg = spent - stats.avgDaily;
   const fijosPendientes = recurrings.filter(
     (r) => r.bookId === activeBookId && r.active && !isPosted(r, transactions, viewMonth),
   ).length;
 
-  return (
-    <div className="grid gap-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
-        <div>
-          <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Este mes</p>
-          <h1 className="font-display text-3xl tracking-tight sm:text-4xl">Resumen</h1>
-        </div>
-        <MonthSwitcher value={viewMonth} onChange={setViewMonth} />
-      </div>
+  const query = q.trim().toLowerCase();
+  const matches = useMemo(() => {
+    if (!query) return [];
+    return stats.txs
+      .filter((t) => {
+        const hay = `${t.merchant} ${t.note} ${allCats.find((c) => c.id === t.categoryId)?.name ?? ""}`.toLowerCase();
+        return hay.includes(query);
+      })
+      .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
+  }, [stats.txs, query, allCats]);
 
-      {over ? (
-        <p className="rounded-2xl bg-expense/15 px-4 py-3 text-sm text-expense">
-          Te pasaste el presupuesto por {moneyARS(stats.spent - globalBudget)}.
-        </p>
-      ) : null}
-      {transactions.length > 0 && !loggedToday && viewMonth === today.slice(0, 7) ? (
-        <button
-          type="button"
-          onClick={() => openQuick()}
-          className="rounded-2xl bg-elevated px-4 py-3 text-left text-sm text-fg"
-        >
-          ¿Cargaste el día? Tocá para anotar un movimiento.
-        </button>
-      ) : null}
-      {fijosPendientes > 0 ? (
-        <Link to="/fijos" className="rounded-2xl bg-elevated px-4 py-3 text-sm text-fg">
-          Hay {fijosPendientes} fijo{fijosPendientes === 1 ? "" : "s"} sin anotar este mes.
-        </Link>
-      ) : null}
+  function changeMonth(delta: -1 | 1) {
+    const next = shiftMonth(viewMonth, delta);
+    if (next > monthISO()) return;
+    setViewMonth(next);
+  }
+
+  function selectDay(date: string) {
+    setSelectedDay(date);
+    const reduce =
+      typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.requestAnimationFrame(() => {
+      document.getElementById("cifra-dia")?.scrollIntoView({
+        behavior: reduce ? "auto" : "smooth",
+        block: "start",
+      });
+    });
+  }
+
+  return (
+    <div className="grid gap-4">
+      <div className="flex items-center justify-between gap-3">
+        <MonthSwitcher value={viewMonth} onChange={setViewMonth} />
+        <div className="flex items-center gap-2">
+          <p className="font-display text-2xl tabular-nums tracking-tight">{moneyARS(stats.spent, true)}</p>
+          <button
+            type="button"
+            aria-label={searching ? "Cerrar búsqueda" : "Buscar en el mes"}
+            onClick={() => {
+              setSearching((v) => !v);
+              setQ("");
+            }}
+            className="grid size-11 place-items-center rounded-lg text-muted hover:bg-elevated hover:text-fg"
+          >
+            {searching ? <X className="size-4" /> : <Search className="size-4" />}
+          </button>
+        </div>
+      </div>
 
       <FxStrip />
       <WalletStrip />
 
-      {transactions.length === 0 ? (
-        <section className="rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
-          <p className="font-display text-2xl tracking-tight">Libro nuevo</p>
-          <p className="mt-1 text-sm text-muted">
-            Todavía no hay movimientos en este libro. Cargá el primero.
+      {fijosPendientes > 0 && !searching ? (
+        <Link to="/fijos" className="text-sm text-muted hover:text-fg">
+          {fijosPendientes} fijo{fijosPendientes === 1 ? "" : "s"} sin anotar este mes.
+        </Link>
+      ) : null}
+
+      {searching ? (
+        <section>
+          <Input
+            autoFocus
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Comercio, nota, categoría"
+          />
+          <p className="mt-3 text-xs text-subtle">
+            {query ? `${matches.length} en ${viewMonth}` : "Escribí para filtrar el mes."}
           </p>
-          <button
-            type="button"
-            className="mt-4 text-sm text-fg underline-offset-4 hover:underline"
-            onClick={() => openQuick()}
-          >
-            Cargar un movimiento
-          </button>
+          <div className="mt-2">
+            {matches.map((tx) => (
+              <TxRow key={tx.id} tx={tx} showDate onClick={() => openQuick(tx)} />
+            ))}
+            {query && matches.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted">Nada con esa búsqueda.</p>
+            ) : null}
+          </div>
         </section>
       ) : (
-      <>
-      <HeroSpend
-        label="Gastado"
-        amount={moneyARS(stats.spent)}
-        hint={
-          spentDelta.dir === "flat"
-            ? `${stats.expenseCount} movimientos · promedio ${moneyARS(stats.avgDaily)} / día`
-            : `${spentDelta.pct > 0 ? "+" : ""}${spentDelta.pct.toFixed(0)}% vs mismas fechas del mes anterior · promedio ${moneyARS(stats.avgDaily)} / día`
-        }
-      />
+        <>
+          <Heatmap
+            byDay={stats.byDay}
+            selected={day}
+            viewMonth={viewMonth}
+            onSelect={selectDay}
+            onLongPress={(date) => openQuick({ date, type: "expense" })}
+            onMonthDelta={changeMonth}
+          />
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi
-          label="Hoy"
-          value={moneyARS(todaySpend, true)}
-          hint={viewMonth === today.slice(0, 7) ? "Lo que va del día" : "Mes cerrado"}
-        />
-        <Kpi label="Ingresos" value={moneyARS(stats.earned, true)} tone="income" hint="En el mes" />
-        <Kpi
-          label="Racha"
-          value={`${streak}d`}
-          hint={streak >= 7 ? "Beta cumplida" : "Días seguidos cargando"}
-        />
-        <Kpi
-          label="Proyección"
-          value={moneyARS(stats.projected, true)}
-          tone={globalBudget && stats.projected > globalBudget ? "warn" : "default"}
-          hint="Si seguís este ritmo"
-        />
-      </div>
-
-      <section className="rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_rgba(244,244,240,0.06)] sm:p-5">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="text-sm font-medium">Presupuesto del mes</h2>
-          <Link to="/presupuestos" className="text-xs tabular-nums text-muted hover:text-fg">
-            {moneyARS(stats.spent)} / {moneyARS(globalBudget)}
-          </Link>
-        </div>
-        <Progress
-          value={budgetPct}
-          barClassName={over ? "bg-expense" : budgetPct > 80 ? "bg-warn" : "bg-accent"}
-        />
-        <p className="mt-2 text-xs text-subtle">
-          {over
-            ? `Te pasaste ${moneyARS(stats.spent - globalBudget)} del tope.`
-            : `Quedan ${moneyARS(Math.max(0, globalBudget - stats.spent))}.`}
-        </p>
-      </section>
-
-      <section className="rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_rgba(244,244,240,0.06)] sm:p-5">
-        <h2 className="mb-2 text-sm font-medium">Gasto diario</h2>
-        <DailyArea data={stats.byDay} />
-      </section>
-
-      <section className="rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_rgba(244,244,240,0.06)] sm:p-5">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-medium">Categorías</h2>
-          <Link to="/analitica" className="text-xs text-muted hover:text-fg">
-            Ver todo
-          </Link>
-        </div>
-        <div className="grid gap-3">
-          {cats.map((c) => {
-            const pct = c.budget ? Math.min(100, (c.spent / c.budget) * 100) : 0;
-            return (
-              <div key={c.id}>
-                <div className="mb-1 flex items-center justify-between gap-3 text-sm">
-                  <span className="flex items-center gap-2 text-fg">
-                    <span style={{ color: catColorVar(c.token) }}>
-                      <CatIcon name={c.icon} className="size-3.5" />
-                    </span>
-                    {c.name}
+          <section id="cifra-dia" className="scroll-mt-24">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm text-muted first-letter:uppercase">
+                  {dayLabel(day, "EEEE d")}
+                  <span className="text-subtle">
+                    {" · "}
+                    {moneyARS(spent)}
+                    {dayTx.length ? ` · ${dayTx.length}` : ""}
                   </span>
-                  <span className="tabular-nums text-muted">{moneyARS(c.spent)}</span>
-                </div>
-                <Progress
-                  value={c.budget ? pct : 0}
-                  barClassName={pct > 100 ? "bg-expense" : undefined}
-                />
+                </p>
+                <p className="mt-1 text-xs tabular-nums text-subtle">
+                  {stats.avgDaily
+                    ? vsAvg > 0
+                      ? `+${moneyARS(vsAvg)} vs promedio`
+                      : `${moneyARS(vsAvg)} vs promedio`
+                    : "Sin promedio todavía"}
+                  {earned > 0 ? ` · ingresos ${moneyARS(earned)}` : ""}
+                </p>
               </div>
-            );
-          })}
-          {cats.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted">Todavía no hay gastos este mes.</p>
-          ) : null}
-        </div>
-      </section>
-
-      <section className="rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_rgba(244,244,240,0.06)] sm:p-5">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-medium">Últimos movimientos</h2>
-          <Link to="/movimientos" className="text-xs text-muted hover:text-fg">
-            Ver todos
-          </Link>
-        </div>
-        <div>
-          {recent.map((tx) => (
-            <TxRow key={tx.id} tx={tx} showDate onClick={() => openQuick(tx)} />
-          ))}
-          {recent.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted">Nada cargado todavía.</p>
-          ) : null}
-        </div>
-      </section>
-      </>
+              <Button size="sm" onClick={() => openQuick({ date: day, type: "expense" })}>
+                <Plus className="size-4" />
+                Cargar
+              </Button>
+            </div>
+            <div className="mt-3">
+              {dayTx.map((tx) => (
+                <TxRow key={tx.id} tx={tx} onClick={() => openQuick(tx)} />
+              ))}
+              {dayTx.length === 0 ? (
+                <button
+                  type="button"
+                  onClick={() => openQuick({ date: day, type: "expense" })}
+                  className="w-full py-10 text-center text-sm text-muted"
+                >
+                  Nada este día. Tocá para cargar.
+                </button>
+              ) : null}
+            </div>
+          </section>
+        </>
       )}
     </div>
   );
-}
-
-function shift(ym: string) {
-  const [y, m] = ym.split("-").map(Number);
-  const d = new Date(y, m - 2, 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }

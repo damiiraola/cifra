@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { BarChart3, Brain, CalendarDays, LogOut, Settings, Shield } from "lucide-react";
+import { Brain, LogOut, Settings, Shield, Target } from "lucide-react";
 import { signOut } from "@/lib/auth/client";
 import { cn } from "@/lib/utils";
 import {
@@ -10,8 +10,7 @@ import {
 } from "@/components/ui/drawer";
 
 const ITEMS = [
-  { to: "/diario", label: "Diario", icon: CalendarDays },
-  { to: "/analitica", label: "Analítica", icon: BarChart3 },
+  { to: "/presupuestos", label: "Presupuestos", icon: Target },
   { to: "/ia", label: "Asistente", icon: Brain },
   { to: "/ajustes", label: "Ajustes", icon: Settings },
 ] as const;
@@ -30,7 +29,7 @@ export function MoreSheet({
       <DrawerContent>
         <div className="px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3">
           <DrawerTitle>Más</DrawerTitle>
-          <DrawerDescription className="mt-1">Diario, analítica y cuenta.</DrawerDescription>
+          <DrawerDescription className="mt-1">Tope, asistente y cuenta.</DrawerDescription>
           <nav className="mt-5 grid gap-1">
             {ITEMS.map((item) => {
               const Icon = item.icon;

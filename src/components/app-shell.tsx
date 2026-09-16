@@ -4,8 +4,6 @@ import {
   BarChart3,
   Brain,
   CalendarDays,
-  LayoutDashboard,
-  List,
   Menu,
   Plus,
   Repeat,
@@ -15,7 +13,7 @@ import {
 import { UserButton } from "@/lib/auth/gates";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { useLedger } from "@/lib/store";
-import { cn } from "@/lib/utils";
+import { cn, todayISO } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QuickAdd } from "@/components/quick-add";
@@ -28,31 +26,29 @@ import { MoreSheet } from "@/components/more-sheet";
 import { Toaster } from "sonner";
 
 const NAV = [
-  { to: "/", label: "Inicio", icon: LayoutDashboard },
-  { to: "/diario", label: "Diario", icon: CalendarDays },
+  { to: "/", label: "Diario", icon: CalendarDays },
   { to: "/analitica", label: "Analítica", icon: BarChart3 },
-  { to: "/ia", label: "Asistente", icon: Brain },
-];
+  { to: "/fijos", label: "Fijos", icon: Repeat },
+] as const;
 
 const MORE = [
-  { to: "/movimientos", label: "Movimientos", icon: List },
   { to: "/presupuestos", label: "Presupuestos", icon: Target },
-  { to: "/fijos", label: "Fijos", icon: Repeat },
+  { to: "/ia", label: "Asistente", icon: Brain },
   { to: "/ajustes", label: "Ajustes", icon: Settings },
-];
+] as const;
 
 const TAB = [
-  { to: "/", label: "Inicio", icon: LayoutDashboard },
-  { to: "/movimientos", label: "Movs", icon: List },
-  { to: "/fijos", label: "Fijos", icon: Repeat },
-  { to: "/presupuestos", label: "Tope", icon: Target },
-];
+  { to: "/", label: "Diario", icon: CalendarDays },
+  { to: "/analitica", label: "Analítica", icon: BarChart3 },
+] as const;
 
-const MORE_PATHS = new Set(["/diario", "/analitica", "/ia", "/ajustes", "/privacidad"]);
+const MORE_PATHS = new Set(["/ia", "/ajustes", "/privacidad", "/presupuestos"]);
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const openQuick = useLedger((s) => s.openQuick);
+  const selectedDay = useLedger((s) => s.selectedDay);
+  const viewMonth = useLedger((s) => s.viewMonth);
   const status = useLedger((s) => s.status);
   const hydrate = useLedger((s) => s.hydrate);
   const user = useCurrentUser();
@@ -67,6 +63,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     void hydrate({ id: userId, email: user?.primaryEmail });
   }, [userId, user?.primaryEmail, hydrate]);
 
+  function addOnDay() {
+    const today = todayISO();
+    const date = selectedDay && selectedDay.startsWith(viewMonth) ? selectedDay : today.startsWith(viewMonth) ? today : `${viewMonth}-01`;
+    openQuick({ date, type: "expense" });
+  }
+
   return (
     <TooltipProvider delayDuration={250}>
       <div className="min-h-dvh bg-bg text-fg">
@@ -79,11 +81,29 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <BookSwitcher />
           </div>
           <nav className="mt-8 flex flex-1 flex-col gap-1">
-            <Button className="mb-3 w-full" onClick={() => openQuick()}>
+            <Button className="mb-3 w-full" onClick={addOnDay}>
               <Plus className="size-4" />
               Nuevo
             </Button>
-            {[...NAV, ...MORE].map((item) => {
+            {NAV.map((item) => {
+              const active = pathname === item.to;
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  className={cn(
+                    "flex h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors duration-150",
+                    active ? "bg-elevated text-fg" : "text-muted hover:bg-elevated hover:text-fg",
+                  )}
+                >
+                  <Icon className="size-4" />
+                  {item.label}
+                </Link>
+              );
+            })}
+            <div className="my-3 h-px bg-border" />
+            {MORE.map((item) => {
               const active = pathname === item.to;
               const Icon = item.icon;
               return (
@@ -109,14 +129,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {chrome ? <header className="sticky top-0 z-20 border-b border-border bg-bg/90 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-sm md:hidden">
           <div className="flex items-center justify-between gap-3">
             <p className="font-display text-2xl leading-none tracking-tight">Cifra</p>
-            <div className="flex items-center gap-1">
-              <Link to="/ajustes" aria-label="Ajustes" className="grid size-9 place-items-center rounded-lg text-muted hover:bg-elevated hover:text-fg">
-                <Settings className="size-4" />
-              </Link>
-              <Button size="icon-sm" aria-label="Nuevo movimiento" onClick={() => openQuick()}>
-                <Plus className="size-4" />
-              </Button>
-            </div>
+            <Link to="/ajustes" aria-label="Ajustes" className="grid size-11 place-items-center rounded-lg text-muted hover:bg-elevated hover:text-fg">
+              <Settings className="size-4" />
+            </Link>
           </div>
           <div className="mt-3">
             <BookSwitcher />
@@ -174,6 +189,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </Link>
               );
             })}
+            <button
+              type="button"
+              aria-label="Cargar movimiento"
+              onClick={addOnDay}
+              className="flex min-h-12 flex-col items-center justify-center"
+            >
+              <span className="grid size-10 place-items-center rounded-full bg-accent text-accent-fg">
+                <Plus className="size-4" />
+              </span>
+            </button>
+            <Link
+              to="/fijos"
+              className={cn(
+                "flex min-h-12 flex-col items-center justify-center gap-0.5 text-[10px] font-medium leading-tight",
+                pathname === "/fijos" ? "text-fg" : "text-muted",
+              )}
+            >
+              <Repeat className="size-4" />
+              Fijos
+            </Link>
             <button
               type="button"
               onClick={() => setMoreOpen(true)}

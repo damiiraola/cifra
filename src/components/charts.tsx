@@ -14,6 +14,7 @@ import {
   YAxis,
 } from "recharts";
 import { moneyARS, shortDay } from "@/lib/format";
+import { todayISO } from "@/lib/utils";
 
 const tooltipStyle = {
   background: "#1c1c20",
@@ -64,7 +65,7 @@ export function DailyArea({
 }: {
   data: { date: string; spent: number }[];
 }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayISO();
   const rows = data.filter((d) => d.date <= today);
   return (
     <SafeChart className="h-44 w-full">
@@ -101,6 +102,82 @@ export function DailyArea({
           stroke="#c8ccd4"
           strokeWidth={1.5}
           fill="url(#spentFill)"
+          isAnimationActive={false}
+        />
+      </AreaChart>
+    </SafeChart>
+  );
+}
+
+export function RhythmChart({
+  byDay,
+  budget,
+}: {
+  byDay: { date: string; spent: number }[];
+  budget: number;
+}) {
+  const today = todayISO();
+  const last = Math.max(1, byDay.length);
+  let cum = 0;
+  const rows = byDay
+    .filter((d) => d.date <= today)
+    .map((d, i) => {
+      cum += d.spent;
+      return {
+        date: d.date,
+        spent: Math.round(cum),
+        pace: budget ? Math.round((budget / last) * (i + 1)) : 0,
+      };
+    });
+  if (rows.length === 0) {
+    return <p className="py-8 text-center text-sm text-muted">Sin ritmo todavía.</p>;
+  }
+  return (
+    <SafeChart className="h-44 w-full">
+      <AreaChart data={rows} margin={{ top: 8, right: 4, left: -18, bottom: 0 }}>
+        <defs>
+          <linearGradient id="rhythmFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#c8ccd4" stopOpacity={0.28} />
+            <stop offset="100%" stopColor="#c8ccd4" stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid stroke="#2a2a2e" vertical={false} />
+        <XAxis
+          dataKey="date"
+          tickFormatter={(v) => shortDay(v)}
+          tick={{ fill: "#8c8c86", fontSize: 11 }}
+          axisLine={false}
+          tickLine={false}
+          minTickGap={28}
+        />
+        <YAxis
+          tickFormatter={(v) => (v >= 1000 ? `${Math.round(v / 1000)}k` : `${v}`)}
+          tick={{ fill: "#8c8c86", fontSize: 11 }}
+          axisLine={false}
+          tickLine={false}
+        />
+        <Tooltip
+          contentStyle={tooltipStyle}
+          formatter={(v, name) => [moneyARS(Number(v)), name === "pace" ? "Tope al día" : "Acumulado"]}
+          labelFormatter={(l) => shortDay(String(l))}
+        />
+        {budget ? (
+          <Area
+            type="monotone"
+            dataKey="pace"
+            stroke="#6a6a66"
+            strokeWidth={1}
+            strokeDasharray="4 4"
+            fill="none"
+            isAnimationActive={false}
+          />
+        ) : null}
+        <Area
+          type="monotone"
+          dataKey="spent"
+          stroke="#c8ccd4"
+          strokeWidth={1.5}
+          fill="url(#rhythmFill)"
           isAnimationActive={false}
         />
       </AreaChart>

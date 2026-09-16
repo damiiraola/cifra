@@ -2,9 +2,17 @@ import { monthBounds, prevMonth, todayISO } from "./utils";
 import type { FxRates } from "./fx";
 import type { Currency, Transaction } from "./types";
 import { categoryRows, snapshotText } from "./snapshot-text";
+import { isFixedExpense } from "./diary-math";
 
 export { categoryRows, snapshotText };
 export type { SnapshotFijo } from "./snapshot-text";
+export {
+  FIXED_CATEGORY_IDS,
+  heatmapIntensity,
+  heatmapMax,
+  isFixedExpense,
+  pickDiaryDay,
+} from "./diary-math";
 
 export function toARS(tx: Transaction, rates: FxRates) {
   if (tx.currency === "ARS") return tx.amount;
@@ -103,8 +111,16 @@ export function computeMonth(txs: Transaction[], ym: string, rates: FxRates) {
   };
 }
 
-export function heatmapMax(byDay: { spent: number }[]) {
-  return Math.max(1, ...byDay.map((d) => d.spent));
+export function splitFixedVariable(txs: Transaction[], rates: FxRates) {
+  let fixed = 0;
+  let variable = 0;
+  for (const t of txs) {
+    if (t.type !== "expense") continue;
+    const v = toARS(t, rates);
+    if (isFixedExpense(t)) fixed += v;
+    else variable += v;
+  }
+  return { fixed, variable };
 }
 
 export function compareDelta(current: number, previous: number) {
