@@ -1,13 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { toast } from "sonner";
-import { budgetAllocation, budgetsFromSpend, liveCategoryRows } from "@/lib/budget-math";
+import { budgetAllocation, liveCategoryRows } from "@/lib/budget-math";
 import { DEFAULT_BUDGETS } from "@/lib/categories";
 import { computeMonth } from "@/lib/analytics";
 import { moneyARS, parseAmount } from "@/lib/format";
 import { CatIcon } from "@/lib/icons";
 import { useAllCategories, useBookTxs, useLedger } from "@/lib/store";
 import { MonthSwitcher } from "@/components/month-switcher";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
@@ -23,7 +21,6 @@ function Presupuestos() {
     usdtRate,
     budgets,
     setBudget,
-    replaceBudgets,
     globalBudget,
     setGlobalBudget,
   } = useLedger();
@@ -36,16 +33,6 @@ function Presupuestos() {
   const { assigned, unassigned, overAssigned } = budgetAllocation(rows, globalBudget);
   const used = globalBudget ? (stats.spent / globalBudget) * 100 : 0;
   const assignedPct = globalBudget ? Math.min(100, (assigned / globalBudget) * 100) : 0;
-
-  function applyMonth() {
-    const patch = budgetsFromSpend(stats.byCat);
-    if (Object.keys(patch).length === 0) {
-      toast.error("No hay gastos este mes para copiar.");
-      return;
-    }
-    replaceBudgets(patch);
-    toast.success("Cada categoría tomó el gasto de este mes como tope.");
-  }
 
   return (
     <div className="grid gap-6">
@@ -115,11 +102,8 @@ function Presupuestos() {
             </span>
           </p>
         </div>
-        <Button variant="secondary" className="mt-4 w-full sm:w-auto" onClick={applyMonth}>
-          Usar el gasto de este mes como tope
-        </Button>
-        <p className="mt-2 text-xs text-subtle">
-          Copia lo que ya cargaste en Vivienda, Salud, etc. El tope global no se toca.
+        <p className="mt-3 text-xs text-subtle">
+          Si no escribís un tope, Cifra usa lo que ya cargaste en esa categoría.
         </p>
       </section>
 
@@ -216,7 +200,9 @@ function EnvelopeRow({
         aria-label={`Tope de ${name}`}
         onBlur={(e) => {
           const n = parseAmount(e.target.value);
-          onSave(n && n > 0 ? n : 0);
+          const next = n && n > 0 ? n : 0;
+          if (next === budget) return;
+          onSave(next);
         }}
       />
     </div>

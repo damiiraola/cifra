@@ -1,16 +1,26 @@
 import type { Category } from "./types";
 
+export function isUserSetTope(
+  id: string,
+  stored: number,
+  seedDefaults: Record<string, number> = {},
+) {
+  const n = Number(stored) || 0;
+  if (n <= 0) return false;
+  if (id.startsWith("c_")) return true;
+  if (n === seedDefaults[id]) return false;
+  return true;
+}
+
 export function effectiveCategoryBudget(
   id: string,
   stored: number,
   spent: number,
   seedDefaults: Record<string, number> = {},
 ) {
-  const n = Number(stored) || 0;
-  if (spent > 0) return n > 0 ? n : 0;
-  if (id.startsWith("c_")) return n > 0 ? n : 0;
-  if (n > 0 && n === seedDefaults[id]) return 0;
-  return n > 0 ? n : 0;
+  if (isUserSetTope(id, stored, seedDefaults)) return Number(stored) || 0;
+  if (spent > 0) return Math.round(spent);
+  return 0;
 }
 
 export type LiveCategoryRow = Category & {

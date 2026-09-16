@@ -252,7 +252,7 @@ function Ajustes() {
       <section className="rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
         <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Categorías</p>
         <p className="mt-1 text-xs text-subtle">
-          Nombre, visibilidad y tope. El tope es el mismo que en Presupuestos: solo cuenta si la categoría tiene gasto o si lo escribiste vos. Oculta no sale en Nuevo.
+          Nombre, visibilidad y tope. Si no escribís tope, se usa el gasto de este mes. Oculta no sale en Nuevo.
         </p>
         <div className="mt-4">
           <Label htmlFor="gbudget">Tope de gasto del mes (ARS)</Label>

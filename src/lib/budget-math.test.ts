@@ -40,8 +40,12 @@ const custom: Category = {
 };
 
 describe("effectiveCategoryBudget", () => {
-  it("keeps the envelope when the category has spend", () => {
-    assert.equal(effectiveCategoryBudget("vivienda", 480_000, 1_550_000, SEED), 480_000);
+  it("uses this month's spend as default tope when the stored value is the factory seed", () => {
+    assert.equal(effectiveCategoryBudget("vivienda", 480_000, 1_550_000, SEED), 1_550_000);
+  });
+
+  it("uses spend when there is no tope stored", () => {
+    assert.equal(effectiveCategoryBudget("salud", 0, 700_000, SEED), 700_000);
   });
 
   it("ignores factory defaults on idle builtin categories", () => {
@@ -53,6 +57,7 @@ describe("effectiveCategoryBudget", () => {
   });
 
   it("keeps a builtin tope that is not the seed default", () => {
+    assert.equal(effectiveCategoryBudget("vivienda", 1_800_000, 1_550_000, SEED), 1_800_000);
     assert.equal(effectiveCategoryBudget("alimentos", 300_000, 0, SEED), 300_000);
   });
 });
@@ -68,13 +73,13 @@ describe("liveCategoryRows + allocation", () => {
     const viva = rows.find((r) => r.id === "vivienda")!;
     const food = rows.find((r) => r.id === "alimentos")!;
     assert.equal(viva.spent, 1_550_000);
-    assert.equal(viva.budget, 480_000);
+    assert.equal(viva.budget, 1_550_000);
     assert.equal(food.spent, 0);
     assert.equal(food.budget, 0);
 
     const { assigned, unassigned } = budgetAllocation(rows, 3_050_000);
-    assert.equal(assigned, 480_000 + 40_000);
-    assert.equal(unassigned, 3_050_000 - 520_000);
+    assert.equal(assigned, 1_550_000 + 700_000);
+    assert.equal(unassigned, 3_050_000 - 2_250_000);
   });
 });
 
