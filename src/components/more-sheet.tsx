@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { Brain, LogOut, Settings, Shield, Target } from "lucide-react";
 import { signOut } from "@/lib/auth/client";
 import { cn } from "@/lib/utils";
+import { BookEntryButton } from "@/components/book-mode";
 import {
   Drawer,
   DrawerContent,
@@ -29,8 +30,9 @@ export function MoreSheet({
       <DrawerContent>
         <div className="px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3">
           <DrawerTitle>Más</DrawerTitle>
-          <DrawerDescription className="mt-1">Tope, asistente y cuenta.</DrawerDescription>
+          <DrawerDescription className="mt-1">Negocio, tope, asistente y cuenta.</DrawerDescription>
           <nav className="mt-5 grid gap-1">
+            <BookEntryButton onPicked={() => onOpenChange(false)} />
             {ITEMS.map((item) => {
               const Icon = item.icon;
               const active = pathname === item.to;

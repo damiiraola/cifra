@@ -22,7 +22,7 @@ import { QuotesTicker } from "@/components/quotes-ticker";
 import { OutboxFlusher } from "@/components/outbox-flusher";
 import { BudgetSeeder } from "@/components/budget-seeder";
 import { Onboarding } from "@/components/onboarding";
-import { BookSwitcher } from "@/components/book-switcher";
+import { BookEntryButton, BookMark, BookTheme, BookTransit, useActiveBook } from "@/components/book-mode";
 import { MoreSheet } from "@/components/more-sheet";
 import { Toaster } from "sonner";
 
@@ -58,6 +58,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const chrome = status === "ready" && onboarded;
   const [moreOpen, setMoreOpen] = useState(false);
   const moreActive = moreOpen || MORE_PATHS.has(pathname);
+  const book = useActiveBook();
+  const business = book?.kind === "business";
 
   useEffect(() => {
     if (!userId) return;
@@ -76,11 +78,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <aside className={cn("fixed inset-y-0 left-0 z-30 w-56 flex-col border-r border-border bg-bg px-4 py-6", chrome ? "hidden md:flex" : "hidden")}>
           <Link to="/" className="px-2">
             <p className="font-display text-3xl tracking-tight">Cifra</p>
-            <p className="mt-0.5 text-[11px] tracking-wide text-muted uppercase">Libro de gastos</p>
+            <p className="mt-0.5 text-[11px] tracking-wide text-muted uppercase">
+              {business ? "Libro de negocio" : "Libro personal"}
+            </p>
           </Link>
-          <div className="mt-5 px-1">
-            <BookSwitcher />
-          </div>
           <nav className="mt-8 flex flex-1 flex-col gap-1">
             <Button className="mb-3 w-full" onClick={addOnDay}>
               <Plus className="size-4" />
@@ -122,20 +123,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               );
             })}
           </nav>
-          <div className="overflow-hidden px-1 [&_span]:truncate [&_button]:text-muted">
-            <UserButton />
+          <div className="grid gap-3 px-1">
+            <BookEntryButton className="h-11 px-2" />
+            <div className="overflow-hidden [&_span]:truncate [&_button]:text-muted">
+              <UserButton />
+            </div>
           </div>
         </aside>
 
-        {chrome ? <header className="sticky top-0 z-20 border-b border-border bg-bg/90 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-sm md:hidden">
-          <div className="flex items-center justify-between gap-3">
-            <p className="font-display text-2xl leading-none tracking-tight">Cifra</p>
+        {chrome ? <header className={cn(
+          "sticky top-0 z-20 border-b border-border bg-bg/90 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-sm md:hidden",
+          business && "shadow-[inset_0_2px_0_0_var(--color-accent)]",
+        )}>
+          <div className="flex items-start justify-between gap-3">
+            <BookMark />
             <Link to="/ajustes" aria-label="Ajustes" className="grid size-11 place-items-center rounded-lg text-muted hover:bg-elevated hover:text-fg">
               <Settings className="size-4" />
             </Link>
-          </div>
-          <div className="mt-3">
-            <BookSwitcher />
           </div>
         </header> : null}
 
@@ -230,6 +234,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {chrome ? <QuotesTicker /> : null}
         {chrome ? <OutboxFlusher /> : null}
         {chrome ? <BudgetSeeder /> : null}
+        {chrome ? <BookTheme /> : null}
+        {chrome ? <BookTransit /> : null}
         <Toaster theme="dark" position="top-center" />
       </div>
     </TooltipProvider>

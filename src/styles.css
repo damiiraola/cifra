@@ -20,6 +20,7 @@
   --color-expense: #c4a4a0;
   --color-warn: #c4b494;
   --color-ring: #c8ccd4;
+  --color-business: #c4b494;
 
   --color-cat-food: #8f9a86;
   --color-cat-transit: #7d8b99;
@@ -68,6 +69,52 @@
 
   .cifra-main {
     padding-bottom: 5.5rem;
+  }
+
+  html[data-book="business"] {
+    --color-accent: var(--color-business);
+    --color-ring: var(--color-business);
+  }
+
+  .cifra-book-veil {
+    animation: cifra-book-veil 720ms ease-in-out forwards;
+  }
+
+  .cifra-book-title {
+    animation: cifra-book-title 720ms ease-in-out forwards;
+  }
+
+  .cifra-book-kicker {
+    animation: cifra-book-kicker 720ms ease-in-out forwards;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cifra-book-veil,
+    .cifra-book-title,
+    .cifra-book-kicker {
+      animation: none;
+    }
+  }
+
+  @keyframes cifra-book-veil {
+    0% { opacity: 0; }
+    14% { opacity: 1; }
+    72% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+
+  @keyframes cifra-book-title {
+    0% { opacity: 0; transform: translateY(10px); filter: blur(4px); }
+    18% { opacity: 1; transform: translateY(0); filter: blur(0); }
+    70% { opacity: 1; transform: translateY(0); filter: blur(0); }
+    100% { opacity: 0; transform: translateY(-8px); filter: blur(4px); }
+  }
+
+  @keyframes cifra-book-kicker {
+    0% { opacity: 0; }
+    22% { opacity: 1; }
+    70% { opacity: 1; }
+    100% { opacity: 0; }
   }
 
   button:not(:disabled),
