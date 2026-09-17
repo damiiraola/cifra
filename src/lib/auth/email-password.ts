@@ -1,8 +1,16 @@
 /**
  * Local email/password — this app's Better Auth DB, not the Grok broker.
- * Mail (confirm + reset) is sent via Resend when RESEND_API_KEY is set.
+ * Mail (confirm + reset + welcome + password-changed) via Resend.
  */
-import { mailConfigured, sendCifraMail } from "../mail";
+import {
+  APP_ORIGIN,
+  MAIL,
+  appOrigin,
+  greeting,
+  mailConfigured,
+  sendCifraMail,
+  sendMailQuiet,
+} from "../mail";
 
 export const emailAndPasswordEnabled = true;
 
@@ -21,11 +29,15 @@ export const emailPasswordOptions = {
   sendResetPassword: async ({ user, url }: { user: MailUser; url: string }) => {
     await sendOrThrow({
       to: user.email,
-      subject: "Cambiar tu contraseña — Cifra",
-      heading: "Cambiar contraseña",
-      body: "Pediste una clave nueva para Cifra. El enlace vale una hora. Si no fuiste vos, ignorá este mail.",
-      cta: "Elegir nueva clave",
       url,
+      ...MAIL.reset,
+    });
+  },
+  onPasswordReset: async ({ user }: { user: MailUser }) => {
+    await sendMailQuiet({
+      to: user.email,
+      url: appOrigin(),
+      ...MAIL.passwordChanged,
     });
   },
 };
@@ -36,11 +48,16 @@ export const emailVerificationOptions = {
   sendVerificationEmail: async ({ user, url }: { user: MailUser; url: string }) => {
     await sendOrThrow({
       to: user.email,
-      subject: "Confirmá tu mail — Cifra",
-      heading: "Confirmá tu cuenta",
-      body: `Hola${user.name ? ` ${user.name}` : ""}. Tocá el botón para confirmar el mail y abrir tu libro.`,
-      cta: "Confirmar mail",
       url,
+      ...MAIL.verify(user.name),
+    });
+  },
+  afterEmailVerification: async (user: MailUser) => {
+    await sendMailQuiet({
+      to: user.email,
+      url: appOrigin() || APP_ORIGIN,
+      ...MAIL.welcome,
+      body: `${greeting(user.name)} ${MAIL.welcome.body}`,
     });
   },
 };

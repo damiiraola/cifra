@@ -11,6 +11,7 @@ import {
 import { DEFAULT_USD_RATE, DEFAULT_USDT_RATE, DEFAULT_USD_SOURCE, isUsdSource, type UsdSource } from "@/lib/fx";
 import type { Account, Book, BookKind, Category, Currency, PayMethod, Recurring, Transaction, TxType } from "@/lib/types";
 import { uid } from "@/lib/utils";
+import { MAIL, sendMailQuiet } from "@/lib/mail";
 
 export type LedgerSnapshot = {
   transactions: Transaction[];
@@ -702,6 +703,7 @@ export const deleteAccount = createServerFn({ method: "POST" })
     `;
     const actual = String(rows[0]?.email ?? "").trim().toLowerCase();
     if (!actual || actual !== data.email) throw new Error("El mail no coincide");
+    await sendMailQuiet({ to: actual, ...MAIL.deleted });
     await sql`delete from ledger_transactions where user_id = ${context.userId}`;
     await sql`delete from ledger_recurring where user_id = ${context.userId}`;
     await sql`delete from ledger_accounts where user_id = ${context.userId}`;

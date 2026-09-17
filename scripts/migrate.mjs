@@ -74,6 +74,27 @@ async function main() {
       count += 1;
     }
     console.log(count ? `[migrate] done — ${count} migration(s) applied.` : "[migrate] up to date.");
+
+    if (process.env.RESEND_API_KEY) {
+      const marker = "mail_drill_preview_v1";
+      const seen = await client.query("SELECT 1 FROM _migrations WHERE name = $1", [marker]);
+      if (seen.rowCount === 0) {
+        const { spawnSync } = await import("node:child_process");
+        const drill = spawnSync(
+          process.execPath,
+          ["--experimental-strip-types", join(dirname(fileURLToPath(import.meta.url)), "mail-drill.mjs")],
+          { env: process.env, encoding: "utf8" },
+        );
+        if (drill.stdout) process.stdout.write(drill.stdout);
+        if (drill.stderr) process.stderr.write(drill.stderr);
+        if (drill.status === 0) {
+          await client.query("INSERT INTO _migrations (name) VALUES ($1)", [marker]);
+          console.log("[migrate] mail template preview sent.");
+        } else {
+          console.error("[migrate] mail drill failed — will retry on next deploy.");
+        }
+      }
+    }
   } finally {
     client.release();
     await pool.end();

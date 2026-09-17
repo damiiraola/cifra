@@ -50,7 +50,7 @@ Variables de entorno (no se commitean). En Vercel se cargan en Project → Setti
 | `XAI_API_KEY` | servidor | asistente IA |
 | `VITE_AUTH_ENABLED` | build | `true` en producción |
 | `RESEND_API_KEY` | servidor | mails (confirmar cuenta + olvidé clave) |
-| `MAIL_FROM` | servidor | opcional. Default de prueba Resend hasta verificar dominio |
+| `MAIL_FROM` | servidor | `Cifra <hola@cifra.lol>` cuando el dominio está verificado en Resend |
 
 Sin `DATABASE_URL` la app igual arranca (PGLite). No uses ese modo para testers reales: el libro se borra al reiniciar.
 
