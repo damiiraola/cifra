@@ -115,7 +115,7 @@ function textVersion(input: SendInput) {
   return lines.join("\n");
 }
 
-export async function sendCifraMail(input: SendInput): Promise<SendResult> {
+export async function sendCifraMail(input: SendInput, opts?: { from?: string }): Promise<SendResult> {
   const apiKey = process.env.RESEND_API_KEY?.trim();
   if (!apiKey) {
     return {
@@ -131,7 +131,7 @@ export async function sendCifraMail(input: SendInput): Promise<SendResult> {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from: fromAddress(),
+      from: opts?.from || fromAddress(),
       to: [input.to],
       subject: input.subject,
       html: html(input),
@@ -141,7 +141,7 @@ export async function sendCifraMail(input: SendInput): Promise<SendResult> {
 
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
-    return { ok: false, error: `No pude enviar el mail (${res.status}). ${detail.slice(0, 180)}` };
+    return { ok: false, error: `No pude enviar el mail (${res.status}). ${detail.slice(0, 280)}` };
   }
   return { ok: true };
 }
@@ -165,8 +165,13 @@ export async function sendTemplatePreviews(to: string): Promise<SendResult> {
     { to, ...MAIL.deleted },
     { to, url: origin, ...MAIL.welcome },
   ];
+  let from: string | undefined;
   for (const job of jobs) {
-    const result = await sendCifraMail(job);
+    let result = await sendCifraMail(job, from ? { from } : undefined);
+    if (!result.ok && /not verified|domain/i.test(result.error)) {
+      from = "Cifra <beth.t@example.com>";
+      result = await sendCifraMail(job, { from });
+    }
     if (!result.ok) return result;
   }
   return { ok: true };

@@ -24,6 +24,7 @@ import { Route as AppFijosRouteImport } from './routes/_app/fijos'
 import { Route as AppIaRouteImport } from './routes/_app/ia'
 import { Route as AppMovimientosRouteImport } from './routes/_app/movimientos'
 import { Route as AppPresupuestosRouteImport } from './routes/_app/presupuestos'
+import { Route as ApiMailDrillRouteImport } from './routes/api/mail-drill'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
 const AppRoute = AppRouteImport.update({
@@ -100,6 +101,11 @@ const AppPresupuestosRoute = AppPresupuestosRouteImport.update({
   path: '/presupuestos',
   getParentRoute: () => AppRoute,
 } as any)
+const ApiMailDrillRoute = ApiMailDrillRouteImport.update({
+  id: '/api/mail-drill',
+  path: '/api/mail-drill',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
@@ -121,6 +127,7 @@ export interface FileRoutesByFullPath {
   '/ia': typeof AppIaRoute
   '/movimientos': typeof AppMovimientosRoute
   '/presupuestos': typeof AppPresupuestosRoute
+  '/api/mail-drill': typeof ApiMailDrillRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesByTo {
@@ -137,6 +144,7 @@ export interface FileRoutesByTo {
   '/ia': typeof AppIaRoute
   '/movimientos': typeof AppMovimientosRoute
   '/presupuestos': typeof AppPresupuestosRoute
+  '/api/mail-drill': typeof ApiMailDrillRoute
   '/': typeof AppIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -156,6 +164,7 @@ export interface FileRoutesById {
   '/_app/ia': typeof AppIaRoute
   '/_app/movimientos': typeof AppMovimientosRoute
   '/_app/presupuestos': typeof AppPresupuestosRoute
+  '/api/mail-drill': typeof ApiMailDrillRoute
   '/_app/': typeof AppIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -176,6 +185,7 @@ export interface FileRouteTypes {
     | '/ia'
     | '/movimientos'
     | '/presupuestos'
+    | '/api/mail-drill'
     | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -192,6 +202,7 @@ export interface FileRouteTypes {
     | '/ia'
     | '/movimientos'
     | '/presupuestos'
+    | '/api/mail-drill'
     | '/'
     | '/api/auth/$'
   id:
@@ -210,6 +221,7 @@ export interface FileRouteTypes {
     | '/_app/ia'
     | '/_app/movimientos'
     | '/_app/presupuestos'
+    | '/api/mail-drill'
     | '/_app/'
     | '/api/auth/$'
   fileRoutesById: FileRoutesById
@@ -222,6 +234,7 @@ export interface RootRouteChildren {
   OlvideRoute: typeof OlvideRoute
   PrivacidadRoute: typeof PrivacidadRoute
   ResetRoute: typeof ResetRoute
+  ApiMailDrillRoute: typeof ApiMailDrillRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
@@ -332,6 +345,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppPresupuestosRouteImport
       parentRoute: typeof AppRoute
     }
+    '/api/mail-drill': {
+      id: '/api/mail-drill'
+      path: '/api/mail-drill'
+      fullPath: '/api/mail-drill'
+      preLoaderRoute: typeof ApiMailDrillRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/auth/$': {
       id: '/api/auth/$'
       path: '/api/auth/$'
@@ -374,6 +394,7 @@ const rootRouteChildren: RootRouteChildren = {
   OlvideRoute: OlvideRoute,
   PrivacidadRoute: PrivacidadRoute,
   ResetRoute: ResetRoute,
+  ApiMailDrillRoute: ApiMailDrillRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport
