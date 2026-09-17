@@ -25,7 +25,7 @@ export const LAUNCH_QUESTIONS: BetaQuestion[] = [
     title: "Dominio en la beta",
     options: [
       { id: "vercel", label: "Seguimos el link de Vercel" },
-      { id: "propio", label: "cifra.com.ar ya" },
+      { id: "propio", label: "cifra.lol ya" },
       { id: "despues", label: "Dominio después, beta igual" },
     ],
   },

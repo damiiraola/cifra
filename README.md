@@ -26,15 +26,11 @@ Las tablas están en `migrations/` (`ledger_transactions`, `ledger_accounts`, `l
 
 ## Dominio propio
 
-Sí. Cifra puede vivir en `cifra.com.ar`, `app.tudominio.com` o lo que compres.
+Producción: **[https://cifra.lol](https://cifra.lol)**.
 
-Flujo:
+Vercel apunta el DNS. HTTPS lo emite Vercel. `www.cifra.lol` también está permitido.
 
-1. Comprás el dominio (nic.ar para `.com.ar` / `.ar`, o Vercel/Namecheap para `.app` / `.com`).
-2. Lo conectás al proyecto en Vercel → Domains.
-3. DNS: registro `A` / `CNAME` como te indica Vercel. HTTPS sale solo.
-
-`cifra.app` ya está tomado. Un `.com.ar` o un subdominio (`app.fixa.com.ar`) es la vía más limpia.
+Si el login falla después de colgar el dominio, `BETTER_AUTH_URL` tiene que ser exactamente `https://cifra.lol` (sin barra al final).
 
 ## Cómo levantar
 
@@ -48,7 +44,7 @@ Variables de entorno (no se commitean). En Vercel se cargan en Project → Setti
 | Variable | Dónde | Para qué |
 |---|---|---|
 | `DATABASE_URL` | servidor | Neon Postgres (producción) |
-| `BETTER_AUTH_URL` | servidor | URL pública, ej. `https://cifra.com.ar` |
+| `BETTER_AUTH_URL` | servidor | URL pública: `https://cifra.lol` |
 | `BETTER_AUTH_SECRET` | servidor | secreto de sesión |
 | `GROK_AUTH_ISSUER` / `GROK_AUTH_CLIENT_ID` / `GROK_AUTH_CLIENT_SECRET` | servidor | login Google / X |
 | `XAI_API_KEY` | servidor | asistente IA |
@@ -92,7 +88,7 @@ La primera vez hay que **importar** `damiiraola/cifra` en [vercel.com/new](https
 En Vercel, Environment Variables (Production + Preview):
 
 - `DATABASE_URL`
-- `BETTER_AUTH_URL` (la URL pública, después del dominio)
+- `BETTER_AUTH_URL` (`https://cifra.lol`)
 - `BETTER_AUTH_SECRET`
 - `GROK_AUTH_*`
 - `XAI_API_KEY`

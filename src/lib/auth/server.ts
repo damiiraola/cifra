@@ -105,10 +105,19 @@ const LOCAL_DEV_ORIGINS: string[] = [
 ];
 const VERCEL_HOSTS: string[] = ["*.vercel.app"];
 const VERCEL_ORIGINS: string[] = ["https://*.vercel.app"];
+const PRODUCTION_HOSTS: string[] = ["cifra.lol", "www.cifra.lol"];
+const PRODUCTION_ORIGINS: string[] = ["https://cifra.lol", "https://www.cifra.lol"];
 const baseURL = explicitBaseURL ?? {
   // Include loopback hosts so dynamic baseURL resolves for local email/password
   // (not only the preview wildcard). Vercel production/preview hosts too.
-  allowedHosts: [...previewAllowedHosts, ...VERCEL_HOSTS, "localhost", "127.0.0.1", "[::1]"],
+  allowedHosts: [
+    ...previewAllowedHosts,
+    ...VERCEL_HOSTS,
+    ...PRODUCTION_HOSTS,
+    "localhost",
+    "127.0.0.1",
+    "[::1]",
+  ],
   // `auto` → trust both http:// and https:// expansions of allowedHosts
   // (preview is https; local dev is http).
   protocol: "auto" as const,
@@ -119,6 +128,7 @@ const baseURL = explicitBaseURL ?? {
 // Missing entries here surface as FORBIDDEN "Invalid origin".
 const trustedOrigins: string[] = [
   ...(explicitBaseURL ? [explicitBaseURL] : []),
+  ...PRODUCTION_ORIGINS,
   ...VERCEL_HOSTS,
   ...VERCEL_ORIGINS,
   ...previewAllowedHosts,
