@@ -95,7 +95,12 @@ function Diario() {
       <div className="flex items-center justify-between gap-3">
         <MonthSwitcher value={viewMonth} onChange={setViewMonth} />
         <div className="flex items-center gap-2">
-          <p className="font-display text-2xl tabular-nums tracking-tight">{moneyARS(stats.spent, true)}</p>
+          <div className="text-right">
+            <p className="font-display text-2xl tabular-nums tracking-tight">{moneyARS(stats.spent, true)}</p>
+            {stats.earned > 0 ? (
+              <p className="text-xs tabular-nums text-income">+{moneyARS(stats.earned, true)}</p>
+            ) : null}
+          </div>
           <button
             type="button"
             aria-label={searching ? "Cerrar búsqueda" : "Buscar en el mes"}
@@ -158,6 +163,7 @@ function Diario() {
                   <span className="text-subtle">
                     {" · "}
                     {moneyARS(spent)}
+                    {earned > 0 ? ` · +${moneyARS(earned)}` : ""}
                     {dayTx.length ? ` · ${dayTx.length}` : ""}
                   </span>
                 </p>
@@ -167,7 +173,6 @@ function Diario() {
                       ? `+${moneyARS(vsAvg)} vs promedio`
                       : `${moneyARS(vsAvg)} vs promedio`
                     : "Sin promedio todavía"}
-                  {earned > 0 ? ` · ingresos ${moneyARS(earned)}` : ""}
                 </p>
               </div>
               <Button size="sm" onClick={() => openQuick({ date: day, type: "expense" })}>

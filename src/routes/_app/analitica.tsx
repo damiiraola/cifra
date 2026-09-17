@@ -30,6 +30,11 @@ function Analitica() {
   const split = splitFixedVariable(stats.txs, fx);
   const rows = liveCategoryRows(stats.byCat, budgets, allCats, DEFAULT_BUDGETS);
   const cats = rows.filter((c) => c.spent > 0);
+  const incomeCats = allCats
+    .filter((c) => c.kind === "income")
+    .map((c) => ({ ...c, earned: stats.byIncomeCat[c.id] ?? 0 }))
+    .filter((c) => c.earned > 0)
+    .sort((a, b) => b.earned - a.earned);
   const { assigned, unassigned, overAssigned } = budgetAllocation(rows, globalBudget);
   const spentDelta = prevMtdSpent ? ((stats.spent - prevMtdSpent) / prevMtdSpent) * 100 : 0;
   const [drill, setDrill] = useState<Drill>(null);
@@ -40,11 +45,11 @@ function Analitica() {
 
   const merchantRows = stats.topMerchants;
 
-  function openCat(id: string, name: string) {
+  function openCat(id: string, name: string, kind: "expense" | "income" = "expense") {
     setDrill({
       title: name,
       txs: stats.txs
-        .filter((t) => t.categoryId === id && t.type === "expense")
+        .filter((t) => t.categoryId === id && t.type === kind)
         .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt)),
     });
   }
@@ -74,15 +79,42 @@ function Analitica() {
       </div>
 
       <section>
-        <p className="font-display text-5xl tabular-nums tracking-tight sm:text-6xl">{moneyARS(stats.spent)}</p>
-        <p className="mt-2 text-sm text-muted">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+          <div className="col-span-2 sm:col-span-1">
+            <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Gastado</p>
+            <p className="mt-1 font-display text-5xl tabular-nums tracking-tight sm:text-6xl">{moneyARS(stats.spent)}</p>
+          </div>
+          <button
+            type="button"
+            className="text-left"
+            onClick={() =>
+              setDrill({
+                title: "Ingresos",
+                txs: stats.txs.filter((t) => t.type === "income"),
+              })
+            }
+          >
+            <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Ingresos</p>
+            <p className="mt-1 font-display text-4xl tabular-nums tracking-tight text-income sm:text-5xl">
+              {moneyARS(stats.earned)}
+            </p>
+          </button>
+          <div>
+            <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Neto</p>
+            <p
+              className={cn(
+                "mt-1 font-display text-4xl tabular-nums tracking-tight sm:text-5xl",
+                stats.net < 0 ? "text-expense" : "text-income",
+              )}
+            >
+              {moneyARS(stats.net)}
+            </p>
+          </div>
+        </div>
+        <p className="mt-3 text-sm text-muted">
           {spentDelta === 0
             ? "Igual al mes previo"
             : `${spentDelta > 0 ? "+" : ""}${spentDelta.toFixed(0)}% vs ${monthLabel(prevMonth(viewMonth), "LLL")}`}
-          {" · "}
-          ingresos {moneyARS(stats.earned)}
-          {" · "}
-          neto {moneyARS(stats.net)}
         </p>
         {globalBudget ? (
           <p className={cn("mt-1 text-sm", over ? "text-expense" : "text-subtle")}>
@@ -157,7 +189,7 @@ function Analitica() {
               <button
                 key={c.id}
                 type="button"
-                onClick={() => openCat(c.id, c.name)}
+                onClick={() => openCat(c.id, c.name, "expense")}
                 className="grid gap-1 rounded-xl px-1 py-1.5 text-left hover:bg-elevated"
               >
                 <div className="flex items-center justify-between gap-3 text-sm">
@@ -186,6 +218,39 @@ function Analitica() {
           })}
           {cats.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted">Todavía no hay gastos este mes.</p>
+          ) : null}
+        </div>
+      </section>
+
+      <section>
+        <h2 className="mb-3 text-sm font-medium">Ingresos</h2>
+        <div className="grid gap-2">
+          {incomeCats.map((c) => {
+            const pct = stats.earned ? (c.earned / stats.earned) * 100 : 0;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => openCat(c.id, c.name, "income")}
+                className="grid gap-1 rounded-xl px-1 py-1.5 text-left hover:bg-elevated"
+              >
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="text-income">
+                      <CatIcon name={c.icon} className="size-3.5" />
+                    </span>
+                    <span className="truncate">{c.name}</span>
+                  </span>
+                  <span className="tabular-nums text-income">{moneyARS(c.earned)}</span>
+                </div>
+                <span className="h-1.5 overflow-hidden rounded-full bg-elevated">
+                  <span className="block h-full rounded-full bg-income" style={{ width: `${Math.min(100, pct)}%` }} />
+                </span>
+              </button>
+            );
+          })}
+          {incomeCats.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted">Todavía no hay ingresos este mes.</p>
           ) : null}
         </div>
       </section>

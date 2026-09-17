@@ -46,6 +46,10 @@ export function computeMonth(txs: Transaction[], ym: string, rates: FxRates) {
   for (const t of expenses) {
     byCat[t.categoryId] = (byCat[t.categoryId] ?? 0) + toARS(t, rates);
   }
+  const byIncomeCat: Record<string, number> = {};
+  for (const t of income) {
+    byIncomeCat[t.categoryId] = (byIncomeCat[t.categoryId] ?? 0) + toARS(t, rates);
+  }
 
   const byDay: { date: string; spent: number; earned: number; count: number }[] = [];
   for (let d = 1; d <= last; d++) {
@@ -101,6 +105,7 @@ export function computeMonth(txs: Transaction[], ym: string, rates: FxRates) {
     count: mine.length,
     expenseCount: expenses.length,
     byCat,
+    byIncomeCat,
     byDay,
     byMethod,
     topMerchants,
