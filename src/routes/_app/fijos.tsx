@@ -252,7 +252,7 @@ function FijoEditor({
           <select
             value={categoryId}
             onChange={(e) => setCategoryId(e.target.value)}
-            className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)]"
+            className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)]"
           >
             {cats.map((c) => (
               <option key={c.id} value={c.id}>
@@ -266,7 +266,7 @@ function FijoEditor({
           <select
             value={accountId}
             onChange={(e) => setAccountId(e.target.value)}
-            className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)]"
+            className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)]"
           >
             {accounts.map((a) => (
               <option key={a.id} value={a.id}>
@@ -280,7 +280,7 @@ function FijoEditor({
           <select
             value={method}
             onChange={(e) => setMethod(e.target.value as PayMethod)}
-            className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)]"
+            className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)]"
           >
             {PAY_METHODS.map((m) => (
               <option key={m.id} value={m.id}>

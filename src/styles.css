@@ -63,6 +63,13 @@
     font-family: var(--font-sans);
   }
 
+  /* iOS zooms the page if a focused field is under 16px. Keep pinch-zoom. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]):not([type="file"]):not([type="button"]):not([type="submit"]),
+  select,
+  textarea {
+    font-size: 1rem;
+  }
+
   .cifra-tabbar {
     padding-bottom: max(0.55rem, env(safe-area-inset-bottom, 0px));
   }

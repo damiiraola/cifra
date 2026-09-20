@@ -314,7 +314,7 @@ function Ajustes() {
           <select
             value={newKind}
             onChange={(e) => setNewKind(e.target.value as CategoryKind)}
-            className="h-11 rounded-lg bg-elevated px-3 text-sm text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)]"
+            className="h-11 rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)]"
           >
             <option value="expense">Gasto</option>
             <option value="income">Ingreso</option>

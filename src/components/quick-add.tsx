@@ -229,7 +229,7 @@ export function QuickAdd() {
                 const acc = accounts.find((a) => a.id === id);
                 if (acc) setCurrency(acc.currency);
               }}
-              className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)] outline-none"
+              className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)] outline-none"
             >
               {accounts.map((a) => (
                 <option key={a.id} value={a.id}>
@@ -246,7 +246,7 @@ export function QuickAdd() {
                 id="to"
                 value={counterpartyId}
                 onChange={(e) => setCounterpartyId(e.target.value)}
-                className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)] outline-none"
+                className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)] outline-none"
               >
                 <option value="">Elegí caja</option>
                 {accounts
@@ -339,7 +339,7 @@ export function QuickAdd() {
                         const inferred = inferAccount(accounts, activeBookId, m, currency);
                         if (inferred) setAccountId(inferred);
                       }}
-                      className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-sm text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)] outline-none"
+                      className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)] outline-none"
                     >
                       {PAY_METHODS.map((m) => (
                         <option key={m.id} value={m.id}>
