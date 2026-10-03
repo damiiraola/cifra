@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { GROK_PROVIDERS, authClient, authEnabled, signIn } from "@/lib/auth/client";
+import { authClient, authEnabled } from "@/lib/auth/client";
 import { useSessionWait } from "@/lib/auth/use-current-user";
 import { AuthScreen } from "@/components/auth-screen";
 import { Button } from "@/components/ui/button";
@@ -31,8 +31,6 @@ function Login() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [checkEmail, setCheckEmail] = useState(false);
-  const onGrok =
-    typeof window !== "undefined" && window.location.hostname.endsWith(".grok-sandbox.com");
 
   useEffect(() => {
     if (isPending || !user) return;
@@ -218,23 +216,6 @@ function Login() {
           </p>
         ) : null}
       </form>
-
-      {onGrok && authEnabled ? (
-        <div className="mt-8 grid gap-2">
-          <p className="text-center text-[11px] tracking-wide text-muted uppercase">o continuar con</p>
-          {GROK_PROVIDERS.map((p) => (
-            <Button
-              key={p.providerId}
-              type="button"
-              variant="secondary"
-              className="w-full"
-              onClick={() => signIn(p.providerId, { callbackURL: "/" })}
-            >
-              Continuar con {p.label}
-            </Button>
-          ))}
-        </div>
-      ) : null}
     </AuthScreen>
   );
 }
