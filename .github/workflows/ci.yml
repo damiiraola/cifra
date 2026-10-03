@@ -24,6 +24,10 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      # npm 11 acepta los package-lock que genera Dependabot; el npm 10 de Node 22
+      # los rechaza ("Missing: lru-cache@… from lock file").
+      - name: npm 11
+        run: npm install --global npm@11
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
