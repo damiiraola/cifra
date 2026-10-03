@@ -74,7 +74,9 @@ describe("mail templates — HTML", () => {
       assert.match(html, /src="https:\/\/cifra\.lol\/mail\/bars\.png" width="23" height="30"/);
       assert.match(html, /src="https:\/\/cifra\.lol\/mail\/bars-muted\.png"/);
       assert.doesNotMatch(html, /\.svg/);
-      assert.doesNotMatch(html, /#ffffff|#fff\b|bgcolor="white"/i);
+      // White only lives in the Gmail blend rule, never in the markup.
+      const markup = html.replace(/<style>[\s\S]*?<\/style>/g, "");
+      assert.doesNotMatch(markup, /#ffffff|#fff\b|bgcolor="white"/i);
       assert.match(html, /'Instrument Serif',Georgia,'Times New Roman',serif/);
       assert.match(html, /Outfit,Helvetica,Arial,sans-serif/);
       assert.ok(html.includes(t.heading));
@@ -86,9 +88,35 @@ describe("mail templates — HTML", () => {
   it("button and fallback link carry the exact url, escaped", () => {
     const html = renderMailHtml(FIVE.verify);
     const escaped = URL_VERIFY.replaceAll("&", "&amp;");
-    assert.ok(html.includes(`<a href="${escaped}" target="_blank" class="sans"`));
+    assert.ok(html.includes(`<a href="${escaped}" target="_blank" class="sans c-btn"`));
     assert.match(html, /¿El botón no anda\? Copiá este enlace/);
     assert.equal(html.split(`href="${escaped}"`).length - 1, 2);
+  });
+
+  it("every background is also a flat gradient (Gmail dark mode does not invert images)", () => {
+    for (const t of Object.values(FIVE)) {
+      const html = renderMailHtml(t);
+      const colours = [...html.matchAll(/background-color:(#[0-9A-F]{6});/gi)].map((m) => m[1]);
+      assert.ok(colours.length > 20);
+      for (const c of colours) assert.ok(html.includes(`background-color:${c};background-image:linear-gradient(${c},${c});`));
+      assert.match(html, /<body class="body" bgcolor="#09090B" style="margin:0;padding:0;background-color:#09090B;background-image:linear-gradient\(#09090B,#09090B\);/);
+      // No CSS borders: Gmail would turn them light grey. Lines are cells.
+      assert.doesNotMatch(html.replace(/<style>[\s\S]*?<\/style>/g, ""), /border:1px solid|border-(top|bottom):1px solid #2A2A2E/);
+    }
+  });
+
+  it("text is wrapped in the Gmail blend layers, scoped to Gmail only", () => {
+    const html = renderMailHtml(FIVE.welcome);
+    assert.match(html, /u \+ \.body \.gmail-blend-screen \{ background:#000; mix-blend-mode:screen; \}/);
+    assert.match(html, /u \+ \.body \.gmail-blend-difference \{ background:#000; mix-blend-mode:difference; \}/);
+    assert.match(html, /u \+ \.body \.gmail-blend-exclusion-blk \{ background:#000; mix-blend-mode:exclusion; \}/);
+    assert.ok(html.includes('<div class="gmail-blend-screen"><div class="gmail-blend-difference"><h1 '));
+    assert.ok(html.includes('<span class="gmail-blend-exclusion-blk"><span class="gmail-blend-difference-blk">Entrar al libro'));
+    // Blend styles are never inline, so non-Gmail clients ignore them.
+    assert.doesNotMatch(html.replace(/<style>[\s\S]*?<\/style>/g, ""), /mix-blend-mode/);
+    assert.match(html, /<meta name="color-scheme" content="dark">/);
+    assert.match(html, /<meta name="supported-color-schemes" content="dark">/);
+    assert.match(html, /\[data-ogsc\] \.c-acc \{ color:#8FA898 !important; \}/);
   });
 
   it("password-changed has a button but no copy-link fallback", () => {
