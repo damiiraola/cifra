@@ -2,7 +2,9 @@
 
 Libro personal de gastos para Argentina. ARS, USD y USDT. Cotización en vivo, cajas, fijos, analítica e IA.
 
-Cada usuario entra con Google o X y ve solo su libro.
+Cada usuario entra con mail y contraseña (Google o X si están configurados) y ve solo su libro. Dos libros: Personal y Negocio.
+
+Para que otro agente se haga cargo, el mapa operativo está en [HANDOFF.md](HANDOFF.md).
 
 ## Stack
 
@@ -11,7 +13,7 @@ Cada usuario entra con Google o X y ve solo su libro.
 | App | TanStack Start + React 19 + Tailwind |
 | Hosting | Vercel |
 | Base de datos | **Postgres** — Neon en producción, PGLite en el preview |
-| Auth | Better Auth (Google / X) |
+| Auth | Better Auth (mail y contraseña; Google / X opcional) |
 | Cotizaciones | [DolarApi](https://dolarapi.com) |
 | IA | xAI Grok |
 
