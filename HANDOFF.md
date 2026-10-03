@@ -36,6 +36,7 @@ El libro de Negocio no hereda categorías, topes ni analítica del personal. Los
 | `VITE_AUTH_ENABLED` | `true` en el build de producción |
 | `RESEND_API_KEY` | Empieza con `re_`. Sin comillas. |
 | `MAIL_FROM` | `Cifra <hola@cifra.lol>` |
+| `MAIL_DRILL_TOKEN` | Opcional. Prende `/api/mail-drill`. Sin ella, la ruta da 404 |
 | `XAI_API_KEY` | Asistente |
 | `GROK_AUTH_ISSUER` / `CLIENT_ID` / `CLIENT_SECRET` | Login Google / X, opcional |
 
@@ -78,11 +79,11 @@ npm run build
 
 - No bajar TanStack Start de 1.168.60.
 - No mezclar datos de Personal y Negocio.
-- No dejar `/api/mail-drill` abierto cuando entren testers de verdad: un GET manda los 5 mails a `iraoladamian@gmail.com`.
+- No volver a abrir `/api/mail-drill`. Manda los 5 mails a `iraoladamian@gmail.com`, así que está apagado salvo que exista `MAIL_DRILL_TOKEN`, y solo manda con `POST` + `Authorization: Bearer <token>` (GET da 405, token mal o ausente da 401). Lógica y tests en `src/lib/mail-drill.ts`; uso en el README.
 - No commitear `.env`.
 - No reintroducir el login en inglés ni esconder Fijos en el teléfono.
 - `/beta` y `/lanzar` no son para el usuario final.
 
 ## Estado al 2026-10-03
 
-Prod responde en cifra.lol. Neon persiste. Resend envía. El deploy de Vercel pasa. Falta para una beta abierta: sacar o proteger `mail-drill`, DMARC, y decidir si Google/X queda o solo mail.
+Prod responde en cifra.lol. Neon persiste. Resend envía. El deploy de Vercel pasa. `mail-drill` quedó protegido (apagado sin `MAIL_DRILL_TOKEN`). Falta para una beta abierta: DMARC, y decidir si Google/X queda o solo mail.
