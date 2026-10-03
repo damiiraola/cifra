@@ -164,9 +164,16 @@ test("cli: relative paths follow the script's root, not the caller's cwd", () =>
   assert.equal(existsSync(join(root, "public/og.jpg")), false);
 });
 
-test("every hand-over the og skill prints is one this script accepts", () => {
+// The og skill is sandbox-only and gitignored (.grok/), so a clean checkout
+// such as CI has no docs to pin. Skip there instead of failing.
+const OG_SKILL_DIR = join(TEMPLATE_ROOT, ".grok/skills/og");
+const skipWithoutOgSkill = existsSync(join(OG_SKILL_DIR, "references"))
+  ? false
+  : ".grok/skills/og is gitignored and absent from this checkout";
+
+test("every hand-over the og skill prints is one this script accepts", { skip: skipWithoutOgSkill }, () => {
   // The card and banner recipes live in the skill's references/, not SKILL.md.
-  const skillDir = join(TEMPLATE_ROOT, ".grok/skills/og");
+  const skillDir = OG_SKILL_DIR;
   const docs = [
     join(skillDir, "SKILL.md"),
     ...readdirSync(join(skillDir, "references")).map((f) => join(skillDir, "references", f)),

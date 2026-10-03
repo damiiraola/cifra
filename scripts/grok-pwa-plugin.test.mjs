@@ -21,6 +21,12 @@ import { renderInstallPage } from "./grok-pwa-plugin.mjs";
 
 const TEMPLATE_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
+// These tests describe the plugin, not this app. Without an explicit `cwd` the
+// plugin reads src/lib/og/site.json and public/og.jpg from process.cwd(), which
+// in this repo are Cifra's real branding. Run from an empty directory so the
+// assertions see a blank workspace no matter where `npm test` is started.
+process.chdir(mkdtempSync(join(tmpdir(), "grok-pwa-test-")));
+
 test("injects before </head>", () => {
   const out = injectGrokPwaHead("<html><head><title>x</title></head><body></body></html>");
   assert.match(out, /rel="manifest"/);

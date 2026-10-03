@@ -53,8 +53,25 @@ Variables de entorno (no se commitean). En Vercel se cargan en Project → Setti
 | `VITE_AUTH_ENABLED` | build | `true` en producción |
 | `RESEND_API_KEY` | servidor | mails (confirmar cuenta + olvidé clave) |
 | `MAIL_FROM` | servidor | `Cifra <hola@cifra.lol>` cuando el dominio está verificado en Resend |
+| `MAIL_DRILL_TOKEN` | servidor | **opcional**. Prende `/api/mail-drill` (ver abajo). Sin esta variable la ruta da 404 |
 
 Sin `DATABASE_URL` la app igual arranca (PGLite). No uses ese modo para testers reales: el libro se borra al reiniciar.
+
+### Probar los mails (`/api/mail-drill`)
+
+Manda las 5 plantillas de mail a `iraoladamian@gmail.com`. Está **apagado por defecto**: si `MAIL_DRILL_TOKEN` no existe, la ruta responde 404 y no manda nada.
+
+Para usarlo:
+
+1. Generá un valor largo y aleatorio (`openssl rand -hex 32`) y cargalo como `MAIL_DRILL_TOKEN` en Vercel (y redeployá).
+2. Llamalo con `POST` y el token en el header:
+
+   ```bash
+   curl -X POST https://cifra.lol/api/mail-drill \
+     -H "Authorization: Bearer $MAIL_DRILL_TOKEN"
+   ```
+
+Abrirlo en el navegador (GET) ya no manda nada: responde 405. Sin token o con uno incorrecto, 401. El token no se acepta en la URL (`?token=`) para que no quede en logs ni en el historial. Cuando termines, podés borrar la variable y la ruta vuelve a dar 404.
 
 ## Deploy (Vercel + Neon)
 
