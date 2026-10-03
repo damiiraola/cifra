@@ -18,7 +18,7 @@ El libro de Negocio no hereda categorías, topes ni analítica del personal. Los
 | Estado local | Zustand, `src/lib/store.ts`, vault v2 |
 | DB | Neon Postgres en prod. PGLite solo si no hay `DATABASE_URL` (se pierde al reiniciar). |
 | SQL | `src/lib/db.ts`. Migraciones en `migrations/0001`–`0008`. `npm run db:migrate` corre en el build. |
-| Auth | Better Auth. Mail + contraseña es el camino real (`src/lib/auth/email-password.ts`). Google/X solo si están `GROK_AUTH_*`. |
+| Auth | Better Auth. Solo mail + contraseña (`src/lib/auth/email-password.ts`). Sin Google, X ni Grok/OAuth genérico. |
 | Mail | Resend. Plantillas en `src/lib/mail.ts`. Remitente `Cifra <hola@cifra.lol>`. |
 | IA | `XAI_API_KEY`, `src/lib/ai.ts` |
 | Cotizaciones | `src/lib/fx-api.ts`, `src/lib/market-hours.ts` |
@@ -38,7 +38,6 @@ El libro de Negocio no hereda categorías, topes ni analítica del personal. Los
 | `MAIL_FROM` | `Cifra <hola@cifra.lol>` |
 | `MAIL_DRILL_TOKEN` | Opcional. Prende `/api/mail-drill`. Sin ella, la ruta da 404 |
 | `XAI_API_KEY` | Asistente |
-| `GROK_AUTH_ISSUER` / `CLIENT_ID` / `CLIENT_SECRET` | Login Google / X, opcional |
 
 DNS de Resend ya está en `send.cifra.lol` (SPF, DKIM). Falta DMARC; no bloquea el envío.
 
@@ -86,4 +85,4 @@ npm run build
 
 ## Estado al 2026-10-03
 
-Prod responde en cifra.lol. Neon persiste. Resend envía. El deploy de Vercel pasa. `mail-drill` quedó protegido (apagado sin `MAIL_DRILL_TOKEN`). Falta para una beta abierta: DMARC, y decidir si Google/X queda o solo mail.
+Prod responde en cifra.lol. Neon persiste. Resend envía. El deploy de Vercel pasa. `mail-drill` quedó protegido (apagado sin `MAIL_DRILL_TOKEN`). Falta para una beta abierta: DMARC. Login: se decidió solo mail y contraseña (sin Google, X ni Grok).

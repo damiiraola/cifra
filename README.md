@@ -2,7 +2,7 @@
 
 Libro personal de gastos para Argentina. ARS, USD y USDT. Cotización en vivo, cajas, fijos, analítica e IA.
 
-Cada usuario entra con mail y contraseña (Google o X si están configurados) y ve solo su libro. Dos libros: Personal y Negocio.
+Cada usuario entra con mail y contraseña (no hay login con Google, X ni Grok) y ve solo su libro. Dos libros: Personal y Negocio.
 
 Para que otro agente se haga cargo, el mapa operativo está en [HANDOFF.md](HANDOFF.md).
 
@@ -13,7 +13,7 @@ Para que otro agente se haga cargo, el mapa operativo está en [HANDOFF.md](HAND
 | App | TanStack Start + React 19 + Tailwind |
 | Hosting | Vercel |
 | Base de datos | **Postgres** — Neon en producción, PGLite en el preview |
-| Auth | Better Auth (mail y contraseña; Google / X opcional) |
+| Auth | Better Auth (solo mail y contraseña) |
 | Cotizaciones | [DolarApi](https://dolarapi.com) |
 | IA | xAI Grok |
 
@@ -48,7 +48,6 @@ Variables de entorno (no se commitean). En Vercel se cargan en Project → Setti
 | `DATABASE_URL` | servidor | Neon Postgres (producción) |
 | `BETTER_AUTH_URL` | servidor | URL pública: `https://cifra.lol` |
 | `BETTER_AUTH_SECRET` | servidor | secreto de sesión |
-| `GROK_AUTH_ISSUER` / `GROK_AUTH_CLIENT_ID` / `GROK_AUTH_CLIENT_SECRET` | servidor | login Google / X |
 | `XAI_API_KEY` | servidor | asistente IA |
 | `VITE_AUTH_ENABLED` | build | `true` en producción |
 | `RESEND_API_KEY` | servidor | mails (confirmar cuenta + olvidé clave) |
@@ -109,7 +108,6 @@ En Vercel, Environment Variables (Production + Preview):
 - `DATABASE_URL`
 - `BETTER_AUTH_URL` (`https://cifra.lol`)
 - `BETTER_AUTH_SECRET`
-- `GROK_AUTH_*`
 - `XAI_API_KEY`
 - `VITE_AUTH_ENABLED=true`
 
