@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { MAIL, greeting } from "./mail.ts";
+import { MAIL, renderMailHtml } from "./mail.ts";
 
 describe("mail templates", () => {
   it("verify greets by name", () => {
@@ -20,8 +20,17 @@ describe("mail templates", () => {
     assert.equal(MAIL.welcome.cta, "Entrar al libro");
   });
 
-  it("greeting falls back", () => {
-    assert.equal(greeting(null), "Hola.");
-    assert.equal(greeting("  "), "Hola.");
+  it("stays black and uses the bar icon", () => {
+    const html = renderMailHtml({
+      heading: "Listo",
+      body: "Tu libro.",
+      cta: "Entrar",
+      url: "https://cifra.lol",
+      preheader: "Listo",
+    });
+    assert.match(html, /color-scheme" content="dark"/);
+    assert.match(html, /bgcolor="#000000"/);
+    assert.match(html, /icon-192\.png/);
+    assert.equal(html.includes("#ffffff"), false);
   });
 });
