@@ -55,8 +55,8 @@ DNS de Resend ya está en `send.cifra.lol` (SPF, DKIM). Falta DMARC; no bloquea 
 - Privacidad: `src/routes/privacidad.tsx`.
 - iOS no debe hacer zoom al enfocar un campo: inputs y selects en 16px (`src/styles.css`, `src/components/ui/input.tsx`).
 - Ícono de inicio: `public/icon-192.png`, `public/icon-512.png`, `public/__grok/icon-180.png`. El nombre en `cifra.lol` sale de `appNameFromHost` en `scripts/grok-pwa-shared.mjs`. No lo vuelvas a “Grok App”.
-- Mails: fondo negro, wordmark + barras en la misma línea, botón pastilla. `renderMailHtml` en `src/lib/mail.ts`. Apple Mail invierte el mail si no va `color-scheme: dark` y `bgcolor="#000000"` en cada celda.
-- Referencia visual de los mails (no es el HTML que se envía): diseño Canva `DAHW-pSiQxA`.
+- Mails: fondo `#09090B`, tarjeta `#121214`, wordmark Instrument Serif + barras, etiqueta con acento por mail, botón pastilla, versión texto. `MAIL` + `renderMailHtml` / `renderMailText` en `src/lib/mail.ts`. Todo en tablas con estilos inline y `bgcolor` en cada celda (si no, Apple Mail lo invierte); `color-scheme: dark`. Íconos: PNG en `public/mail/` servidos siempre desde `https://cifra.lol` (Gmail no muestra SVG).
+- Referencia visual de los mails (no es el HTML que se envía): diseño Canva `DAHW-z99ex4` (rediseño oct 2026). El anterior era `DAHW-pSiQxA`.
 
 ## Auth, en corto
 
