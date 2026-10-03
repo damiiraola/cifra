@@ -58,8 +58,18 @@ test("non-.sql entries are dropped (readdir also yields the auth/ directory)", (
 
 test("the auth schema ships outside the globbed directory", () => {
   const migrationsDir = join(projectRoot(), "migrations");
-  assert.deepEqual(pendingMigrations(readdirSync(migrationsDir), []), []);
-  assert.ok(readdirSync(join(migrationsDir, "auth")).includes("0001_auth.sql"));
+  assert.ok(readdirSync(join(migrationsDir, "auth")).includes(AUTH_MIGRATION));
+  // The glob only sees top-level .sql files: never the auth/ directory itself.
+  const pending = pendingMigrations(readdirSync(migrationsDir), []).map((m) => m.name);
+  assert.ok(pending.every((name) => name.endsWith(".sql")), pending.join(", "));
+  // With sign-in off nothing has been copied up, so the auth schema is not
+  // applied. With sign-in on (this app) the verbatim copy is, and the next
+  // test pins it to its source.
+  if (authSchemaCopy(projectRoot()) === null) {
+    assert.equal(pending.includes(AUTH_MIGRATION), false);
+  } else {
+    assert.ok(pending.includes(AUTH_MIGRATION));
+  }
 });
 
 test("this workspace's auth schema copy is byte-identical to its source", () => {

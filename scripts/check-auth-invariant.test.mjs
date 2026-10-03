@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtempSync, symlinkSync } from "node:fs";
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -12,7 +12,7 @@ import {
   compareAuthInvariant,
   probeDevAuthEnabled,
 } from "./check-auth-invariant.mjs";
-import { projectRoot } from "./with-app-env.mjs";
+import { APP_ENV_REL_PATH, projectRoot } from "./with-app-env.mjs";
 
 /**
  * The JSON body `/__app-env` would serve. Do not start a real Vite server —
@@ -90,9 +90,16 @@ test("only a divergence warns the smoke verdict", () => {
   }
 });
 
-test("the build side resolves the template's shipped app-env", () => {
-  assert.equal(buildAuthEnabled(projectRoot(), {}), false);
-  assert.equal(buildAuthEnabled(projectRoot(), { VITE_AUTH_ENABLED: "true" }), true);
+test("the build side resolves a workspace's app-env", () => {
+  // A throwaway workspace: this repo's .grok/app-env.json is gitignored, so
+  // projectRoot() would test whatever the checkout happens to have.
+  const root = mkdtempSync(join(tmpdir(), "auth-invariant-env-"));
+  mkdirSync(join(root, ".grok"));
+  writeFileSync(join(root, APP_ENV_REL_PATH), '{"VITE_AUTH_ENABLED":"false"}');
+  assert.equal(buildAuthEnabled(root, {}), false);
+  assert.equal(buildAuthEnabled(root, { VITE_AUTH_ENABLED: "true" }), true);
+  // Without the file (a clean checkout, CI, Vercel) sign-in stays on.
+  assert.equal(buildAuthEnabled(mkdtempSync(join(tmpdir(), "auth-invariant-bare-")), {}), true);
 });
 
 test("the CLI reports rather than silently passing when run via a symlink", async () => {
