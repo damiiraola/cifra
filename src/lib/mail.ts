@@ -152,9 +152,29 @@ export type MailContent = Omit<SendInput, "to" | "subject">;
 const SERIF = "'Instrument Serif',Georgia,'Times New Roman',serif";
 const SANS = "Outfit,Helvetica,Arial,sans-serif";
 
-/** A table cell that keeps its background in Apple Mail / Outlook dark mode. */
-function cell(bg: string, style: string, inner: string, attrs = ""): string {
-  return `<td bgcolor="${bg}" style="background:${bg};${style}"${attrs ? " " + attrs : ""}>${inner}</td>`;
+/**
+ * Solid background that survives Gmail iOS/Android dark mode. Those apps
+ * invert `background-color` but leave background images alone, so the same
+ * colour also goes in as a flat `linear-gradient`. `bgcolor` stays for
+ * Outlook and Apple Mail.
+ */
+export function solidBg(color: string): string {
+  return `background-color:${color};background-image:linear-gradient(${color},${color});`;
+}
+
+/** Background class for Outlook.com / Outlook apps `[data-ogsb]` overrides. */
+const BG_CLASS: Record<string, string> = {
+  [C.bg]: "bg-page",
+  [C.card]: "bg-card",
+  [C.elevated]: "bg-elev",
+  [C.border]: "bg-line",
+  [C.fg]: "bg-btn",
+};
+
+/** A table cell whose background holds in every client's dark mode. */
+function cell(bg: string, style: string, inner: string, attrs = "", cls = ""): string {
+  const classes = [BG_CLASS[bg], cls].filter(Boolean).join(" ");
+  return `<td bgcolor="${bg}"${classes ? ` class="${classes}"` : ""} style="${solidBg(bg)}${style}"${attrs ? " " + attrs : ""}>${inner}</td>`;
 }
 
 function table(inner: string, attrs = "", style = ""): string {
@@ -162,6 +182,52 @@ function table(inner: string, attrs = "", style = ""): string {
 }
 
 const row = (inner: string) => `<tr>${inner}</tr>`;
+
+/**
+ * Light text on a dark background. Gmail iOS turns light text dark; these two
+ * blend layers (black backgrounds that Gmail turns white, then `difference`
+ * and `screen`) undo that. They only switch on in Gmail (`u + .body`), so
+ * every other client renders the text as written.
+ * https://www.hteumeuleu.com/2021/fixing-gmail-dark-mode-css-blend-modes/
+ */
+export function keepLight(html: string): string {
+  return `<div class="gmail-blend-screen"><div class="gmail-blend-difference">${html}</div></div>`;
+}
+
+/**
+ * Dark text on a light background (the button). Same idea with `exclusion`:
+ * in Gmail the label comes out as the inverse of the button colour, which
+ * for #F4F4F0 is #0B0B0F.
+ */
+export function keepDark(html: string): string {
+  return `<span class="gmail-blend-exclusion-blk"><span class="gmail-blend-difference-blk">${html}</span></span>`;
+}
+
+/** 1px horizontal line drawn as a cell, so Gmail cannot invert it. */
+function hairline(color: string, bg: string): string {
+  return table(
+    row(cell(color, "height:1px;font-size:0;line-height:0;mso-line-height-rule:exactly;", "&nbsp;", 'height="1"')),
+    'width="100%"',
+    solidBg(bg),
+  );
+}
+
+/**
+ * Rounded box with a 1px border. The border is an outer cell (also a
+ * gradient) instead of CSS `border`, which Gmail would turn light grey.
+ */
+function framed(fill: string, radius: number, padding: string, inner: string, innerCls = ""): string {
+  return table(
+    row(
+      cell(
+        C.border,
+        `padding:1px;border-radius:${radius}px;`,
+        table(row(cell(fill, `padding:${padding};border-radius:${radius - 1}px;`, inner, "", innerCls)), 'width="100%"'),
+      ),
+    ),
+    'width="100%"',
+  );
+}
 
 export function renderMailHtml(
   content: MailContent,
@@ -187,8 +253,9 @@ export function renderMailHtml(
             cell(
               C.bg,
               `font-family:${SERIF};font-size:38px;line-height:38px;font-weight:400;letter-spacing:-0.01em;color:${C.fg};mso-line-height-rule:exactly;`,
-              "Cifra",
-              'class="serif" valign="bottom"',
+              keepLight("Cifra"),
+              'valign="bottom"',
+              "serif c-fg",
             ) +
               cell(
                 C.bg,
@@ -203,8 +270,9 @@ export function renderMailHtml(
         cell(
           C.bg,
           `padding:0 4px 36px;font-family:${SANS};font-size:11px;line-height:14px;letter-spacing:0.18em;text-transform:uppercase;color:${C.subtle};`,
-          "REGISTRO DIARIO",
-          'class="sans" align="right" valign="bottom"',
+          keepLight("REGISTRO DIARIO"),
+          'align="right" valign="bottom"',
+          "sans c-subtle",
         ),
     ),
     'width="100%"',
@@ -222,8 +290,9 @@ export function renderMailHtml(
         cell(
           C.card,
           `padding:0 0 14px;font-family:${SANS};font-size:11px;line-height:14px;font-weight:600;letter-spacing:0.2em;text-transform:uppercase;color:${accent};`,
-          e(kicker.toUpperCase()),
-          'class="sans"',
+          keepLight(e(kicker.toUpperCase())),
+          "",
+          "sans c-acc",
         ),
       )
     : "";
@@ -233,31 +302,30 @@ export function renderMailHtml(
         cell(
           C.card,
           "padding:24px 0 0;",
-          table(
-            row(
-              cell(
-                C.elevated,
-                `padding:14px 16px;border:1px solid ${C.border};border-radius:12px;`,
-                table(
-                  row(
-                    cell(
-                      C.elevated,
-                      "padding-top:7px;width:8px;",
-                      `<div style="width:8px;height:8px;border-radius:4px;background:${accent};font-size:0;line-height:0;">&nbsp;</div>`,
-                      'width="8" valign="top"',
-                    ) +
-                      cell(
-                        C.elevated,
-                        `padding-left:12px;font-family:${SANS};font-size:14px;line-height:21px;color:${C.body};`,
-                        `${info.lead ? `<strong style="color:${C.fg};font-weight:600;">${e(info.lead)}</strong> ` : ""}${e(info.text)}`,
-                        'class="sans" valign="top"',
-                      ),
+          framed(
+            C.elevated,
+            12,
+            "14px 16px",
+            table(
+              row(
+                cell(
+                  C.elevated,
+                  "padding-top:7px;width:8px;",
+                  table(row(cell(accent, "width:8px;height:8px;border-radius:4px;font-size:0;line-height:0;", "&nbsp;", 'width="8" height="8"'))),
+                  'width="8" valign="top"',
+                ) +
+                  cell(
+                    C.elevated,
+                    `padding-left:12px;font-family:${SANS};font-size:14px;line-height:21px;color:${C.body};`,
+                    keepLight(
+                      `${info.lead ? `<strong class="c-fg" style="color:${C.fg};font-weight:600;">${e(info.lead)}</strong> ` : ""}${e(info.text)}`,
+                    ),
+                    'valign="top"',
+                    "sans c-body",
                   ),
-                  'width="100%"',
-                ),
               ),
+              'width="100%"',
             ),
-            'width="100%"',
           ),
         ),
       )
@@ -270,26 +338,29 @@ export function renderMailHtml(
             C.card,
             "padding:26px 0 0;",
             table(
-              ledger
-                .map(([k, v], i) =>
-                  row(
-                    cell(
-                      C.card,
-                      `padding:12px 0;border-bottom:1px solid ${C.border};${i === 0 ? `border-top:1px solid ${C.border};` : ""}font-family:${SANS};font-size:14px;line-height:20px;color:${C.muted};`,
-                      e(k),
-                      'class="sans" align="left"',
-                    ) +
-                      cell(
-                        C.card,
-                        `padding:12px 0;border-bottom:1px solid ${C.border};${i === 0 ? `border-top:1px solid ${C.border};` : ""}font-family:${SANS};font-size:14px;line-height:20px;color:${C.fg};`,
-                        e(v),
-                        'class="sans" align="right"',
-                      ),
-                  ),
-                )
-                .join(""),
+              row(cell(C.card, "", hairline(C.border, C.card), 'colspan="2"')) +
+                ledger
+                  .map(
+                    ([k, v]) =>
+                      row(
+                        cell(
+                          C.card,
+                          `padding:12px 0;font-family:${SANS};font-size:14px;line-height:20px;color:${C.muted};`,
+                          keepLight(e(k)),
+                          'align="left"',
+                          "sans c-muted",
+                        ) +
+                          cell(
+                            C.card,
+                            `padding:12px 0;font-family:${SANS};font-size:14px;line-height:20px;color:${C.fg};text-align:right;`,
+                            keepLight(e(v)),
+                            'align="right"',
+                            "sans c-fg",
+                          ),
+                      ) + row(cell(C.card, "", hairline(C.border, C.card), 'colspan="2"')),
+                  )
+                  .join(""),
               'width="100%"',
-              "border-collapse:collapse;",
             ),
           ),
         )
@@ -305,8 +376,8 @@ export function renderMailHtml(
               row(
                 cell(
                   C.fg,
-                  "border-radius:999px;",
-                  `<a href="${e(url)}" target="_blank" class="sans" style="display:inline-block;border:solid ${C.fg};border-width:15px 30px;border-radius:999px;background:${C.fg};font-family:${SANS};font-size:15px;line-height:18px;font-weight:600;letter-spacing:0.005em;color:${C.bg};text-decoration:none;">${e(cta)}&nbsp;&nbsp;&rarr;</a>`,
+                  "border-radius:999px;mso-padding-alt:15px 30px;",
+                  `<a href="${e(url)}" target="_blank" class="sans c-btn" style="display:inline-block;padding:15px 30px;border-radius:999px;${solidBg(C.fg)}font-family:${SANS};font-size:15px;line-height:18px;font-weight:600;letter-spacing:0.005em;color:${C.bg};text-decoration:none;">${keepDark(`${e(cta)}&nbsp;&nbsp;&rarr;`)}</a>`,
                 ),
               ),
             ),
@@ -320,64 +391,62 @@ export function renderMailHtml(
           cell(
             C.card,
             `padding:16px 0 0;font-family:${SANS};font-size:12.5px;line-height:19px;color:${C.subtle};`,
-            `¿El botón no anda? Copiá este enlace en el navegador:<br><a href="${e(url)}" target="_blank" style="color:${C.muted};text-decoration:none;border-bottom:1px solid ${C.borderStrong};word-break:break-all;">${e(url)}</a>`,
-            'class="sans"',
+            keepLight(
+              `¿El botón no anda? Copiá este enlace en el navegador:<br><a href="${e(url)}" target="_blank" class="c-muted" style="color:${C.muted};text-decoration:none;border-bottom:1px solid ${C.borderStrong};word-break:break-all;">${e(url)}</a>`,
+            ),
+            "",
+            "sans c-subtle",
           ),
         )
       : "";
 
   const signoffRows = signoff
-    ? row(
-        cell(
-          C.card,
-          "padding:34px 0 0;",
-          table(row(cell(C.border, "height:1px;font-size:0;line-height:0;", "&nbsp;", 'height="1"')), 'width="100%"'),
-        ),
-      ) +
+    ? row(cell(C.card, "padding:34px 0 0;", hairline(C.border, C.card))) +
       row(
         cell(
           C.card,
           `padding:18px 0 0;font-family:${SANS};font-size:13px;line-height:20px;color:${C.muted};`,
-          e(signoff),
-          'class="sans"',
+          keepLight(e(signoff)),
+          "",
+          "sans c-muted",
         ),
       )
     : "";
 
-  const card = table(
-    row(
-      cell(
-        C.card,
-        `padding:44px 44px 40px;border:1px solid ${C.border};border-radius:20px;`,
-        table(
-          kickerRows +
-            row(
-              cell(
-                C.card,
-                `padding:0 0 18px;font-family:${SERIF};font-size:46px;line-height:48px;font-weight:400;letter-spacing:-0.01em;color:${C.fg};mso-line-height-rule:exactly;`,
-                `<h1 class="serif h1" style="margin:0;font-family:${SERIF};font-size:46px;line-height:48px;font-weight:400;color:${C.fg};">${e(heading)}</h1>`,
-                'class="serif"',
-              ),
-            ) +
-            row(
-              cell(
-                C.card,
-                `padding-right:40px;font-family:${SANS};font-size:16px;line-height:26px;color:${C.body};`,
-                e(body),
-                'class="sans body"',
-              ),
-            ) +
-            infoRow +
-            ledgerRow +
-            button +
-            linkRow +
-            signoffRows,
-          'width="100%"',
-        ),
-        'class="card"',
-      ),
+  const card = framed(
+    C.card,
+    20,
+    "44px 44px 40px",
+    table(
+      kickerRows +
+        row(
+          cell(
+            C.card,
+            `padding:0 0 18px;font-family:${SERIF};font-size:46px;line-height:48px;font-weight:400;letter-spacing:-0.01em;color:${C.fg};mso-line-height-rule:exactly;`,
+            keepLight(
+              `<h1 class="serif h1 c-fg" style="margin:0;font-family:${SERIF};font-size:46px;line-height:48px;font-weight:400;color:${C.fg};">${e(heading)}</h1>`,
+            ),
+            "",
+            "serif",
+          ),
+        ) +
+        row(
+          cell(
+            C.card,
+            `padding-right:40px;font-family:${SANS};font-size:16px;line-height:26px;color:${C.body};`,
+            keepLight(e(body)),
+            "",
+            "sans body-copy c-body",
+          ),
+        ) +
+        infoRow +
+        ledgerRow +
+        button +
+        linkRow +
+        signoffRows,
+      'width="100%"',
     ),
-    'width="100%"',
+    "card",
   );
 
   const footer = table(
@@ -391,8 +460,11 @@ export function renderMailHtml(
         cell(
           C.bg,
           `padding:22px 0 0 14px;font-family:${SANS};font-size:12px;line-height:19px;color:${C.subtle};`,
-          `<a href="${APP_ORIGIN}" target="_blank" style="color:${C.muted};text-decoration:none;">cifra.lol</a> · <a href="mailto:hola@cifra.lol" style="color:${C.muted};text-decoration:none;">hola@cifra.lol</a>${note ? `<br>${e(note)}` : ""}`,
-          'class="sans" valign="top"',
+          keepLight(
+            `<a href="${APP_ORIGIN}" target="_blank" class="c-muted" style="color:${C.muted};text-decoration:none;">cifra.lol</a> · <a href="mailto:hola@cifra.lol" class="c-muted" style="color:${C.muted};text-decoration:none;">hola@cifra.lol</a>${note ? `<br>${e(note)}` : ""}`,
+          ),
+          'valign="top"',
+          "sans c-subtle",
         ),
     ),
   );
@@ -417,21 +489,38 @@ export function renderMailHtml(
 <![endif]-->
 <style>
   :root { color-scheme: dark; supported-color-schemes: dark; }
-  body { margin:0 !important; padding:0 !important; background:${C.bg} !important; }
+  body { margin:0 !important; padding:0 !important; background-color:${C.bg} !important; }
   @media (prefers-color-scheme: light) {
-    body, .bg { background:${C.bg} !important; }
+    body, .bg-page { background-color:${C.bg} !important; }
   }
+  /* Gmail iOS / Android dark mode: undo the forced inversion of text. */
+  u + .body .gmail-blend-screen { background:#000; mix-blend-mode:screen; }
+  u + .body .gmail-blend-difference { background:#000; mix-blend-mode:difference; }
+  u + .body .gmail-blend-exclusion-blk { background:#000; mix-blend-mode:exclusion; }
+  u + .body .gmail-blend-difference-blk { background:#000; mix-blend-mode:difference; color:#fff; }
+  /* Outlook.com / Outlook apps dark mode. */
+  [data-ogsb] .bg-page { background-color:${C.bg} !important; }
+  [data-ogsb] .bg-card { background-color:${C.card} !important; }
+  [data-ogsb] .bg-elev { background-color:${C.elevated} !important; }
+  [data-ogsb] .bg-line { background-color:${C.border} !important; }
+  [data-ogsb] .bg-btn, [data-ogsb] .c-btn { background-color:${C.fg} !important; }
+  [data-ogsc] .c-fg { color:${C.fg} !important; }
+  [data-ogsc] .c-body { color:${C.body} !important; }
+  [data-ogsc] .c-muted { color:${C.muted} !important; }
+  [data-ogsc] .c-subtle { color:${C.subtle} !important; }
+  [data-ogsc] .c-acc { color:${accent} !important; }
+  [data-ogsc] .c-btn { color:${C.bg} !important; }
   a[x-apple-data-detectors] { color:inherit !important; text-decoration:none !important; font-size:inherit !important; font-family:inherit !important; font-weight:inherit !important; line-height:inherit !important; }
-  u + #body a { color:inherit; text-decoration:none; }
+  u + .body a { color:inherit; text-decoration:none; }
   @media only screen and (max-width:620px) {
     .outer { padding:28px 16px 32px !important; }
     .card { padding:32px 24px 30px !important; }
     .h1 { font-size:38px !important; line-height:40px !important; }
-    .body { padding-right:0 !important; }
+    .body-copy { padding-right:0 !important; }
   }
 </style>
 </head>
-<body id="body" class="bg" bgcolor="${C.bg}" style="margin:0;padding:0;background:${C.bg};color:${C.body};-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
+<body class="body" bgcolor="${C.bg}" style="margin:0;padding:0;${solidBg(C.bg)}color:${C.body};-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
 ${preview}
 ${table(
   row(
@@ -441,11 +530,12 @@ ${table(
       `<!--[if mso]><table role="presentation" width="600" align="center" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
 ${table(row(cell(C.bg, "", header)) + row(cell(C.bg, "", card)) + row(cell(C.bg, "", footer)), 'width="100%" align="center"', "max-width:600px;margin:0 auto;")}
 <!--[if mso]></td></tr></table><![endif]-->`,
-      'class="outer bg" align="center"',
+      'align="center"',
+      "outer",
     ),
   ),
-  'width="100%" class="bg"',
-  `background:${C.bg};`,
+  'width="100%"',
+  solidBg(C.bg),
 )}
 </body>
 </html>`;
