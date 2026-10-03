@@ -75,11 +75,11 @@ export function renderMailHtml({ heading, body, cta, url, preheader }: Omit<Send
   const button =
     cta && url
       ? `<tr>
-            <td class="bg" bgcolor="#000000" style="padding:32px 0 0;background:#000000;">
+            <td class="bg" bgcolor="#000000" style="padding:28px 0 0;background:#000000;">
               <table role="presentation" cellpadding="0" cellspacing="0">
                 <tr>
                   <td bgcolor="#f4f4f0" style="border-radius:999px;background:#f4f4f0;">
-                    <a href="${escapeHtml(url)}" style="display:inline-block;padding:14px 26px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;font-weight:600;letter-spacing:0.01em;color:#09090b;text-decoration:none;">${escapeHtml(cta)}</a>
+                    <a href="${escapeHtml(url)}" style="display:inline-block;padding:12px 22px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:15px;font-weight:600;color:#111111;text-decoration:none;">${escapeHtml(cta)}</a>
                   </td>
                 </tr>
               </table>
@@ -106,30 +106,39 @@ export function renderMailHtml({ heading, body, cta, url, preheader }: Omit<Send
   ${preview}
   <table role="presentation" class="bg" width="100%" cellpadding="0" cellspacing="0" bgcolor="#000000" style="background:#000000;">
     <tr>
-      <td class="bg" align="center" bgcolor="#000000" style="padding:48px 24px;background:#000000;">
-        <table role="presentation" class="bg" width="100%" cellpadding="0" cellspacing="0" bgcolor="#000000" style="max-width:440px;background:#000000;">
+      <td class="bg" align="center" bgcolor="#000000" style="padding:36px 28px 48px;background:#000000;">
+        <table role="presentation" class="bg" width="100%" cellpadding="0" cellspacing="0" bgcolor="#000000" style="max-width:520px;background:#000000;">
           <tr>
             <td class="bg" bgcolor="#000000" style="background:#000000;">
-              <img src="${escapeHtml(logo)}" width="56" height="56" alt="Cifra" style="display:block;border:0;outline:none;width:56px;height:56px;">
+              <table role="presentation" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td class="bg" bgcolor="#000000" valign="middle" style="background:#000000;font-family:Georgia,'Times New Roman',serif;font-size:40px;line-height:1;letter-spacing:-0.03em;color:#f4f4f0;">Cifra</td>
+                  <td class="bg" bgcolor="#000000" valign="middle" style="padding-left:10px;background:#000000;">
+                    <img src="${escapeHtml(logo)}" width="44" height="44" alt="" style="display:block;border:0;outline:none;width:44px;height:44px;">
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
           <tr>
-            <td class="bg" bgcolor="#000000" style="padding-top:16px;background:#000000;font-family:Georgia,'Times New Roman',serif;font-size:32px;line-height:1;letter-spacing:-0.03em;color:#f4f4f0;">Cifra</td>
-          </tr>
-          <tr>
-            <td class="bg" bgcolor="#000000" style="padding-top:28px;background:#000000;">
-              <div style="height:1px;line-height:1px;background:#2a2a2e;font-size:0;">&nbsp;</div>
+            <td class="bg" bgcolor="#000000" style="padding-top:18px;background:#000000;">
+              <div style="height:1px;line-height:1px;background:#3a3a3a;font-size:0;">&nbsp;</div>
             </td>
           </tr>
           <tr>
-            <td class="bg" bgcolor="#000000" style="padding-top:28px;background:#000000;font-family:Georgia,'Times New Roman',serif;font-size:26px;line-height:1.2;letter-spacing:-0.02em;color:#f4f4f0;">${escapeHtml(heading)}</td>
+            <td class="bg" bgcolor="#000000" style="padding-top:28px;background:#000000;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:32px;line-height:1.15;font-weight:700;letter-spacing:-0.03em;color:#f4f4f0;">${escapeHtml(heading)}</td>
           </tr>
           <tr>
-            <td class="bg" bgcolor="#000000" style="padding-top:12px;background:#000000;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:15px;line-height:1.6;color:#9a9a94;">${escapeHtml(body)}</td>
+            <td class="bg" bgcolor="#000000" style="padding-top:14px;background:#000000;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:16px;line-height:1.45;color:#c8c8c2;">${escapeHtml(body)}</td>
           </tr>
           ${button}
           <tr>
-            <td class="bg" bgcolor="#000000" style="padding-top:40px;background:#000000;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:12px;line-height:1.5;color:#6a6a66;">cifra.lol<br>Si no fuiste vos, ignorá este mail.</td>
+            <td class="bg" bgcolor="#000000" style="padding-top:36px;background:#000000;">
+              <div style="height:1px;line-height:1px;background:#3a3a3a;font-size:0;">&nbsp;</div>
+            </td>
+          </tr>
+          <tr>
+            <td class="bg" bgcolor="#000000" style="padding-top:16px;background:#000000;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;line-height:1.4;color:#8a8a86;">cifra.lol / Si no fuiste vos, ignorá este mail.</td>
           </tr>
         </table>
       </td>
