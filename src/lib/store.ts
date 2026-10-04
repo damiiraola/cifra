@@ -38,9 +38,9 @@ import {
   type UsdSource,
 } from "./fx";
 import { inferAccount, stampRate } from "./books";
-import { dueDate, isDue, isPosted, postedTxId } from "./recurring";
+import { dueDate, dueUnposted, isPosted, likelyDuplicate, postedTxId } from "./recurring";
 import { buildSeed } from "./seed";
-import { monthISO, todayISO, uid } from "./utils";
+import { monthISO, uid } from "./utils";
 import { applyOutbox, enqueue, OUTBOX_MAX_TRIES, pruneOutbox, resetTries, type OutboxOp } from "./outbox";
 import { mergeRecurrings } from "./recurring-sync";
 import { hydrateBookMoney, moneyForBook } from "./budget-math";
@@ -108,7 +108,6 @@ type LedgerState = {
   upsertRecurring: (row: Recurring) => void;
   deleteRecurring: (id: string) => void;
   postRecurring: (id: string, ym?: string) => boolean;
-  postDueRecurrings: () => number;
   flushRecurrings: (opts?: { force?: boolean }) => Promise<void>;
   pushChat: (msg: ChatMessage) => void;
   clearChat: () => void;
@@ -233,6 +232,44 @@ function clearLocalSnapshot() {
   } catch {
     /* ignore */
   }
+}
+
+function fijoNames(rs: Recurring[]) {
+  const names = rs.slice(0, 3).map((r) => r.name);
+  return rs.length > 3 ? `${names.join(", ")} y ${rs.length - 3} más` : names.join(", ");
+}
+
+/**
+ * Fijos used to be posted on their own every time the app opened ("Anoté 1
+ * fijo"), which surprised people and duplicated expenses they had already
+ * loaded by hand. Now we only ASK: a toast lists what is due this month with
+ * an "Anotar" button, and leaves out the ones that look already loaded.
+ */
+function offerDueRecurrings(get: () => LedgerState) {
+  const ym = monthISO();
+  const txs = get().transactions;
+  const due = dueUnposted(get().recurrings, txs, ym);
+  if (!due.length) return;
+  const twins = due.filter((r) => likelyDuplicate(r, txs, ym));
+  const clean = due.filter((r) => !twins.includes(r));
+  const parts: string[] = [];
+  if (clean.length) parts.push(fijoNames(clean));
+  if (twins.length) parts.push(`Parece que ya cargaste a mano: ${fijoNames(twins)}. Esos no los anoto; revisalos en Fijos.`);
+  toast(clean.length === 1 ? "Tenés 1 fijo para anotar este mes" : clean.length > 1 ? `Tenés ${clean.length} fijos para anotar este mes` : "Revisá tus fijos de este mes", {
+    id: "fijos-due",
+    duration: 20000,
+    description: parts.join(" · "),
+    action: clean.length
+      ? {
+          label: "Anotar",
+          onClick: () => {
+            let n = 0;
+            for (const r of clean) if (get().postRecurring(r.id, ym)) n += 1;
+            if (n) toast.success(n === 1 ? "Anoté 1 fijo" : `Anoté ${n} fijos`);
+          },
+        }
+      : undefined,
+  });
 }
 
 let hydrateLock: Promise<void> | null = null;
@@ -510,8 +547,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
             await restoreVault(get, set);
             void get().flushRecurrings({ force: true });
             void get().refreshQuotes();
-            const posted = get().postDueRecurrings();
-            if (posted > 0) toast.success(posted === 1 ? "Anoté 1 fijo de este mes" : `Anoté ${posted} fijos de este mes`);
+            offerDueRecurrings(get);
             void get().flushOutbox({ force: true });
             return;
           }
@@ -544,8 +580,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
         await restoreVault(get, set);
         void get().flushRecurrings({ force: true });
         void get().refreshQuotes();
-        const posted = get().postDueRecurrings();
-        if (posted > 0) toast.success(posted === 1 ? "Anoté 1 fijo de este mes" : `Anoté ${posted} fijos de este mes`);
+        offerDueRecurrings(get);
         void get().flushOutbox({ force: true });
       } catch (err) {
         if (get().books.length || get().confirmed.length || get().outbox.length) {
@@ -870,16 +905,6 @@ export const useLedger = create<LedgerState>()((set, get) => ({
       recurringId: r.id,
     });
     return true;
-  },
-  postDueRecurrings: () => {
-    const ym = monthISO();
-    const today = todayISO();
-    let n = 0;
-    for (const r of get().recurrings) {
-      if (!isDue(r, ym, today)) continue;
-      if (get().postRecurring(r.id, ym)) n += 1;
-    }
-    return n;
   },
   flushRecurrings: async () => {
     if (recFlushBusy) {
