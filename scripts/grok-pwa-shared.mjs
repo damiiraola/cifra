@@ -158,6 +158,9 @@ export function renderInstallPageHtml(template, { host, url } = {}) {
     .replaceAll("{{APP_URL}}", escapeHtml(stripInstallParams(url)));
 }
 
+/** Same dark as the app background (`--color-bg`) and the `theme-color` meta. */
+export const PWA_THEME_COLOR = "#09090B";
+
 export function renderWebManifest(hostHeader) {
   const name = appNameFromHost(hostHeader);
   return JSON.stringify(
@@ -168,8 +171,9 @@ export function renderWebManifest(hostHeader) {
       start_url: "/",
       scope: "/",
       display: "standalone",
-      background_color: "#000000",
-      theme_color: "#000000",
+      lang: "es-AR",
+      background_color: PWA_THEME_COLOR,
+      theme_color: PWA_THEME_COLOR,
       icons: [
         {
           src: "/__grok/icon-180.png",
@@ -188,6 +192,20 @@ export function renderWebManifest(hostHeader) {
           sizes: "512x512",
           type: "image/png",
           purpose: "any",
+        },
+        // Android crops icons into circles/squircles: these keep the bars
+        // inside the safe zone (80% center) on the app's dark background.
+        {
+          src: "/icon-maskable-192.png",
+          sizes: "192x192",
+          type: "image/png",
+          purpose: "maskable",
+        },
+        {
+          src: "/icon-maskable-512.png",
+          sizes: "512x512",
+          type: "image/png",
+          purpose: "maskable",
         },
       ],
     },
@@ -210,7 +228,7 @@ export function grokPwaHeadTags(appName = DEFAULT_APP_NAME) {
       "apple-mobile-web-app-status-bar-style",
       '<meta name="apple-mobile-web-app-status-bar-style" content="black">',
     ],
-    ["theme-color", '<meta name="theme-color" content="#000000">'],
+    ["theme-color", `<meta name="theme-color" content="${PWA_THEME_COLOR}">`],
   ];
 }
 
@@ -370,8 +388,11 @@ export function grokOgHeadTags({
   if (description) {
     tags.push(`<meta property="og:description" content="${escapeHtml(description)}">`);
   }
-  if (String(site.type ?? "").toLowerCase() === "x:game") {
+  const ogType = String(site.type ?? "").trim().toLowerCase();
+  if (ogType === "x:game") {
     tags.push(`<meta property="og:type" content="x:game">`);
+  } else if (ogType) {
+    tags.push(`<meta property="og:type" content="${escapeHtml(ogType)}">`);
   }
   if (publicHost) {
     const asset = resolveOgCardAsset(site, cwd);

@@ -1,0 +1,18 @@
+# Cifra es una app privada: cada libro está detrás del login.
+# Se pueden leer la portada/login (para la vista previa al compartir el link)
+# y la política de privacidad. Lo demás no tiene sentido indexarlo.
+User-agent: *
+Allow: /$
+Allow: /login
+Allow: /privacidad
+Disallow: /api/
+Disallow: /_serverFn/
+Disallow: /ajustes
+Disallow: /analitica
+Disallow: /fijos
+Disallow: /ia
+Disallow: /presupuestos
+Disallow: /olvide
+Disallow: /reset
+Disallow: /beta
+Disallow: /lanzar
