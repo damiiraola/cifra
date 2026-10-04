@@ -6,21 +6,11 @@ import { AuthScreen } from "@/components/auth-screen";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AUTH_MESSAGES, authErrorMessage, isExpiredLinkError } from "@/lib/auth/errors";
 
 export const Route = createFileRoute("/login")({
   component: Login,
 });
-
-function spanishAuthError(message: string | undefined, fallback: string): string {
-  const raw = (message ?? "").toLowerCase();
-  if (raw.includes("invalid origin")) return "URL pública mal configurada (BETTER_AUTH_URL).";
-  if (raw.includes("not verified") || raw.includes("email_not_verified")) {
-    return "Confirmá el mail primero. Te reenviamos el enlace si hace falta.";
-  }
-  if (raw.includes("already exists") || raw.includes("user already")) return "Ese mail ya tiene cuenta. Entrá o recuperá la clave.";
-  if (raw.includes("invalid") && raw.includes("password")) return "Mail o contraseña incorrectos.";
-  return message || fallback;
-}
 
 function Login() {
   const { user, isPending, timedOut } = useSessionWait();
@@ -31,6 +21,14 @@ function Login() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [checkEmail, setCheckEmail] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    const linkError = new URLSearchParams(window.location.search).get("error");
+    if (linkError && isExpiredLinkError(linkError.toUpperCase())) {
+      setError("El enlace para confirmar la cuenta venció o ya se usó. Entrá con tu mail y clave y te mandamos otro.");
+    }
+  }, []);
 
   useEffect(() => {
     if (isPending || !user) return;
@@ -39,7 +37,7 @@ function Login() {
 
   if (isPending && timedOut) {
     return (
-      <AuthScreen kicker="La sesión no responde. En Vercel falta DATABASE_URL o BETTER_AUTH_URL.">
+      <AuthScreen kicker="Cifra no responde. Revisá tu conexión y recargá en un ratito.">
         <Button className="mt-5" onClick={() => window.location.reload()}>
           Recargar
         </Button>
@@ -67,7 +65,7 @@ function Login() {
           callbackURL: "/",
         });
         if (err) {
-          setError(spanishAuthError(err.message, "No pude crear la cuenta."));
+          setError(authErrorMessage(err, "No pude crear la cuenta. Probá de nuevo."));
           return;
         }
         const session = await authClient.getSession();
@@ -84,14 +82,14 @@ function Login() {
         callbackURL: "/",
       });
       if (err) {
-        const msg = spanishAuthError(err.message, "Mail o contraseña incorrectos.");
+        const msg = authErrorMessage(err, AUTH_MESSAGES.wrongCredentials);
         setError(msg);
-        if (msg.includes("Confirmá el mail")) setCheckEmail(true);
+        if (msg === AUTH_MESSAGES.notVerified) setCheckEmail(true);
         return;
       }
       window.location.replace("/");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No pude entrar. Probá de nuevo.");
+      setError(authErrorMessage(err, "No pude entrar. Probá de nuevo."));
     } finally {
       setBusy(false);
     }
@@ -100,12 +98,16 @@ function Login() {
   async function resend() {
     setBusy(true);
     setError(null);
+    setNotice(null);
     try {
       const { error: err } = await authClient.sendVerificationEmail({
         email: email.trim(),
         callbackURL: "/",
       });
-      if (err) setError(spanishAuthError(err.message, "No pude reenviar el mail."));
+      if (err) setError(authErrorMessage(err, "No pude reenviar el mail. Probá en un rato."));
+      else setNotice("Listo, te lo reenviamos.");
+    } catch (err) {
+      setError(authErrorMessage(err, "No pude reenviar el mail. Probá en un rato."));
     } finally {
       setBusy(false);
     }
@@ -113,9 +115,18 @@ function Login() {
 
   if (checkEmail) {
     return (
-      <AuthScreen kicker="Revisá tu mail. Ahí está el enlace para confirmar la cuenta. Si no llega, spam.">
+      <AuthScreen kicker="Revisá tu mail. Ahí está el enlace para confirmar la cuenta. Si no llega en unos minutos, mirá en spam.">
         <div className="mt-8 grid gap-3">
-          {error ? <p className="text-sm text-red-400">{error}</p> : null}
+          {error ? (
+            <p role="alert" className="text-sm text-red-400">
+              {error}
+            </p>
+          ) : null}
+          {notice ? (
+            <p role="status" className="text-sm text-muted">
+              {notice}
+            </p>
+          ) : null}
           <Button type="button" variant="secondary" disabled={busy || !email} onClick={() => void resend()}>
             {busy ? "Enviando…" : "Reenviar confirmación"}
           </Button>
@@ -202,7 +213,11 @@ function Login() {
             Olvidé la contraseña
           </Link>
         ) : null}
-        {error ? <p className="text-sm text-red-400">{error}</p> : null}
+        {error ? (
+          <p role="alert" className="text-sm text-red-400">
+            {error}
+          </p>
+        ) : null}
         <Button type="submit" className="mt-1 w-full" disabled={busy || !authEnabled}>
           {busy ? "Un segundo…" : mode === "up" ? "Crear cuenta" : "Entrar"}
         </Button>

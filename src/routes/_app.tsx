@@ -14,7 +14,12 @@ function AppLayout() {
 
   useEffect(() => {
     if (isPending || timedOut) return;
-    if (!userId) window.location.replace("/login");
+    if (!userId) {
+      // Keep Better Auth's `?error=` (e.g. an expired confirmation link) so the
+      // login screen can explain it.
+      const linkError = new URLSearchParams(window.location.search).get("error");
+      window.location.replace(linkError ? `/login?error=${encodeURIComponent(linkError)}` : "/login");
+    }
   }, [isPending, timedOut, userId]);
 
   if (isPending && timedOut) {
@@ -23,8 +28,8 @@ function AppLayout() {
         <div className="max-w-sm text-center">
           <p className="font-display text-4xl tracking-tight">Cifra</p>
           <p className="mt-3 text-sm text-muted">
-            La sesión no responde. En Vercel falta <span className="text-fg">DATABASE_URL</span> (Neon) o{" "}
-            <span className="text-fg">BETTER_AUTH_URL</span> (tu URL pública). Pegá esas variables, redeploy, y recargá.
+            Cifra no responde. Revisá tu conexión y recargá. Si sigue igual, probá en un rato: tus datos
+            están guardados.
           </p>
           <Button className="mt-5" onClick={() => window.location.reload()}>
             Recargar

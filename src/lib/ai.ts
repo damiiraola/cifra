@@ -13,8 +13,8 @@ type AskInput = {
   categories?: CatHint[];
 };
 
-export const AI_UNAVAILABLE = "El asistente no está activo en este entorno.";
-export const AI_TIMEOUT = "El asistente no respondió. Reintentá.";
+export const AI_UNAVAILABLE = "El asistente todavía no está disponible. Lo estamos activando.";
+export const AI_TIMEOUT = "El asistente no respondió a tiempo. Probá de nuevo.";
 const ASK_MS = 20_000;
 
 const BASE_CHAT = `Sos el analista financiero de Cifra, una app de control de gastos personales. Hablás en español rioplatense, claro y directo. No uses emojis.

@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { money } from "@/lib/format";
+import { money, amountInput } from "@/lib/format";
 import { parseAmount } from "@/lib/format";
 import { useLedger } from "@/lib/store";
 import { Button } from "@/components/ui/button";
@@ -66,7 +66,7 @@ export function Onboarding() {
   const accounts = useLedger((s) => s.accounts);
   const { globalBudget, completeOnboarding, usdSource, setUsdSource } = useLedger();
   const [step, setStep] = useState(0);
-  const [budget, setBudget] = useState(String(globalBudget || 1_150_000));
+  const [budget, setBudget] = useState(amountInput(globalBudget || 1_150_000));
   const [openings, setOpenings] = useState<Record<string, string>>({});
   const [wantBusiness, setWantBusiness] = useState(false);
 
@@ -207,8 +207,8 @@ export function Onboarding() {
   return (
     <Frame
       kicker="Dólar"
-      title="Default cash: blue."
-      hint="USD se toma al blue. USDT al cripto, o ponés precio P2P en cada carga."
+      title="¿A qué dólar convertimos?"
+      hint="Lo usamos para pasar tus dólares a pesos. Si no sabés, dejá el blue. USDT va al cripto, o ponés el precio P2P en cada carga. Se cambia después en Ajustes."
       footer={
         <>
           <Button className="w-full" onClick={finish}>
