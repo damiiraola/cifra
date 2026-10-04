@@ -12,9 +12,14 @@ export const Route = createFileRoute("/privacidad")({
   component: Privacidad,
 });
 
-// TODO(Damián): si Cifra pasa a operar a nombre de una empresa, cambiar el
-// responsable (razón social, CUIT y domicilio). Hoy figura la persona.
-const RESPONSABLE = "Damián Iraola";
+// Responsable de los datos (dato dado por Damián, octubre 2026).
+// TODO(Damián): falta el domicilio legal de FIXXA SRL. La Ley 25.326 (art. 6)
+// pide informar identidad y domicilio del responsable: cuando lo tengas, sumalo
+// en "Quién es responsable" y en el pie (por ejemplo, una const DOMICILIO).
+// TODO(Damián): edad mínima sin decidir (¿solo mayores de 18?). Si se decide,
+// agregar una sección "Quién puede usar Cifra".
+const RESPONSABLE = "FIXXA SRL";
+const CUIT = "30-71666643-0";
 const CONTACTO = "hola@cifra.lol";
 const ACTUALIZADA = "octubre 2026";
 
@@ -51,7 +56,7 @@ function Privacidad() {
       <div className="mt-8 grid gap-7">
         <Section title="Quién es responsable">
           <p>
-            {RESPONSABLE} es responsable de los datos que cargás en Cifra. Para cualquier consulta o pedido escribí a{" "}
+            {RESPONSABLE} (CUIT {CUIT}) es responsable de los datos que cargás en Cifra. Para cualquier consulta o pedido escribí a{" "}
             {mail}.
           </p>
         </Section>
@@ -150,7 +155,7 @@ function Privacidad() {
       </div>
 
       <p className="mt-10 text-xs text-muted">
-        Cifra · {RESPONSABLE} · {CONTACTO} · Actualizada en {ACTUALIZADA}
+        Cifra · {RESPONSABLE} · CUIT {CUIT} · {CONTACTO} · Actualizada en {ACTUALIZADA}
       </p>
     </main>
   );
