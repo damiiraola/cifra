@@ -14,7 +14,7 @@ export function userMessage(err: unknown, fallback: string): string {
   if (!raw) return fallback;
   if (NETWORK.test(raw)) return NETWORK_MESSAGE;
   // Server-only configuration hints are for Damián's logs, not for testers.
-  if (/RESEND_API_KEY|DATABASE_URL|BETTER_AUTH|XAI_API_KEY|Vercel/.test(raw)) return fallback;
+  if (/RESEND_API_KEY|DATABASE_URL|BETTER_AUTH|XAI_API_KEY|AI_GATEWAY_API_KEY|GROQ_API_KEY|VERCEL_OIDC|Vercel/.test(raw)) return fallback;
   if (SPANISH_HINT.test(raw) && raw.length <= 160) return raw;
   return fallback;
 }

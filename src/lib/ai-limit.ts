@@ -1,6 +1,6 @@
 /**
  * Daily cap on assistant questions per user, so one tester (or a stolen
- * session) cannot run up the xAI bill. Default 30/day; `AI_DAILY_LIMIT`
+ * session) cannot burn the free AI Gateway credit. Default 30/day; `AI_DAILY_LIMIT`
  * overrides it (0 = assistant off for everyone).
  */
 export const DEFAULT_AI_DAILY_LIMIT = 30;
@@ -31,7 +31,7 @@ const MODES = new Set(["chat", "parse", "report"]);
 type Hist = { role: "user" | "assistant"; content: string };
 type Cat = { id: string; name: string; kind: string };
 
-/** Validate/trim what the browser sends before it reaches xAI. */
+/** Validate/trim what the browser sends before it reaches the AI provider. */
 export function cleanAskInput(input: unknown): {
   mode: "chat" | "parse" | "report";
   message: string;

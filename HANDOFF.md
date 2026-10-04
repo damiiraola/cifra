@@ -20,7 +20,7 @@ El libro de Negocio no hereda categorías, topes ni analítica del personal. Los
 | SQL | `src/lib/db.ts`. Migraciones en `migrations/0001`–`0008`. `npm run db:migrate` corre en el build. |
 | Auth | Better Auth. Solo mail + contraseña (`src/lib/auth/email-password.ts`). Sin Google, X ni Grok/OAuth genérico. |
 | Mail | Resend. Plantillas en `src/lib/mail.ts`. Remitente `Cifra <hola@cifra.lol>`. |
-| IA | `XAI_API_KEY`, `src/lib/ai.ts` |
+| IA | Vercel AI Gateway (OIDC o `AI_GATEWAY_API_KEY`), `src/lib/ai.ts` + `src/lib/ai-provider.ts` |
 | Cotizaciones | `src/lib/fx-api.ts`, `src/lib/market-hours.ts` |
 | Host | Vercel. Push a `main` despliega. Dominio `cifra.lol` y `www.cifra.lol`. |
 
@@ -37,7 +37,7 @@ El libro de Negocio no hereda categorías, topes ni analítica del personal. Los
 | `RESEND_API_KEY` | Empieza con `re_`. Sin comillas. |
 | `MAIL_FROM` | `Cifra <hola@cifra.lol>` |
 | `MAIL_DRILL_TOKEN` | Opcional. Prende `/api/mail-drill`. Sin ella, la ruta da 404 |
-| `XAI_API_KEY` | Asistente |
+| `AI_GATEWAY_API_KEY` | Asistente (opcional en Vercel: usa OIDC) |
 
 DNS de Resend ya está en `send.cifra.lol` (SPF, DKIM). Falta DMARC; no bloquea el envío.
 
