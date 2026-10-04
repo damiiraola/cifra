@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import { userMessage } from "@/lib/user-error";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Eye, EyeOff, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { BUILTIN_IDS, DEFAULT_BUDGETS } from "@/lib/categories";
 import { computeMonth } from "@/lib/analytics";
 import { effectiveCategoryBudget } from "@/lib/budget-math";
-import { moneyARS, parseAmount } from "@/lib/format";
+import { moneyARS, parseAmount, amountInput } from "@/lib/format";
 import { formatRate, USD_SOURCES } from "@/lib/fx";
 import { CatIcon } from "@/lib/icons";
 import { isArgentineWeekday, quotesAgeLabel } from "@/lib/market-hours";
@@ -75,7 +76,7 @@ function Ajustes() {
   } = useLedger();
   const hidden = useMemo(() => new Set(hiddenCategoryIds), [hiddenCategoryIds]);
   const book = books.find((b) => b.id === activeBookId);
-  const [budget, setBudgetInput] = useState(String(globalBudget || ""));
+  const [budget, setBudgetInput] = useState(amountInput(globalBudget));
   const [newName, setNewName] = useState("");
   const [newKind, setNewKind] = useState<CategoryKind>("expense");
   const [confirmWipe, setConfirmWipe] = useState(false);
@@ -179,7 +180,7 @@ function Ajustes() {
                 })
                 .catch((err) => {
                   setDeleting(false);
-                  toast.error(err instanceof Error ? err.message : "No pude borrar la cuenta");
+                  toast.error(userMessage(err, "No pude borrar la cuenta. Probá de nuevo en un rato."));
                 });
             }}
           >
@@ -245,7 +246,7 @@ function Ajustes() {
               </span>
               <Input
                 inputMode="decimal"
-                defaultValue={a.opening ? String(a.opening) : ""}
+                defaultValue={amountInput(a.opening)}
                 placeholder="0"
                 onBlur={(e) => setAccountOpening(a.id, parseAmount(e.target.value) ?? 0)}
               />
@@ -503,7 +504,7 @@ function CatGroup({
                 <Input
                   key={`${c.id}-${tope}`}
                   inputMode="decimal"
-                  defaultValue={tope ? String(tope) : ""}
+                  defaultValue={amountInput(tope)}
                   placeholder="Tope"
                   aria-label={`Tope de ${c.name}`}
                   onBlur={(e) => {

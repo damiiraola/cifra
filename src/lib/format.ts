@@ -63,3 +63,13 @@ export function shortDay(iso: string) {
 export function weekdayShort(iso: string) {
   return format(parseISO(iso), "EEEEE", { locale: es });
 }
+
+/**
+ * A number as the user would type it in an amount field (`1.150.000`,
+ * `120,5`). Empty for 0 so the placeholder shows. Round-trips through
+ * `parseAmount`.
+ */
+export function amountInput(n: number | null | undefined): string {
+  if (!n || !Number.isFinite(n)) return "";
+  return new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2, useGrouping: true }).format(n);
+}

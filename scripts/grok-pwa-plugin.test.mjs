@@ -27,6 +27,24 @@ const TEMPLATE_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 // assertions see a blank workspace no matter where `npm test` is started.
 process.chdir(mkdtempSync(join(tmpdir(), "grok-pwa-test-")));
 
+// The extensions script is opt-in (see readGrokExtensionsEnabled). Most tests
+// below describe the opted-in behaviour; the default is covered on its own.
+process.env.VITE_GROK_EXTENSIONS = "1";
+
+test("does not inject the third-party extensions script by default", () => {
+  const prev = process.env.VITE_GROK_EXTENSIONS;
+  delete process.env.VITE_GROK_EXTENSIONS;
+  try {
+    const out = injectGrokPwaHead(
+      '<html><head><script src="https://grok.com/grok-app-builder/extensions.js" defer></script></head></html>',
+    );
+    assert.doesNotMatch(out, /grok-app-builder\/extensions\.js/);
+    assert.match(out, /rel="manifest"/);
+  } finally {
+    process.env.VITE_GROK_EXTENSIONS = prev;
+  }
+});
+
 test("injects before </head>", () => {
   const out = injectGrokPwaHead("<html><head><title>x</title></head><body></body></html>");
   assert.match(out, /rel="manifest"/);
