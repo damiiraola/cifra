@@ -10,10 +10,11 @@ import { moneyARS, parseAmount, amountInput } from "@/lib/format";
 import { formatRate, USD_SOURCES } from "@/lib/fx";
 import { CatIcon } from "@/lib/icons";
 import { isArgentineWeekday, quotesAgeLabel } from "@/lib/market-hours";
-import { autoBackupHint, clearLocalVault, downloadLocalVault, shareVaultToIcloud } from "@/lib/local-vault";
+import { autoBackupHint, downloadLocalVault, shareVaultToIcloud } from "@/lib/local-vault";
 import { deleteAccount } from "@/lib/ledger-api";
-import { useAllCategories, useBookAccounts, useBookTxs, useLedger } from "@/lib/store";
+import { forgetLocalLedger, useAllCategories, useBookAccounts, useBookTxs, useLedger } from "@/lib/store";
 import { signOut } from "@/lib/auth/client";
+import { signOutAndForget } from "@/lib/sign-out";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -120,10 +121,14 @@ function Ajustes() {
             disabled={signingOut}
             onClick={() => {
               setSigningOut(true);
-              void signOut("/login").catch(() => {
-                setSigningOut(false);
-                toast.error("No pude cerrar sesión. Reintentá.");
-              });
+              void signOutAndForget("/login")
+                .then((done) => {
+                  if (!done) setSigningOut(false);
+                })
+                .catch(() => {
+                  setSigningOut(false);
+                  toast.error("No pude cerrar sesión. Reintentá.");
+                });
             }}
           >
             {signingOut ? "Cerrando…" : "Cerrar sesión"}
@@ -165,7 +170,7 @@ function Ajustes() {
               setDeleting(true);
               void deleteAccount({ data: { email: deleteEmail.trim() } })
                 .then(async () => {
-                  clearLocalVault();
+                  forgetLocalLedger();
                   resetClient();
                   try {
                     await signOut("/login");
@@ -346,7 +351,7 @@ function Ajustes() {
               toast.success("Copié el link con monto");
             }}
           >
-            Copiar link: guardar directo
+            Copiar link: con monto
           </Button>
         </div>
         <ol className="mt-4 list-decimal space-y-2 pl-4 text-sm text-muted">
@@ -361,7 +366,8 @@ function Ajustes() {
           <li>
             Otro atajo “Anotar gasto”: Pedir entrada (Número, “¿Cuánto?”) → Abrir URL
             <span className="text-fg"> {origin}/?tipo=gasto&guardar=1&monto=</span>
-            y concatená la respuesta. Agregar a Siri: “anotar gasto”.
+            y concatená la respuesta. Agregar a Siri: “anotar gasto”. Cifra abre el formulario
+            ya cargado y vos tocás Guardar (por seguridad, un link nunca guarda solo).
           </li>
           <li>
             Opcional: agregá <span className="text-fg">&libro=negocio&caja=usdt&nota=</span> y otra pregunta para la nota.
