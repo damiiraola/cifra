@@ -42,7 +42,7 @@ function Forgot() {
       {sent ? (
         <div className="mt-8">
           <p className="text-sm text-fg">Si ese mail está en Cifra, ya salió el enlace. Revisá spam.</p>
-          <Link to="/login" className="mt-6 block text-sm text-muted underline-offset-4 hover:text-fg hover:underline">
+          <Link to="/login" className="mt-3 block py-3 text-sm text-muted underline-offset-4 hover:text-fg hover:underline">
             Volver a entrar
           </Link>
         </div>
@@ -64,7 +64,7 @@ function Forgot() {
           <Button type="submit" disabled={busy}>
             {busy ? "Enviando…" : "Mandar enlace"}
           </Button>
-          <Link to="/login" className="mt-2 block text-center text-sm text-muted underline-offset-4 hover:text-fg hover:underline">
+          <Link to="/login" className="mt-1 block py-3 text-center text-sm text-muted underline-offset-4 hover:text-fg hover:underline">
             Volver
           </Link>
         </form>

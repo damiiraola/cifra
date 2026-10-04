@@ -188,7 +188,7 @@ export function Asistente() {
             type="button"
             disabled={busy || blocked}
             onClick={() => send(s)}
-            className="h-9 rounded-full bg-elevated px-3 text-[13px] text-muted transition-colors duration-150 hover:text-fg disabled:opacity-50"
+            className="h-11 rounded-full bg-elevated px-3.5 text-[13px] text-muted transition-colors duration-150 hover:text-fg disabled:opacity-50"
           >
             {s}
           </button>
@@ -246,6 +246,7 @@ export function Asistente() {
           Interpretar como movimiento (ej. “15 mil en el super ayer con débito”)
         </label>
         <Textarea
+          aria-label={parseMode ? "Movimiento a interpretar" : "Pregunta para el asistente"}
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder={parseMode ? "Gasté 12.400 en YPF con Mercado Pago" : "Escribí una pregunta sobre tus gastos"}

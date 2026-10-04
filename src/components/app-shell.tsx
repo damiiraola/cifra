@@ -125,7 +125,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </nav>
           <div className="grid gap-3 px-1">
             <BookEntryButton className="h-11 px-2" />
-            <div className="overflow-hidden [&_span]:truncate [&_button]:text-muted">
+            {/* Avatar + name on one line (name truncates with room to spare),
+                "Cerrar sesión" on its own line with a 44px tap area. */}
+            <div className="min-w-0 [&>div]:flex-wrap [&>div]:gap-x-2 [&>div]:gap-y-0 [&>div>:first-child]:shrink-0 [&>div>span:last-of-type]:min-w-0 [&>div>span:last-of-type]:flex-1 [&>div>span:last-of-type]:truncate [&_button]:min-h-11 [&_button]:basis-full [&_button]:text-left [&_button]:whitespace-nowrap [&_button]:text-muted">
               <UserButton />
             </div>
           </div>

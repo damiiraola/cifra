@@ -3,7 +3,7 @@ import { createFileRoute, Link, useSearch } from "@tanstack/react-router";
 import { authClient } from "@/lib/auth/client";
 import { AuthScreen } from "@/components/auth-screen";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 type ResetSearch = { token?: string };
@@ -50,7 +50,7 @@ function Reset() {
   if (!token) {
     return (
       <AuthScreen kicker="Este enlace está incompleto.">
-        <Link to="/olvide" className="mt-8 block text-sm text-muted underline-offset-4 hover:text-fg hover:underline">
+        <Link to="/olvide" className="mt-5 block py-3 text-sm text-muted underline-offset-4 hover:text-fg hover:underline">
           Pedir uno nuevo
         </Link>
       </AuthScreen>
@@ -62,7 +62,7 @@ function Reset() {
       {done ? (
         <div className="mt-8">
           <p className="text-sm">Listo. Ya podés entrar con la clave nueva.</p>
-          <Link to="/login" className="mt-6 block text-sm text-muted underline-offset-4 hover:text-fg hover:underline">
+          <Link to="/login" className="mt-3 block py-3 text-sm text-muted underline-offset-4 hover:text-fg hover:underline">
             Ir a entrar
           </Link>
         </div>
@@ -70,9 +70,8 @@ function Reset() {
         <form className="mt-8 grid gap-3" onSubmit={(e) => void onSubmit(e)}>
           <div className="grid gap-1.5">
             <Label htmlFor="password">Nueva contraseña</Label>
-            <Input
+            <PasswordInput
               id="password"
-              type="password"
               autoComplete="new-password"
               required
               minLength={8}
