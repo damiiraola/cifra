@@ -139,6 +139,27 @@ export const auth = betterAuth({
     ? { emailAndPassword: emailPasswordOptions, emailVerification: emailVerificationOptions }
     : {}),
 
+  // Better Auth swallows some failures (e.g. a reset/verification mail that
+  // could not be sent) and only logs them. Keep the log, and also send errors
+  // to Sentry when SENTRY_DSN is set.
+  logger: {
+    level: "warn",
+    log: (level, message, ...args) => {
+      const line = `[auth] ${message}`;
+      if (level === "error") {
+        console.error(line, ...args);
+        const cause = args.find((a) => a instanceof Error);
+        // Mail failures are already reported where they happen (mail.ts).
+        if (cause && /mail|RESEND/i.test(cause.message)) return;
+        void import("@/lib/observability.server").then(({ reportServerError }) =>
+          reportServerError(cause ?? new Error(message), { where: "auth", message }),
+        );
+      } else {
+        console.warn(line, ...args);
+      }
+    },
+  },
+
   // `__Host-` prefixed cookies: the browser REFUSES any same-named cookie that
   // carries a `Domain` attribute, so a sibling `*.grok.me` app cannot "toss" a
   // `Domain=.grok.me` session cookie onto this app. `__Host-` requires Secure +

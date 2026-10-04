@@ -3,6 +3,7 @@ import { AuthProvider } from "@/lib/auth/provider";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import { ServiceWorkerRegister } from "@/components/sw-register";
 import appCss from "../styles.css?url";
+import { ErrorReporter } from "@/components/error-reporter";
 
 const APP_NAME = "Cifra";
 
@@ -33,6 +34,7 @@ export const Route = createRootRoute({
         <AuthProvider>
           <Outlet />
         </AuthProvider>
+        <ErrorReporter />
         <Scripts />
       </body>
     </html>

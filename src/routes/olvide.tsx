@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { authClient } from "@/lib/auth/client";
 import { AuthScreen } from "@/components/auth-screen";
+import { MailHealthNotice } from "@/components/mail-health-notice";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,6 +47,9 @@ function Forgot() {
           <Link to="/login" className="mt-3 block py-3 text-sm text-muted underline-offset-4 hover:text-fg hover:underline">
             Volver a entrar
           </Link>
+          <div className="mt-4">
+            <MailHealthNotice />
+          </div>
         </div>
       ) : (
         <form className="mt-8 grid gap-3" onSubmit={(e) => void onSubmit(e)}>

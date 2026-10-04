@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { authClient, authEnabled } from "@/lib/auth/client";
 import { useSessionWait } from "@/lib/auth/use-current-user";
 import { AuthScreen } from "@/components/auth-screen";
+import { MailHealthNotice } from "@/components/mail-health-notice";
 import { Button } from "@/components/ui/button";
 import { Input, PasswordInput } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -140,6 +141,7 @@ function Login() {
           >
             Ya confirmé — entrar
           </button>
+          <MailHealthNotice />
         </div>
       </AuthScreen>
     );
