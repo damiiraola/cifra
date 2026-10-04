@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { money, parseAmount } from "@/lib/format";
+import { money, parseAmount, amountInput } from "@/lib/format";
 import { toARS } from "@/lib/analytics";
 import { inferAccount, stampRate } from "@/lib/books";
 import { CatIcon } from "@/lib/icons";
@@ -67,8 +67,8 @@ export function QuickAdd() {
     const nextCurrency = src.currency ?? "ARS";
     const nextMethod = src.method ?? (nextCurrency === "USDT" ? "crypto" : "debito");
     setType(nextType);
-    setAmount(src.amount != null ? String(src.amount) : "");
-    setAmountTo(src.amountTo ? String(src.amountTo) : "");
+    setAmount(amountInput(src.amount));
+    setAmountTo(amountInput(src.amountTo));
     setCategoryId(src.categoryId ?? startCategory(nextType));
     setMerchant(src.merchant ?? "");
     setNote(src.note ?? "");
@@ -80,7 +80,7 @@ export function QuickAdd() {
     setCurrency(nextCurrency);
     setAccountId(nextAccount);
     setCounterpartyId(src.counterpartyId ?? "");
-    setRate(src.rateLocked && src.rateArs ? String(src.rateArs) : "");
+    setRate(src.rateLocked && src.rateArs ? amountInput(src.rateArs) : "");
     // startCategory reads the latest categories; only re-run when the sheet opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quickOpen, editing, draft, accounts, activeBookId]);

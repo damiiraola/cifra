@@ -1,10 +1,12 @@
 import { useMemo } from "react";
+import { userMessage } from "@/lib/user-error";
 import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import { toast } from "sonner";
 import {
   applyOpenings,
   asVault,
+  clearLocalVault,
   buildLocalVault,
   markAutoBackup,
   readLocalVault,
@@ -116,13 +118,13 @@ type LedgerState = {
 };
 
 function persistFail(err: unknown, retry?: () => void) {
-  const msg = err instanceof Error ? err.message : "No pude guardar";
+  const msg = err instanceof Error ? err.message : "";
   const session = msg === "Unauthorized";
   const desc = session
     ? "Entrá de nuevo. El movimiento sigue acá."
     : retry
       ? "El movimiento sigue acá."
-      : msg;
+      : userMessage(err, "Probá de nuevo en un rato.");
   toast.error("No pude guardar en tu libro", {
     description: desc,
     action: retry
@@ -232,6 +234,16 @@ function clearLocalSnapshot() {
   } catch {
     /* ignore */
   }
+}
+
+/**
+ * Forget every copy of the ledger kept in this browser (local vault, old
+ * snapshot, auto-backup marker). Called after a confirmed sign-out so the next
+ * person on a shared phone does not inherit the previous user's numbers.
+ */
+export function forgetLocalLedger() {
+  clearLocalVault();
+  clearLocalSnapshot();
 }
 
 function fijoNames(rs: Recurring[]) {

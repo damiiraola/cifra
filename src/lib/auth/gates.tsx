@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Navigate } from "@tanstack/react-router";
-import { authEnabled, signOut } from "./client";
+import { authEnabled } from "./client";
+import { signOutAndForget } from "@/lib/sign-out";
 import { resolveSignInGateState } from "./sign-in-gate";
 import { useCurrentUser, useCurrentUserState } from "./use-current-user";
 
@@ -92,7 +93,11 @@ export function UserButton() {
           onClick={() => {
             setSigningOut(true);
             // Success navigates away; on failure re-enable so it can be retried.
-            void signOut().catch(() => setSigningOut(false));
+            void signOutAndForget("/login")
+              .then((done) => {
+                if (!done) setSigningOut(false);
+              })
+              .catch(() => setSigningOut(false));
           }}
           className="cursor-pointer text-sm underline-offset-4 opacity-70 hover:underline disabled:cursor-wait disabled:no-underline"
         >

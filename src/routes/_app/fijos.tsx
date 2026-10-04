@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { money, parseAmount } from "@/lib/format";
+import { money, parseAmount, amountInput } from "@/lib/format";
 import { FIJO_TEMPLATES, dueUnposted, isDue, isPosted, likelyDuplicate } from "@/lib/recurring";
 import { PAY_METHODS, type AccountKind, type Currency, type PayMethod, type Recurring, type TxType } from "@/lib/types";
 import { methodForAccount } from "@/lib/quick-defaults";
@@ -216,7 +216,7 @@ function FijoEditor({
   onDelete: (id: string) => void;
 }) {
   const [name, setName] = useState(value.name);
-  const [amount, setAmount] = useState(value.amount ? String(value.amount) : "");
+  const [amount, setAmount] = useState(amountInput(value.amount));
   const [day, setDay] = useState(String(value.day));
   const [type, setType] = useState<TxType>(value.type);
   const [categoryId, setCategoryId] = useState(value.categoryId);

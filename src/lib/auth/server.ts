@@ -31,7 +31,7 @@ import { Pool } from "pg";
 import { ensureDbReady, getPglite } from "../db";
 import { emailAndPasswordEnabled, emailPasswordOptions, emailVerificationOptions } from "./email-password";
 import { pgliteDialect } from "./pglite-dialect";
-import { PREVIEW_ALLOWED_HOSTS } from "./preview";
+import { authOrigins } from "./origins";
 
 // Kick (and share) PGLite bootstrap as soon as the auth server module loads.
 void ensureDbReady();
@@ -71,47 +71,16 @@ export const authConfigured = !authDisabled;
 const explicitBaseURL = env("BETTER_AUTH_URL")?.replace(/\/+$/, "");
 // Explicit `string[]` (not a readonly tuple) — Better Auth's DynamicBaseURLConfig
 // requires a mutable `allowedHosts: string[]`.
-const previewAllowedHosts: string[] = [...PREVIEW_ALLOWED_HOSTS];
-// Local `npm run dev` (port 8080 contract). Browsers may send Origin as any of
-// these for the same server — trusting only `localhost` rejects `127.0.0.1` and
-// breaks email/password with "Invalid origin".
-const LOCAL_DEV_ORIGINS: string[] = [
-  "http://localhost:8080",
-  "http://127.0.0.1:8080",
-  "http://[::1]:8080",
-];
-const VERCEL_HOSTS: string[] = ["*.vercel.app"];
-const VERCEL_ORIGINS: string[] = ["https://*.vercel.app"];
-const PRODUCTION_HOSTS: string[] = ["cifra.lol", "www.cifra.lol"];
-const PRODUCTION_ORIGINS: string[] = ["https://cifra.lol", "https://www.cifra.lol"];
+// Who may call the auth API, and which hosts the dynamic base URL may come
+// from. Only cifra.lol + this deployment's own Vercel URLs (+ local dev and the
+// sandbox preview outside production). See `./origins`.
+const origins = authOrigins(process.env);
 const baseURL = explicitBaseURL ?? {
-  // Include loopback hosts so dynamic baseURL resolves for local email/password
-  // (not only the preview wildcard). Vercel production/preview hosts too.
-  allowedHosts: [
-    ...previewAllowedHosts,
-    ...VERCEL_HOSTS,
-    ...PRODUCTION_HOSTS,
-    "localhost",
-    "127.0.0.1",
-    "[::1]",
-  ],
-  // `auto` → trust both http:// and https:// expansions of allowedHosts
-  // (preview is https; local dev is http).
+  allowedHosts: origins.allowedHosts,
   protocol: "auto" as const,
   fallback: "http://localhost:8080",
 };
-
-// Origins Better Auth accepts on credentialed POSTs (sign-up/sign-in, etc.).
-// Missing entries here surface as FORBIDDEN "Invalid origin".
-const trustedOrigins: string[] = [
-  ...(explicitBaseURL ? [explicitBaseURL] : []),
-  ...PRODUCTION_ORIGINS,
-  ...VERCEL_HOSTS,
-  ...VERCEL_ORIGINS,
-  ...previewAllowedHosts,
-  ...previewAllowedHosts.flatMap((host) => [`https://${host}`, `http://${host}`]),
-  ...LOCAL_DEV_ORIGINS,
-];
+const trustedOrigins: string[] = origins.trustedOrigins;
 
 const databaseUrl = env("DATABASE_URL");
 
@@ -146,6 +115,25 @@ export const auth = betterAuth({
   // flicker-prevention guidance (gate on `isPending`; SSR the session).
   session: { cookieCache: { enabled: true, maxAge: 300 } },
 
+  // Limit of attempts, stored in Postgres (table "rateLimit", migration 0009)
+  // so every Vercel instance shares the same counters. On by default in
+  // production; `AUTH_RATE_LIMIT=1` turns it on locally to try it.
+  rateLimit: {
+    enabled: process.env.NODE_ENV === "production" || env("AUTH_RATE_LIMIT") === "1",
+    storage: "database",
+    window: 60,
+    max: 100,
+    customRules: {
+      "/sign-in/email": { window: 60, max: 5 },
+      "/sign-up/email": { window: 600, max: 5 },
+      "/request-password-reset": { window: 600, max: 3 },
+      "/reset-password": { window: 600, max: 5 },
+      "/send-verification-email": { window: 600, max: 3 },
+      // Read-only and called on every screen; not worth a DB write each time.
+      "/get-session": false,
+    },
+  },
+
   // Local email/password + verification / reset mail (see `./email-password`).
   ...(emailAndPasswordEnabled
     ? { emailAndPassword: emailPasswordOptions, emailVerification: emailVerificationOptions }
@@ -159,6 +147,8 @@ export const auth = betterAuth({
   // Secure + the names ourselves. (Browsers allow Secure cookies on
   // `http://localhost`, so local dev still works.)
   advanced: {
+    // Vercel sets these to the real client IP; the rate limit keys on it.
+    ipAddress: { ipAddressHeaders: ["x-vercel-forwarded-for", "x-forwarded-for", "x-real-ip"] },
     useSecureCookies: false,
     defaultCookieAttributes: { secure: true, sameSite: "lax", path: "/" },
     cookies: {

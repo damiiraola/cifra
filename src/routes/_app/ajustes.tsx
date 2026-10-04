@@ -1,18 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
+import { userMessage } from "@/lib/user-error";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Eye, EyeOff, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { BUILTIN_IDS, DEFAULT_BUDGETS } from "@/lib/categories";
 import { computeMonth } from "@/lib/analytics";
 import { effectiveCategoryBudget } from "@/lib/budget-math";
-import { moneyARS, parseAmount } from "@/lib/format";
+import { moneyARS, parseAmount, amountInput } from "@/lib/format";
 import { formatRate, USD_SOURCES } from "@/lib/fx";
 import { CatIcon } from "@/lib/icons";
 import { isArgentineWeekday, quotesAgeLabel } from "@/lib/market-hours";
-import { autoBackupHint, clearLocalVault, downloadLocalVault, shareVaultToIcloud } from "@/lib/local-vault";
+import { autoBackupHint, downloadLocalVault, shareVaultToIcloud } from "@/lib/local-vault";
 import { deleteAccount } from "@/lib/ledger-api";
-import { useAllCategories, useBookAccounts, useBookTxs, useLedger } from "@/lib/store";
+import { forgetLocalLedger, useAllCategories, useBookAccounts, useBookTxs, useLedger } from "@/lib/store";
 import { signOut } from "@/lib/auth/client";
+import { signOutAndForget } from "@/lib/sign-out";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -74,7 +76,7 @@ function Ajustes() {
   } = useLedger();
   const hidden = useMemo(() => new Set(hiddenCategoryIds), [hiddenCategoryIds]);
   const book = books.find((b) => b.id === activeBookId);
-  const [budget, setBudgetInput] = useState(String(globalBudget || ""));
+  const [budget, setBudgetInput] = useState(amountInput(globalBudget));
   const [newName, setNewName] = useState("");
   const [newKind, setNewKind] = useState<CategoryKind>("expense");
   const [confirmWipe, setConfirmWipe] = useState(false);
@@ -119,10 +121,14 @@ function Ajustes() {
             disabled={signingOut}
             onClick={() => {
               setSigningOut(true);
-              void signOut("/login").catch(() => {
-                setSigningOut(false);
-                toast.error("No pude cerrar sesión. Reintentá.");
-              });
+              void signOutAndForget("/login")
+                .then((done) => {
+                  if (!done) setSigningOut(false);
+                })
+                .catch(() => {
+                  setSigningOut(false);
+                  toast.error("No pude cerrar sesión. Reintentá.");
+                });
             }}
           >
             {signingOut ? "Cerrando…" : "Cerrar sesión"}
@@ -164,7 +170,7 @@ function Ajustes() {
               setDeleting(true);
               void deleteAccount({ data: { email: deleteEmail.trim() } })
                 .then(async () => {
-                  clearLocalVault();
+                  forgetLocalLedger();
                   resetClient();
                   try {
                     await signOut("/login");
@@ -174,7 +180,7 @@ function Ajustes() {
                 })
                 .catch((err) => {
                   setDeleting(false);
-                  toast.error(err instanceof Error ? err.message : "No pude borrar la cuenta");
+                  toast.error(userMessage(err, "No pude borrar la cuenta. Probá de nuevo en un rato."));
                 });
             }}
           >
@@ -240,7 +246,7 @@ function Ajustes() {
               </span>
               <Input
                 inputMode="decimal"
-                defaultValue={a.opening ? String(a.opening) : ""}
+                defaultValue={amountInput(a.opening)}
                 placeholder="0"
                 onBlur={(e) => setAccountOpening(a.id, parseAmount(e.target.value) ?? 0)}
               />
@@ -345,7 +351,7 @@ function Ajustes() {
               toast.success("Copié el link con monto");
             }}
           >
-            Copiar link: guardar directo
+            Copiar link: con monto
           </Button>
         </div>
         <ol className="mt-4 list-decimal space-y-2 pl-4 text-sm text-muted">
@@ -360,7 +366,8 @@ function Ajustes() {
           <li>
             Otro atajo “Anotar gasto”: Pedir entrada (Número, “¿Cuánto?”) → Abrir URL
             <span className="text-fg"> {origin}/?tipo=gasto&guardar=1&monto=</span>
-            y concatená la respuesta. Agregar a Siri: “anotar gasto”.
+            y concatená la respuesta. Agregar a Siri: “anotar gasto”. Cifra abre el formulario
+            ya cargado y vos tocás Guardar (por seguridad, un link nunca guarda solo).
           </li>
           <li>
             Opcional: agregá <span className="text-fg">&libro=negocio&caja=usdt&nota=</span> y otra pregunta para la nota.
@@ -497,7 +504,7 @@ function CatGroup({
                 <Input
                   key={`${c.id}-${tope}`}
                   inputMode="decimal"
-                  defaultValue={tope ? String(tope) : ""}
+                  defaultValue={amountInput(tope)}
                   placeholder="Tope"
                   aria-label={`Tope de ${c.name}`}
                   onBlur={(e) => {
