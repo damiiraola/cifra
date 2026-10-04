@@ -13,7 +13,15 @@ export function aiDailyLimit(raw: string | undefined): number {
 export function aiLimitMessage(limit: number): string {
   return limit === 0
     ? "El asistente está pausado por ahora."
-    : `Llegaste al límite de ${limit} preguntas por hoy. Mañana se renueva.`;
+    : `Llegaste al límite de ${limit} usos del asistente por hoy (cada pregunta usa 1 y cada resumen en PDF, 6). Mañana se renueva.`;
+}
+
+/** Why a statement PDF cannot be read today (6 units of the daily cap, max 3 PDFs). */
+export function pdfLimitMessage(o: { limit: number; used: number; pdfs: number; units: number }): string {
+  if (o.limit === 0) return aiLimitMessage(0);
+  if (o.pdfs >= 3) return "Ya leíste 3 resúmenes hoy. Mañana podés seguir.";
+  const left = Math.max(0, o.limit - o.used);
+  return `Leer un resumen usa ${o.units} de tus ${o.limit} usos diarios del asistente y hoy te ${left === 1 ? "queda 1" : `quedan ${left}`}. Mañana se renueva.`;
 }
 
 /** Calendar day in Buenos Aires (the cap resets at local midnight). */

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { aiDailyLimit, aiLimitMessage, aiUsageDay, cleanAskInput, DEFAULT_AI_DAILY_LIMIT } from "./ai-limit.ts";
+import { aiDailyLimit, aiLimitMessage, aiUsageDay, cleanAskInput, DEFAULT_AI_DAILY_LIMIT, pdfLimitMessage } from "./ai-limit.ts";
 
 test("daily limit parsing", () => {
   assert.equal(aiDailyLimit(undefined), DEFAULT_AI_DAILY_LIMIT);
@@ -8,7 +8,7 @@ test("daily limit parsing", () => {
   assert.equal(aiDailyLimit("50"), 50);
   assert.equal(aiDailyLimit("0"), 0);
   assert.equal(aiDailyLimit("-3"), DEFAULT_AI_DAILY_LIMIT);
-  assert.match(aiLimitMessage(30), /30 preguntas por hoy/);
+  assert.match(aiLimitMessage(30), /30 usos del asistente por hoy/);
 });
 
 test("usage day follows Buenos Aires midnight", () => {
@@ -31,4 +31,11 @@ test("cleanAskInput rejects unknown modes and trims everything", () => {
   assert.equal(out.snapshot, "");
   assert.deepEqual(out.history, [{ role: "user", content: "hola" }]);
   assert.equal(out.categories.length, 1);
+});
+
+test("statement PDF limit messages", () => {
+  assert.match(pdfLimitMessage({ limit: 30, used: 26, pdfs: 1, units: 6 }), /usa 6 de tus 30 .* quedan 4/);
+  assert.match(pdfLimitMessage({ limit: 30, used: 29, pdfs: 0, units: 6 }), /queda 1\./);
+  assert.match(pdfLimitMessage({ limit: 30, used: 6, pdfs: 3, units: 6 }), /Ya leíste 3 resúmenes/);
+  assert.equal(pdfLimitMessage({ limit: 0, used: 0, pdfs: 0, units: 6 }), aiLimitMessage(0));
 });

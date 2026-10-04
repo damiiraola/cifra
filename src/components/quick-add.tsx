@@ -6,11 +6,11 @@ import { Link } from "@tanstack/react-router";
 import { accountLabel, inferAccount, stampRate } from "@/lib/books";
 import {
   cardForAccount,
-  dueDate as cardDueDate,
-  closingDate,
+  closingOf,
+  dueOf,
   financingCost,
   installmentAmounts,
-  periodFor,
+  periodForCard,
 } from "@/lib/card-math";
 import { CatIcon } from "@/lib/icons";
 import { PAY_METHODS, type Currency, type PayMethod, type TxType } from "@/lib/types";
@@ -49,6 +49,7 @@ export function QuickAdd() {
   } = useLedger();
   const accounts = useBookAccounts();
   const cards = useBookCards();
+  const statements = useLedger((s) => s.statements);
   const visible = useVisibleCategories();
   const editing = editingId ? transactions.find((t) => t.id === editingId) : null;
 
@@ -118,7 +119,7 @@ export function QuickAdd() {
   const toAcc = accounts.find((a) => a.id === counterpartyId);
   const liveRate = stampRate(currency, usdRate, usdtRate, customRate ?? undefined);
   const card = type !== "transfer" ? cardForAccount(cards, accountId) : undefined;
-  const cardPeriod = card && date ? periodFor(date, card.closingDay) : "";
+  const cardPeriod = card && date ? periodForCard(date, card, statements) : "";
   // Crédito with a card in the book: the caja picker only shows cards.
   const creditOnly = Boolean(card) && method === "credito";
   const moneyCajas = accounts.filter((a) => a.kind !== "card");
@@ -381,8 +382,8 @@ export function QuickAdd() {
             </select>
             {card ? (
               <p className="mt-1 text-xs text-subtle">
-                Va al resumen que cierra el {dm(closingDate(cardPeriod, card.closingDay))} y vence el{" "}
-                {dm(cardDueDate(cardPeriod, card.closingDay, card.dueDay))}. No baja tu banco hoy.
+                Va al resumen que cierra el {dm(closingOf(card, cardPeriod, statements))} y vence el{" "}
+                {dm(dueOf(card, cardPeriod, statements))}. No baja tu banco hoy.
               </p>
             ) : type !== "transfer" && method === "credito" && cards.length === 0 ? (
               <p className="mt-1 text-xs text-subtle">

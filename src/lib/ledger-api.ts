@@ -9,7 +9,7 @@ import {
   inferAccount,
 } from "@/lib/books";
 import { DEFAULT_USD_RATE, DEFAULT_USDT_RATE, DEFAULT_USD_SOURCE, isUsdSource, type UsdSource } from "@/lib/fx";
-import type { Account, Book, BookKind, Card, CardNetwork, CardPurchase, Category, Currency, PayMethod, Recurring, Transaction, TxType } from "@/lib/types";
+import type { Account, BankStatement, Book, BookKind, Card, CardNetwork, CardPurchase, Category, Currency, PayMethod, Recurring, Transaction, TxType } from "@/lib/types";
 import { cardAccountNames, clampDay, MAX_INSTALLMENTS, validLast4 } from "@/lib/card-math";
 import { uid } from "@/lib/utils";
 import { MAIL, sendMailQuiet } from "@/lib/mail";
@@ -33,6 +33,7 @@ export type LedgerSnapshot = {
   recurrings: Recurring[];
   cards: Card[];
   purchases: CardPurchase[];
+  statements: BankStatement[];
 };
 
 const TYPES = new Set<TxType>(["expense", "income", "transfer"]);
@@ -430,6 +431,7 @@ export const loadLedger = createServerFn({ method: "GET" })
     }));
     const cards = await loadCards(sql, context.userId);
     const purchases = await loadPurchases(sql, context.userId);
+    const statements = await loadStatements(sql, context.userId);
     const money = hydrateBookMoney({
       books: books.books,
       legacyBudgets: settings.budgets,
@@ -447,6 +449,7 @@ export const loadLedger = createServerFn({ method: "GET" })
       recurrings,
       cards,
       purchases,
+      statements,
     };
   });
 
@@ -963,6 +966,125 @@ export const removePurchases = createServerFn({ method: "POST" })
     return { ok: true as const, count: data.length };
   });
 
+// ------------------------------------------------------------ statements
+
+const PERIOD_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+function asStatement(input: BankStatement): BankStatement {
+  if (!input || typeof input.id !== "string" || !input.id || input.id.length > 80) throw new Error("Resumen inválido");
+  if (!input.cardId) throw new Error("Resumen sin tarjeta");
+  if (!PERIOD_RE.test(String(input.period ?? ""))) throw new Error("Período inválido");
+  if (!DAY_RE.test(String(input.closingDate ?? "")) || !DAY_RE.test(String(input.dueDate ?? ""))) {
+    throw new Error("Fechas inválidas");
+  }
+  const opt = (v: unknown) => (DAY_RE.test(String(v ?? "")) ? String(v) : "");
+  const num = (v: unknown) => {
+    const n = Number(v);
+    return Number.isFinite(n) && Math.abs(n) < 1e12 ? Math.round(n * 100) / 100 : 0;
+  };
+  return {
+    id: input.id,
+    bookId: String(input.bookId ?? ""),
+    cardId: String(input.cardId).slice(0, 80),
+    period: input.period,
+    closingDate: input.closingDate,
+    dueDate: input.dueDate,
+    nextClosingDate: opt(input.nextClosingDate),
+    nextDueDate: opt(input.nextDueDate),
+    totalArs: num(input.totalArs),
+    totalUsd: num(input.totalUsd),
+    minimumArs: num(input.minimumArs),
+    chargesArs: num(input.chargesArs),
+    importedAt: "",
+  };
+}
+
+type StatementRow = {
+  id: string;
+  book_id: string;
+  card_id: string;
+  period: string;
+  closing_date: string;
+  due_date: string;
+  next_closing_date: string | null;
+  next_due_date: string | null;
+  bank_total_ars: number;
+  bank_total_usd: number;
+  bank_minimum_ars: number;
+  charges_ars: number;
+  updated_at: string;
+};
+
+function rowToStatement(r: StatementRow): BankStatement {
+  return {
+    id: r.id,
+    bookId: r.book_id,
+    cardId: r.card_id,
+    period: r.period,
+    closingDate: String(r.closing_date).slice(0, 10),
+    dueDate: String(r.due_date).slice(0, 10),
+    nextClosingDate: r.next_closing_date ? String(r.next_closing_date).slice(0, 10) : "",
+    nextDueDate: r.next_due_date ? String(r.next_due_date).slice(0, 10) : "",
+    totalArs: Number(r.bank_total_ars) || 0,
+    totalUsd: Number(r.bank_total_usd) || 0,
+    minimumArs: Number(r.bank_minimum_ars) || 0,
+    chargesArs: Number(r.charges_ars) || 0,
+    importedAt: String(r.updated_at ?? ""),
+  };
+}
+
+async function loadStatements(sql: Awaited<ReturnType<typeof getSql>>, userId: string): Promise<BankStatement[]> {
+  const rows = await sql<StatementRow>`
+    select id, book_id, card_id, period, closing_date::text as closing_date, due_date::text as due_date,
+           next_closing_date::text as next_closing_date, next_due_date::text as next_due_date, bank_total_ars,
+           bank_total_usd, bank_minimum_ars, charges_ars, updated_at::text as updated_at
+    from ledger_card_statements
+    where user_id = ${userId}
+    order by period desc
+  `;
+  return rows.map(rowToStatement);
+}
+
+/**
+ * Save what the bank printed on a statement (one per card and period: a new
+ * import of the same month replaces it). The card must be the user's.
+ */
+export const saveStatement = createServerFn({ method: "POST" })
+  .validator((input: BankStatement) => asStatement(input))
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }): Promise<BankStatement> => {
+    const sql = await getSql();
+    const card = await sql<{ book_id: string }>`
+      select book_id from ledger_cards where id = ${data.cardId} and user_id = ${context.userId} limit 1
+    `;
+    if (!card[0]) throw new Error("Tarjeta inválida");
+    const rows = await sql<StatementRow>`
+      insert into ledger_card_statements (
+        id, user_id, book_id, card_id, period, closing_date, due_date, next_closing_date, next_due_date,
+        bank_total_ars, bank_total_usd, bank_minimum_ars, charges_ars
+      ) values (
+        ${data.id}, ${context.userId}, ${card[0].book_id}, ${data.cardId}, ${data.period}, ${data.closingDate},
+        ${data.dueDate}, ${data.nextClosingDate || null}, ${data.nextDueDate || null}, ${data.totalArs},
+        ${data.totalUsd}, ${data.minimumArs}, ${data.chargesArs}
+      )
+      on conflict (user_id, card_id, period) do update set
+        closing_date = excluded.closing_date,
+        due_date = excluded.due_date,
+        next_closing_date = excluded.next_closing_date,
+        next_due_date = excluded.next_due_date,
+        bank_total_ars = excluded.bank_total_ars,
+        bank_total_usd = excluded.bank_total_usd,
+        bank_minimum_ars = excluded.bank_minimum_ars,
+        charges_ars = excluded.charges_ars,
+        updated_at = now()
+      returning id, book_id, card_id, period, closing_date::text as closing_date, due_date::text as due_date,
+        next_closing_date::text as next_closing_date, next_due_date::text as next_due_date, bank_total_ars,
+        bank_total_usd, bank_minimum_ars, charges_ars, updated_at::text as updated_at
+    `;
+    if (!rows[0]) throw new Error("No pude guardar el resumen");
+    return rowToStatement(rows[0]);
+  });
+
 export const saveDailyBackup = createServerFn({ method: "POST" })
   .validator((input: { day: string; payloadJson: string }) => {
     if (!DAY_RE.test(input?.day ?? "")) throw new Error("Día inválido");
@@ -1029,6 +1151,7 @@ export const deleteAccount = createServerFn({ method: "POST" })
       await tx`delete from ledger_recurring where user_id = ${context.userId}`;
       await tx`delete from ledger_cards where user_id = ${context.userId}`;
       await tx`delete from ledger_card_purchases where user_id = ${context.userId}`;
+      await tx`delete from ledger_card_statements where user_id = ${context.userId}`;
       await tx`delete from ledger_accounts where user_id = ${context.userId}`;
       await tx`delete from ledger_books where user_id = ${context.userId}`;
       await tx`delete from ledger_settings where user_id = ${context.userId}`;

@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { CreditCard } from "lucide-react";
+import { CreditCard, FileUp } from "lucide-react";
 import { toast } from "sonner";
 import { accountBalance, accountLabel } from "@/lib/books";
 import {
   cardDebt,
-  dueDate,
+  dueOf,
   lastClosedStatement,
   limitUse,
   openStatement,
@@ -15,11 +15,12 @@ import {
 } from "@/lib/card-math";
 import { money, monthLabel } from "@/lib/format";
 import { argentinaDay } from "@/lib/market-hours";
-import { useBookAccounts, useBookCards, useBookPurchases, useBookTxs, useLedger } from "@/lib/store";
+import { useBookAccounts, useBookCards, useBookPurchases, useBookStatements, useBookTxs, useLedger } from "@/lib/store";
 import { CARD_NETWORKS, type Card } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { PurchaseForm } from "@/components/purchase-form";
+import { StatementImport } from "@/components/statement-import";
 
 export const Route = createFileRoute("/_app/tarjetas")({
   component: Tarjetas,
@@ -36,6 +37,7 @@ function both(ars: number, usd: number) {
 function Tarjetas() {
   const cards = useBookCards();
   const txs = useBookTxs();
+  const statements = useBookStatements();
   const book = useLedger((s) => s.books.find((b) => b.id === s.activeBookId));
   const today = argentinaDay();
 
@@ -47,7 +49,7 @@ function Tarjetas() {
   }, []);
 
   const toPay = cards
-    .map((c) => ({ card: c, st: lastClosedStatement(c, txs, today) }))
+    .map((c) => ({ card: c, st: lastClosedStatement(c, txs, today, statements) }))
     .filter((x) => (x.st.ars > 0 || x.st.usd > 0) && x.st.due >= today);
   const payArs = toPay.reduce((s, x) => s + x.st.ars, 0);
   const payUsd = toPay.reduce((s, x) => s + x.st.usd, 0);
@@ -90,14 +92,17 @@ function CardBlock({ card, today }: { card: Card; today: string }) {
   const recurrings = useLedger((s) => s.recurrings);
   const usdRate = useLedger((s) => s.usdRate);
   const removePurchase = useLedger((s) => s.removePurchase);
+  const statements = useBookStatements();
   const [adding, setAdding] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [editingId, setEditingId] = useState("");
   const [confirmId, setConfirmId] = useState("");
 
-  const open = openStatement(card, txs, today);
-  const closed = lastClosedStatement(card, txs, today);
-  const nextDue = dueDate(shiftPeriod(open.period, 1), card.closingDay, card.dueDay);
-  const upcoming = upcomingStatements(card, txs, recurrings, today, 6);
+  const open = openStatement(card, txs, today, statements);
+  const closed = lastClosedStatement(card, txs, today, statements);
+  const bank = statements.find((s) => s.cardId === card.id && s.period === closed.period);
+  const nextDue = dueOf(card, shiftPeriod(open.period, 1), statements);
+  const upcoming = upcomingStatements(card, txs, recurrings, today, 6, statements);
   const max = Math.max(1, ...upcoming.map((u) => u.ars + u.usd * usdRate));
   const ars = accounts.find((a) => a.id === card.accountArsId);
   const usd = accounts.find((a) => a.id === card.accountUsdId);
@@ -130,6 +135,12 @@ function CardBlock({ card, today }: { card: Card; today: string }) {
             Resumen cerrado · {closed.due >= today ? `vence ${dm(closed.due)}` : `venció ${dm(closed.due)}`}
           </p>
           <p className="mt-1 font-display text-3xl tabular-nums">{both(closed.ars, closed.usd)}</p>
+          {bank ? (
+            <p className="mt-1 text-xs text-muted tabular-nums">
+              Según el banco: {both(bank.totalArs, bank.totalUsd)}
+              {bank.minimumArs ? ` · mínimo ${money(bank.minimumArs, "ARS")}` : ""}
+            </p>
+          ) : null}
           <p className="mt-1 text-xs text-subtle">
             {closed.ars > 0 || closed.usd > 0
               ? `Pagalo con un Cambio ${payFrom ? `desde ${accountLabel(payFrom)} ` : ""}a la tarjeta. No cuenta como gasto.`
@@ -259,17 +270,32 @@ function CardBlock({ card, today }: { card: Card; today: string }) {
         </ul>
         {adding ? (
           <PurchaseForm card={card} onDone={() => setAdding(false)} />
+        ) : importing ? (
+          <StatementImport card={card} onClose={() => setImporting(false)} />
         ) : (
-          <Button
-            variant="secondary"
-            className="mt-3 w-full sm:w-auto"
-            onClick={() => {
-              setEditingId("");
-              setAdding(true);
-            }}
-          >
-            Cargar compra en cuotas
-          </Button>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              className="flex-1 sm:flex-none"
+              onClick={() => {
+                setEditingId("");
+                setAdding(true);
+              }}
+            >
+              Cargar compra en cuotas
+            </Button>
+            <Button
+              variant="secondary"
+              className="flex-1 sm:flex-none"
+              onClick={() => {
+                setEditingId("");
+                setImporting(true);
+              }}
+            >
+              <FileUp aria-hidden />
+              Importar resumen PDF
+            </Button>
+          </div>
         )}
       </div>
     </section>

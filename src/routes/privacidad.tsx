@@ -72,7 +72,9 @@ function Privacidad() {
             Tus movimientos, fijos, cajas, tarjetas, presupuestos, categorías y cotizaciones, para mostrarte tu libro. De
             una tarjeta guardamos el nombre que le pongas, la red, el banco, los días de cierre y vencimiento, el límite y,
             si querés, los últimos 4 números; nunca el número completo, el vencimiento del plástico ni el código. De una compra en
-            cuotas, qué compraste, el monto, la cantidad de cuotas y si tiene interés. La sesión,
+            cuotas, qué compraste, el monto, la cantidad de cuotas y si tiene interés. De un resumen de tarjeta que
+            importes, las fechas de cierre y vencimiento, los totales, el pago mínimo y los cargos del banco; nunca el PDF.
+            La sesión,
             para no pedirte la clave cada vez. Datos técnicos mínimos (fecha de inicio de sesión, dirección IP y
             navegador) por seguridad y para frenar abusos.
           </p>
@@ -98,8 +100,10 @@ function Privacidad() {
             </li>
             <li>
               <span className="text-fg">Vercel AI Gateway</span>, y a través de él {aiModel}: solo si usás el
-              asistente. Recibe un resumen del mes (totales, categorías, fijos y presupuestos) y lo que le escribís. No
-              le mandamos tu mail, tu nombre ni la lista de movimientos. Le pedimos que solo use proveedores que no
+              asistente o importás un resumen de tarjeta. Con el asistente recibe un resumen del mes (totales,
+              categorías, fijos y presupuestos) y lo que le escribís, no la lista de tus movimientos. Con un resumen de
+              tarjeta recibe solo las líneas de consumos y los totales de ese resumen, sin tu nombre, domicilio, CUIT,
+              mail ni número de tarjeta. Nunca le mandamos tu mail. Le pedimos que solo use proveedores que no
               entrenan sus modelos con lo que mandás, y el Gateway no guarda las preguntas.
             </li>
             {ai.groq ? (
@@ -116,6 +120,19 @@ function Privacidad() {
           <p>
             Estos servidores pueden estar fuera de Argentina (por ejemplo, en Estados Unidos). Las cotizaciones vienen
             de DolarApi, que no recibe ningún dato tuyo.
+          </p>
+        </Section>
+
+        <Section title="Resúmenes de tarjeta en PDF">
+          <p>
+            Si importás el resumen de tu tarjeta, el PDF viaja cifrado a nuestro servidor, se lee en memoria durante ese
+            pedido y se descarta apenas termina (en menos de un minuto). No lo guardamos en la base, en archivos ni en
+            registros, y tampoco la clave del PDF si tiene. Antes de mandar el texto a la IA le sacamos tu nombre,
+            domicilio, CUIT o DNI, mail y número de tarjeta, y dejamos solo los consumos y los totales.
+          </p>
+          <p>
+            Lo que lee la IA vuelve a tu pantalla para que lo revises. Solo se guarda lo que aprobás: los movimientos
+            que elegís cargar y los datos del resumen (cierre, vencimiento, totales, pago mínimo y cargos).
           </p>
         </Section>
 
