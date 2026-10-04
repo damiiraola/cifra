@@ -15,7 +15,7 @@ export function AuthScreen({
         {kicker ? <p className="mt-2 text-sm text-muted">{kicker}</p> : null}
         {children}
         <p className="mt-8 text-center text-xs text-subtle">
-          <Link to="/privacidad" className="underline-offset-4 hover:text-muted hover:underline">
+          <Link to="/privacidad" className="-my-3.5 inline-block py-3.5 underline-offset-4 hover:text-muted hover:underline">
             Privacidad
           </Link>
           : qué se guarda y cómo se borra.

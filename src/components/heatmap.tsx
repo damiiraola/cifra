@@ -1,6 +1,6 @@
 import { useRef, type PointerEvent } from "react";
 import { heatmapIntensity, heatmapMax } from "@/lib/analytics";
-import { moneyARS } from "@/lib/format";
+import { dayLabel, moneyARS } from "@/lib/format";
 import { cn, monthISO, todayISO } from "@/lib/utils";
 
 const HEAD = ["L", "M", "M", "J", "V", "S", "D"];
@@ -104,7 +104,7 @@ export function Heatmap({
       onPointerUp={onPointerUp}
       onPointerCancel={clearLong}
     >
-      <div className="mb-2 grid grid-cols-7 gap-1 text-center text-[11px] font-medium text-subtle">
+      <div aria-hidden className="mb-2 grid grid-cols-7 gap-1 text-center text-[11px] font-medium text-subtle">
         {HEAD.map((h, i) => (
           <span key={`${h}-${i}`}>{h}</span>
         ))}
@@ -125,8 +125,10 @@ export function Heatmap({
               disabled={future}
               aria-label={
                 future
-                  ? `${d.date}, futuro`
-                  : `${d.date}, ${moneyARS(d.spent)}${d.count ? `, ${d.count} movimientos` : ""}`
+                  ? `${dayLabel(d.date, "EEEE d 'de' MMMM")}, todavía no llegó`
+                  : `${dayLabel(d.date, "EEEE d 'de' MMMM")}${isToday ? " (hoy)" : ""}: gastaste ${moneyARS(d.spent)}${
+                      d.count ? `, ${d.count === 1 ? "1 movimiento" : `${d.count} movimientos`}` : ", sin movimientos"
+                    }`
               }
               aria-pressed={on}
               onPointerDown={() => pressDay(d.date, future)}

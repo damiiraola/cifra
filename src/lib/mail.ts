@@ -570,7 +570,34 @@ export function renderMailText(content: MailContent): string {
   return lines.join("\n");
 }
 
+/**
+ * Send one mail and record the outcome: failures go to the log (and Sentry if
+ * SENTRY_DSN is set) and feed the "mails are down" notice. The address is
+ * never logged; only the subject.
+ */
 export async function sendCifraMail(input: SendInput, opts?: { from?: string }): Promise<SendResult> {
+  let result: SendResult;
+  try {
+    result = await deliverMail(input, opts);
+  } catch (err) {
+    await track(false, input.subject, err instanceof Error ? err.message : "Mail falló");
+    throw err;
+  }
+  await track(result.ok, input.subject, result.ok ? "" : result.error);
+  return result;
+}
+
+async function track(ok: boolean, kind: string, error: string) {
+  if (typeof window !== "undefined") return;
+  try {
+    const { trackMailResult } = await import("@/lib/mail-health.server");
+    await trackMailResult(ok, kind, error);
+  } catch {
+    /* no DB in unit tests; tracking is best effort */
+  }
+}
+
+async function deliverMail(input: SendInput, opts?: { from?: string }): Promise<SendResult> {
   const apiKey = process.env.RESEND_API_KEY?.trim();
   if (!apiKey) {
     return {
@@ -620,13 +647,10 @@ export async function sendTemplatePreviews(to: string): Promise<SendResult> {
     { to, ...MAIL.deleted },
     { to, url: origin, ...MAIL.welcome, body: `${greeting(name)} ${MAIL.welcome.body}` },
   ];
-  let from: string | undefined;
+  // Always from the configured MAIL_FROM. (It used to retry from a
+  // placeholder example.com address when the domain was not verified.)
   for (const job of jobs) {
-    let result = await sendCifraMail(job, from ? { from } : undefined);
-    if (!result.ok && /not verified|domain/i.test(result.error)) {
-      from = "Cifra <beth.t@example.com>";
-      result = await sendCifraMail(job, { from });
-    }
+    const result = await sendCifraMail(job);
     if (!result.ok) return result;
   }
   return { ok: true };

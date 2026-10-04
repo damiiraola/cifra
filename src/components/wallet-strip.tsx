@@ -18,7 +18,7 @@ export function WalletStrip() {
             key={a.id}
             type="button"
             onClick={() => openQuick({ type: "expense", accountId: a.id, currency: a.currency })}
-            className="min-w-fit shrink-0 rounded-full bg-elevated px-3 py-2 text-left"
+            className="min-h-11 min-w-fit shrink-0 rounded-full bg-elevated px-3.5 py-2 text-left"
           >
             <span className="text-[11px] text-muted">{a.name}</span>
             <span className="ml-2 text-sm font-medium tabular-nums text-fg">{money(bal, a.currency, true)}</span>

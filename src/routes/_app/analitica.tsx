@@ -175,7 +175,7 @@ function Analitica() {
       <section>
         <div className="mb-3 flex items-baseline justify-between">
           <h2 className="text-sm font-medium">Categorías</h2>
-          <Link to="/presupuestos" className="text-xs text-muted hover:text-fg">
+          <Link to="/presupuestos" className="-my-3 inline-flex min-h-11 items-center px-1 text-xs text-muted hover:text-fg">
             Editar tope
           </Link>
         </div>

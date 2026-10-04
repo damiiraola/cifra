@@ -1,24 +1,27 @@
 import { useEffect, useMemo, useState } from "react";
+import { userMessage } from "@/lib/user-error";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Eye, EyeOff, Trash2 } from "lucide-react";
+import { ChevronDown, Eye, EyeOff, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { BUILTIN_IDS, DEFAULT_BUDGETS } from "@/lib/categories";
 import { computeMonth } from "@/lib/analytics";
 import { effectiveCategoryBudget } from "@/lib/budget-math";
-import { moneyARS, parseAmount } from "@/lib/format";
+import { moneyARS, parseAmount, amountInput } from "@/lib/format";
 import { formatRate, USD_SOURCES } from "@/lib/fx";
 import { CatIcon } from "@/lib/icons";
 import { isArgentineWeekday, quotesAgeLabel } from "@/lib/market-hours";
-import { autoBackupHint, clearLocalVault, downloadLocalVault, shareVaultToIcloud } from "@/lib/local-vault";
+import { autoBackupHint, downloadLocalVault, shareVaultToIcloud } from "@/lib/local-vault";
 import { deleteAccount } from "@/lib/ledger-api";
-import { useAllCategories, useBookAccounts, useBookTxs, useLedger } from "@/lib/store";
+import { forgetLocalLedger, useAllCategories, useBookAccounts, useBookTxs, useLedger } from "@/lib/store";
 import { signOut } from "@/lib/auth/client";
+import { signOutAndForget } from "@/lib/sign-out";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import type { Category, CategoryKind, Transaction } from "@/lib/types";
+import type { ReactNode } from "react";
 
 export const Route = createFileRoute("/_app/ajustes")({
   component: Ajustes,
@@ -74,7 +77,7 @@ function Ajustes() {
   } = useLedger();
   const hidden = useMemo(() => new Set(hiddenCategoryIds), [hiddenCategoryIds]);
   const book = books.find((b) => b.id === activeBookId);
-  const [budget, setBudgetInput] = useState(String(globalBudget || ""));
+  const [budget, setBudgetInput] = useState(amountInput(globalBudget));
   const [newName, setNewName] = useState("");
   const [newKind, setNewKind] = useState<CategoryKind>("expense");
   const [confirmWipe, setConfirmWipe] = useState(false);
@@ -106,8 +109,7 @@ function Ajustes() {
         </p>
       </div>
 
-      <section className="rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
-        <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Cuenta</p>
+      <Section title="Cuenta" defaultOpen>
         <div className="mt-3">
           <p className="text-sm">{user?.displayName || "Cifra"}</p>
           <p className="text-xs text-muted">{user?.primaryEmail}</p>
@@ -119,10 +121,14 @@ function Ajustes() {
             disabled={signingOut}
             onClick={() => {
               setSigningOut(true);
-              void signOut("/login").catch(() => {
-                setSigningOut(false);
-                toast.error("No pude cerrar sesión. Reintentá.");
-              });
+              void signOutAndForget("/login")
+                .then((done) => {
+                  if (!done) setSigningOut(false);
+                })
+                .catch(() => {
+                  setSigningOut(false);
+                  toast.error("No pude cerrar sesión. Reintentá.");
+                });
             }}
           >
             {signingOut ? "Cerrando…" : "Cerrar sesión"}
@@ -138,6 +144,7 @@ function Ajustes() {
             vuelta atrás.
           </p>
           <Input
+            aria-label="Escribí tu mail para confirmar"
             id="delete-email"
             type="email"
             autoComplete="off"
@@ -164,7 +171,7 @@ function Ajustes() {
               setDeleting(true);
               void deleteAccount({ data: { email: deleteEmail.trim() } })
                 .then(async () => {
-                  clearLocalVault();
+                  forgetLocalLedger();
                   resetClient();
                   try {
                     await signOut("/login");
@@ -174,20 +181,19 @@ function Ajustes() {
                 })
                 .catch((err) => {
                   setDeleting(false);
-                  toast.error(err instanceof Error ? err.message : "No pude borrar la cuenta");
+                  toast.error(userMessage(err, "No pude borrar la cuenta. Probá de nuevo en un rato."));
                 });
             }}
           >
             {deleting ? "Borrando…" : confirmDelete ? "¿Seguro? Borrar cuenta para siempre" : "Borrar cuenta"}
           </Button>
         </div>
-      </section>
+      </Section>
 
-      <section className="rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
+      <Section title="Cotizaciones" hint="Dólar y USDT del día">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Cotizaciones</p>
-            <p className="mt-1 text-xs text-subtle">
+            <p className="text-xs text-subtle">
               {live
                 ? `Hábil: se actualizan solas cada 10 min · ${quotesAgeLabel(quotesAt)}`
                 : `Fin de semana: queda la última · ${quotesAgeLabel(quotesAt)}`}
@@ -227,11 +233,10 @@ function Ajustes() {
           })}
         </div>
         <p className="mt-3 text-xs tabular-nums text-subtle">USDT ${formatRate(usdtRate)}</p>
-      </section>
+      </Section>
 
-      <section className="rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
-        <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Cajas · {book?.name}</p>
-        <p className="mt-1 text-xs text-subtle">Saldo inicial. El de hoy se calcula encima de los movimientos.</p>
+      <Section title={`Cajas · ${book?.name ?? ""}`} hint="Saldo inicial de cada caja">
+        <p className="text-xs text-subtle">Saldo inicial. El de hoy se calcula encima de los movimientos.</p>
         <div className="mt-4 grid gap-2">
           {accounts.map((a) => (
             <div key={a.id} className="grid grid-cols-[1fr_7rem] items-center gap-2">
@@ -239,18 +244,18 @@ function Ajustes() {
                 {a.name} · {a.currency}
               </span>
               <Input
+                aria-label={`Saldo inicial de ${a.name} (${a.currency})`}
                 inputMode="decimal"
-                defaultValue={a.opening ? String(a.opening) : ""}
+                defaultValue={amountInput(a.opening)}
                 placeholder="0"
                 onBlur={(e) => setAccountOpening(a.id, parseAmount(e.target.value) ?? 0)}
               />
             </div>
           ))}
         </div>
-      </section>
+      </Section>
 
-      <section className="rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
-        <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Categorías</p>
+      <Section title="Categorías" hint="Nombres, visibilidad y topes">
         <p className="mt-1 text-xs text-subtle">
           Nombre, visibilidad y tope. Si no escribís tope, se usa el gasto de este mes. Oculta no sale en Nuevo.
         </p>
@@ -305,6 +310,7 @@ function Ajustes() {
           }}
         >
           <Input
+            aria-label="Nombre de la nueva categoría"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             placeholder="Nueva categoría"
@@ -312,6 +318,7 @@ function Ajustes() {
             required
           />
           <select
+            aria-label="Tipo de la nueva categoría"
             value={newKind}
             onChange={(e) => setNewKind(e.target.value as CategoryKind)}
             className="h-11 rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)]"
@@ -321,10 +328,9 @@ function Ajustes() {
           </select>
           <Button type="submit">Agregar</Button>
         </form>
-      </section>
+      </Section>
 
-      <section className="rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
-        <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Atajos de iPhone</p>
+      <Section title="Atajos de iPhone" hint="Cargar desde Siri o un atajo">
         <p className="mt-1 text-xs text-subtle">
           Apple Atajos abre Cifra con un link. Tenés que estar logueado. La sesión de Safari vale.
         </p>
@@ -345,7 +351,7 @@ function Ajustes() {
               toast.success("Copié el link con monto");
             }}
           >
-            Copiar link: guardar directo
+            Copiar link: con monto
           </Button>
         </div>
         <ol className="mt-4 list-decimal space-y-2 pl-4 text-sm text-muted">
@@ -360,7 +366,8 @@ function Ajustes() {
           <li>
             Otro atajo “Anotar gasto”: Pedir entrada (Número, “¿Cuánto?”) → Abrir URL
             <span className="text-fg"> {origin}/?tipo=gasto&guardar=1&monto=</span>
-            y concatená la respuesta. Agregar a Siri: “anotar gasto”.
+            y concatená la respuesta. Agregar a Siri: “anotar gasto”. Cifra abre el formulario
+            ya cargado y vos tocás Guardar (por seguridad, un link nunca guarda solo).
           </li>
           <li>
             Opcional: agregá <span className="text-fg">&libro=negocio&caja=usdt&nota=</span> y otra pregunta para la nota.
@@ -370,10 +377,9 @@ function Ajustes() {
             “Guardar respaldo en iCloud” → Guardar en Archivos → iCloud Drive → carpeta Cifra.
           </li>
         </ol>
-      </section>
+      </Section>
 
-      <section className="rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
-        <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Datos</p>
+      <Section title="Datos" hint="Respaldo, exportar e importar">
         <p className="mt-1 text-xs text-subtle">
           Se respalda solo, todos los días, en tu cuenta. No tenés que tocar nada. Quedan 30 días.
           {auto ? ` Último automático: ${auto.day.slice(8, 10)}/${auto.day.slice(5, 7)}.` : " Hoy se copia al abrir el libro."}
@@ -419,7 +425,7 @@ function Ajustes() {
           </Button>
         </div>
         <p className="mt-4 text-xs text-subtle">Cotizaciones: DolarApi.</p>
-      </section>
+      </Section>
     </div>
   );
 }
@@ -497,7 +503,7 @@ function CatGroup({
                 <Input
                   key={`${c.id}-${tope}`}
                   inputMode="decimal"
-                  defaultValue={tope ? String(tope) : ""}
+                  defaultValue={amountInput(tope)}
                   placeholder="Tope"
                   aria-label={`Tope de ${c.name}`}
                   onBlur={(e) => {
@@ -536,5 +542,34 @@ function CatGroup({
         })}
       </div>
     </div>
+  );
+}
+
+/**
+ * Collapsible block of Ajustes (native <details>, works with keyboard and
+ * screen readers). Only "Cuenta" starts open so the page fits on a phone.
+ */
+function Section({
+  title,
+  hint,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <details open={defaultOpen} className="group rounded-3xl bg-surface shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
+      <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 rounded-3xl px-5 py-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
+        <span className="min-w-0">
+          <span className="block text-[11px] font-medium tracking-wide text-muted uppercase">{title}</span>
+          {hint ? <span className="mt-0.5 block text-xs text-subtle group-open:hidden">{hint}</span> : null}
+        </span>
+        <ChevronDown className="size-4 shrink-0 text-muted transition-transform duration-150 group-open:rotate-180" aria-hidden />
+      </summary>
+      <div className="px-5 pb-5">{children}</div>
+    </details>
   );
 }
