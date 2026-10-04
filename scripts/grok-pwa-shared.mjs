@@ -221,9 +221,14 @@ export function readGrokProjectId() {
   return String(fromProcess ?? "").trim();
 }
 
+/**
+ * The grok.com extensions script is a third-party script with full access to
+ * the page (and so to the user's ledger). Cifra promises "no third-party
+ * tracking", so it is OFF unless `VITE_GROK_EXTENSIONS=1` is set explicitly.
+ */
 export function readGrokExtensionsEnabled() {
   const fromProcess = typeof process !== "undefined" ? process.env?.VITE_GROK_EXTENSIONS : "";
-  return String(fromProcess ?? "").trim() !== "0";
+  return String(fromProcess ?? "").trim() === "1";
 }
 
 export function readXCreator() {

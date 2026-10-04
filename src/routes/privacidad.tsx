@@ -1,60 +1,157 @@
+import type { ReactNode } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 
 export const Route = createFileRoute("/privacidad")({
+  head: () => ({
+    meta: [
+      { title: "Privacidad · Cifra" },
+      { name: "description", content: "Qué datos guarda Cifra, quién los procesa, cuánto tiempo y cómo pedir que se borren." },
+    ],
+  }),
   component: Privacidad,
 });
 
+// TODO(Damián): si Cifra pasa a operar a nombre de una empresa, cambiar el
+// responsable (razón social, CUIT y domicilio). Hoy figura la persona.
+const RESPONSABLE = "Damián Iraola";
+const CONTACTO = "hola@cifra.lol";
+const ACTUALIZADA = "octubre 2026";
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section>
+      <h2 className="text-sm font-medium text-fg">{title}</h2>
+      <div className="mt-1 grid gap-2 text-sm leading-relaxed text-muted">{children}</div>
+    </section>
+  );
+}
+
 function Privacidad() {
   const user = useCurrentUser();
+  const mail = (
+    <a href={`mailto:${CONTACTO}`} className="text-fg underline underline-offset-4">
+      {CONTACTO}
+    </a>
+  );
   return (
     <main className="mx-auto min-h-dvh w-full max-w-lg px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-16 text-fg">
       <Link
         to={user ? "/ajustes" : "/login"}
-        className="text-xs tracking-wide text-muted uppercase"
+        className="inline-flex min-h-11 items-center text-xs tracking-wide text-muted uppercase"
       >
-        {user ? "Ajustes" : "Cifra"}
+        {user ? "← Ajustes" : "← Cifra"}
       </Link>
-      <h1 className="mt-3 font-display text-4xl tracking-tight">Privacidad</h1>
+      <h1 className="mt-1 font-display text-4xl tracking-tight">Privacidad</h1>
       <p className="mt-2 text-sm text-muted">
-        Beta abierta. Esto es lo que Cifra guarda, dónde y cómo se borra. Sin letra chica.
+        Cifra está en beta. Acá está qué guardamos, quién lo procesa, cuánto tiempo y cómo pedir que lo borremos. Sin
+        letra chica.
       </p>
 
-      <section className="mt-8 grid gap-7 text-sm leading-relaxed">
-        <div>
-          <h2 className="font-medium">Qué se guarda</h2>
-          <p className="mt-1 text-muted">
-            Mail, nombre, movimientos, fijos, cajas, presupuestos, categorías y cotizaciones. La
-            sesión (para no pedirte la clave cada vez). Si usás el asistente, un resumen del mes —
-            no el historial completo.
+      <div className="mt-8 grid gap-7">
+        <Section title="Quién es responsable">
+          <p>
+            {RESPONSABLE} es responsable de los datos que cargás en Cifra. Para cualquier consulta o pedido escribí a{" "}
+            {mail}.
           </p>
-        </div>
-        <div>
-          <h2 className="font-medium">Dónde</h2>
-          <p className="mt-1 text-muted">
-            El libro vive en Neon (Postgres). Los mails de confirmar cuenta y cambiar clave los
-            manda Resend. El asistente consulta a Grok. En este teléfono queda una copia local. Si
-            exportás a iCloud, el JSON sale de Cifra y queda en tus archivos. Un respaldo diario en
-            el servidor dura 30 días, atado a tu mail.
-          </p>
-        </div>
-        <div>
-          <h2 className="font-medium">Qué no hacemos</h2>
-          <p className="mt-1 text-muted">
-            No vendemos datos. No hay publicidad. No hay tracking de terceros. Otro mail es otro
-            libro: no se mezclan.
-          </p>
-        </div>
-        <div>
-          <h2 className="font-medium">Cómo salir</h2>
-          <p className="mt-1 text-muted">
-            En Ajustes podés exportar CSV o JSON, cerrar sesión, o borrar la cuenta. Borrar cuenta
-            elimina movimientos, fijos, cajas, respaldos y el login. No hay vuelta atrás.
-          </p>
-        </div>
-      </section>
+        </Section>
 
-      <p className="mt-10 text-xs text-subtle">Cifra · septiembre 2026</p>
+        <Section title="Qué guardamos y para qué">
+          <p>
+            Tu mail, tu nombre y tu contraseña (guardada cifrada, nunca en texto plano), para que entres a tu cuenta.
+            Tus movimientos, fijos, cajas, presupuestos, categorías y cotizaciones, para mostrarte tu libro. La sesión,
+            para no pedirte la clave cada vez. Datos técnicos mínimos (fecha de inicio de sesión, dirección IP y
+            navegador) por seguridad y para frenar abusos.
+          </p>
+          <p>Los usamos solo para que Cifra funcione. No los usamos para publicidad ni para armar perfiles.</p>
+          <p>
+            Al crear la cuenta aceptás este tratamiento. Podés retirar ese consentimiento cuando quieras borrando la
+            cuenta.
+          </p>
+        </Section>
+
+        <Section title="Quién más los procesa">
+          <p>Usamos estos proveedores, que procesan datos solo para darnos su servicio:</p>
+          <ul className="list-disc pl-5">
+            <li>
+              <span className="text-fg">Vercel</span>: aloja la app y la hace llegar a tu navegador.
+            </li>
+            <li>
+              <span className="text-fg">Neon</span>: la base de datos (Postgres) donde vive tu libro.
+            </li>
+            <li>
+              <span className="text-fg">Resend</span>: manda los mails de confirmar cuenta, cambiar la clave y avisos de
+              la cuenta.
+            </li>
+            <li>
+              <span className="text-fg">xAI (Grok)</span>: solo si usás el asistente. Recibe un resumen del mes (totales,
+              categorías, fijos y presupuestos) y lo que le escribís. No le mandamos tu mail, tu nombre ni la lista de
+              movimientos.
+            </li>
+            <li>
+              <span className="text-fg">Sentry</span>: solo si está activado, recibe datos técnicos cuando algo falla
+              (qué pantalla, qué error). No le mandamos tus montos ni tus movimientos.
+            </li>
+          </ul>
+          <p>
+            Estos servidores pueden estar fuera de Argentina (por ejemplo, en Estados Unidos). Las cotizaciones vienen
+            de DolarApi, que no recibe ningún dato tuyo.
+          </p>
+        </Section>
+
+        <Section title="En tu dispositivo">
+          <p>
+            Cifra guarda una copia de tu libro en este navegador para andar rápido y aguantar cortes de señal. Se borra
+            al cerrar sesión o al borrar la cuenta. Si exportás a iCloud, CSV o JSON, ese archivo queda en tus manos.
+          </p>
+          <p>Solo usamos la cookie de sesión. No hay cookies de publicidad ni rastreadores de terceros.</p>
+        </Section>
+
+        <Section title="Cuánto tiempo">
+          <p>
+            Mientras tengas la cuenta. Hay un respaldo diario de tu libro que dura 30 días. Si borrás la cuenta, se
+            borran tu libro, tus respaldos y tu login en el momento. Los proveedores pueden guardar registros técnicos
+            por un tiempo corto antes de descartarlos.
+          </p>
+        </Section>
+
+        <Section title="Tus derechos (Ley 25.326)">
+          <p>
+            Podés pedir acceso a tus datos, corregirlos, actualizarlos o suprimirlos. Escribí a {mail} desde el mail de
+            tu cuenta. Respondemos el pedido de acceso dentro de los 10 días corridos y los de corrección o supresión
+            dentro de los 5 días hábiles. El acceso es gratis cada seis meses, salvo que acredites un interés legítimo
+            para pedirlo antes.
+          </p>
+          <p>
+            También podés exportar todo desde Ajustes (CSV o JSON) y borrar la cuenta vos mismo, sin pedirle nada a
+            nadie.
+          </p>
+          <p>
+            La Agencia de Acceso a la Información Pública, en su carácter de Órgano de Control de la Ley N° 25.326, tiene
+            la atribución de atender las denuncias y reclamos que interpongan quienes resulten afectados en sus derechos
+            por incumplimiento de las normas vigentes en materia de protección de datos personales.
+          </p>
+        </Section>
+
+        <Section title="Qué no hacemos">
+          <p>No vendemos datos. No hay publicidad. Otro mail es otro libro: no se mezclan.</p>
+        </Section>
+
+        <Section title="Seguridad">
+          <p>
+            Todo viaja cifrado (HTTPS). Cada usuario ve solo su libro. Si pasa algo que afecte tus datos, te avisamos
+            por mail.
+          </p>
+        </Section>
+
+        <Section title="Cambios">
+          <p>Si cambiamos algo importante de esta política, te avisamos por mail antes de que rija.</p>
+        </Section>
+      </div>
+
+      <p className="mt-10 text-xs text-muted">
+        Cifra · {RESPONSABLE} · {CONTACTO} · Actualizada en {ACTUALIZADA}
+      </p>
     </main>
   );
 }
