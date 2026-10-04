@@ -157,7 +157,7 @@ export function Asistente() {
     <div className="grid gap-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Grok</p>
+          <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Asesor Cifra</p>
           <h1 className="font-display text-4xl tracking-tight">Asistente</h1>
         </div>
         <div className="flex gap-2">

@@ -25,7 +25,7 @@ if (shouldRunTestsBeforeBuild(process.env)) {
   // tests check the defaults, and no test should ever reach a real database).
   const testEnv = { ...process.env };
   for (const key of Object.keys(testEnv)) {
-    if (/^(VITE_|DATABASE_URL|POSTGRES_|PG[A-Z]+$|RESEND_|XAI_|SENTRY_|BETTER_AUTH_)/.test(key)) delete testEnv[key];
+    if (/^(VITE_|DATABASE_URL|POSTGRES_|PG[A-Z]+$|RESEND_|XAI_|AI_GATEWAY_|GROQ_|VERCEL_OIDC_|SENTRY_|BETTER_AUTH_)/.test(key)) delete testEnv[key];
   }
   run("npm", ["run", "typecheck"]);
   run("npm", ["test"], testEnv);

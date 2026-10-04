@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
+import { getAiProcessors } from "@/lib/ai-processors";
 
 export const Route = createFileRoute("/privacidad")({
   head: () => ({
@@ -9,6 +10,8 @@ export const Route = createFileRoute("/privacidad")({
       { name: "description", content: "Qué datos guarda Cifra, quién los procesa, cuánto tiempo y cómo pedir que se borren." },
     ],
   }),
+  // Which AI processors are on (names only). If it fails, show the default.
+  loader: async () => getAiProcessors().catch(() => ({ gateway: null, groq: false })),
   component: Privacidad,
 });
 
@@ -34,6 +37,8 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 
 function Privacidad() {
   const user = useCurrentUser();
+  const ai = Route.useLoaderData();
+  const aiModel = ai.gateway ?? "xAI (Grok)";
   const mail = (
     <a href={`mailto:${CONTACTO}`} className="text-fg underline underline-offset-4">
       {CONTACTO}
@@ -89,10 +94,17 @@ function Privacidad() {
               la cuenta.
             </li>
             <li>
-              <span className="text-fg">xAI (Grok)</span>: solo si usás el asistente. Recibe un resumen del mes (totales,
-              categorías, fijos y presupuestos) y lo que le escribís. No le mandamos tu mail, tu nombre ni la lista de
-              movimientos.
+              <span className="text-fg">Vercel AI Gateway</span>, y a través de él {aiModel}: solo si usás el
+              asistente. Recibe un resumen del mes (totales, categorías, fijos y presupuestos) y lo que le escribís. No
+              le mandamos tu mail, tu nombre ni la lista de movimientos. Le pedimos que solo use proveedores que no
+              entrenan sus modelos con lo que mandás, y el Gateway no guarda las preguntas.
             </li>
+            {ai.groq ? (
+              <li>
+                <span className="text-fg">Groq</span>: de respaldo, solo si el asistente principal no responde. Recibe
+                lo mismo que el anterior. No guarda las preguntas salvo para investigar abusos (hasta 30 días).
+              </li>
+            ) : null}
             <li>
               <span className="text-fg">Sentry</span>: solo si está activado, recibe datos técnicos cuando algo falla
               (qué pantalla, qué error). No le mandamos tus montos ni tus movimientos.

@@ -10,7 +10,7 @@ Si no podés usar eso, escribí a quien te pasó el acceso de Cifra. No pegues t
 
 ## Qué no va en este repo
 
-- `DATABASE_URL`, `BETTER_AUTH_SECRET`, `RESEND_API_KEY`, `XAI_API_KEY`
+- `DATABASE_URL`, `BETTER_AUTH_SECRET`, `RESEND_API_KEY`, `AI_GATEWAY_API_KEY`, `GROQ_API_KEY`
 - Cookies de sesión, mails de testers, respaldos JSON
 - Capturas con saldos reales
 

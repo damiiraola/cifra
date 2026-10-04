@@ -15,7 +15,7 @@ Para que otro agente se haga cargo, el mapa operativo está en [HANDOFF.md](HAND
 | Base de datos | **Postgres** — Neon en producción, PGLite en el preview |
 | Auth | Better Auth (solo mail y contraseña) |
 | Cotizaciones | [DolarApi](https://dolarapi.com) |
-| IA | xAI Grok |
+| IA | Vercel AI Gateway (plan gratis, Grok 4.1 Fast por defecto; respaldo opcional en Groq) |
 
 ## Base de datos
 
@@ -48,7 +48,10 @@ Variables de entorno (no se commitean). En Vercel se cargan en Project → Setti
 | `DATABASE_URL` | servidor | Neon Postgres (producción) |
 | `BETTER_AUTH_URL` | servidor | URL pública: `https://cifra.lol` |
 | `BETTER_AUTH_SECRET` | servidor | secreto de sesión |
-| `XAI_API_KEY` | servidor | asistente IA |
+| `AI_GATEWAY_API_KEY` | servidor | **opcional**. Asistente IA vía Vercel AI Gateway. En Vercel no hace falta: usa el token OIDC del proyecto |
+| `AI_MODEL` | servidor | **opcional**. Modelo del Gateway (default `spacexai/grok-4.1-fast-non-reasoning`, del plan gratis) |
+| `GROQ_API_KEY` / `GROQ_MODEL` | servidor | **opcional**. Respaldo en Groq si el Gateway falla (default `openai/gpt-oss-120b`) |
+| `AI_DAILY_LIMIT` | servidor | **opcional**. Preguntas por usuario por día (default 30; `0` apaga el asistente) |
 | `VITE_AUTH_ENABLED` | build | `true` en producción |
 | `RESEND_API_KEY` | servidor | mails (confirmar cuenta + olvidé clave) |
 | `MAIL_FROM` | servidor | `Cifra <hola@cifra.lol>` cuando el dominio está verificado en Resend |
@@ -108,7 +111,6 @@ En Vercel, Environment Variables (Production + Preview):
 - `DATABASE_URL`
 - `BETTER_AUTH_URL` (`https://cifra.lol`)
 - `BETTER_AUTH_SECRET`
-- `XAI_API_KEY`
 - `VITE_AUTH_ENABLED=true`
 
 ## Scripts
