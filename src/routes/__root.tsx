@@ -2,6 +2,7 @@ import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-r
 import { AuthProvider } from "@/lib/auth/provider";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import appCss from "../styles.css?url";
+import { ErrorReporter } from "@/components/error-reporter";
 
 const APP_NAME = "Cifra";
 
@@ -31,6 +32,7 @@ export const Route = createRootRoute({
         <AuthProvider>
           <Outlet />
         </AuthProvider>
+        <ErrorReporter />
         <Scripts />
       </body>
     </html>

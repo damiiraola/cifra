@@ -43,5 +43,12 @@ export const authMiddleware = createMiddleware({ type: "function" })
     // Reject scripted cross-site/sibling requests before touching per-user data.
     assertSameSiteRequest();
     const userId = await requireUserId(context.bearerToken);
-    return next({ context: { userId } });
+    try {
+      return await next({ context: { userId } });
+    } catch (err) {
+      // Bugs (not "mail inválido" style errors) go to the log + Sentry.
+      const { isExpectedError, reportServerError } = await import("@/lib/observability.server");
+      if (!isExpectedError(err)) await reportServerError(err, { where: "server-fn" });
+      throw err;
+    }
   });
