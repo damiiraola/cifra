@@ -24,6 +24,7 @@ import {
   replaceTransactions,
   saveAccounts,
   replaceRecurrings,
+  saveCards,
   loadLatestBackup,
   saveDailyBackup,
   saveSettings,
@@ -40,17 +41,22 @@ import {
   type UsdSource,
 } from "./fx";
 import { inferAccount, stampRate } from "./books";
+import { cardAccountNames, cardPeriodFor, clampDay, missingVaultCards } from "./card-math";
 import { dueDate, dueUnposted, isPosted, likelyDuplicate, postedTxId } from "./recurring";
 import { buildSeed } from "./seed";
 import { monthISO, uid } from "./utils";
 import { applyOutbox, enqueue, OUTBOX_MAX_TRIES, pruneOutbox, resetTries, type OutboxOp } from "./outbox";
 import { mergeRecurrings } from "./recurring-sync";
 import { hydrateBookMoney, moneyForBook } from "./budget-math";
-import type { Account, Book, Category, CategoryKind, ChatMessage, Recurring, Transaction } from "./types";
+import type { Account, Book, Card, Category, CategoryKind, ChatMessage, Recurring, Transaction } from "./types";
 
 const LOCAL_KEY = "cifra-ledger-v1";
 
 type Draft = Partial<Transaction> & { id?: string };
+export type CardInput = Omit<Card, "id" | "accountArsId" | "accountUsdId" | "archived" | "bookId"> & {
+  id?: string;
+  bookId?: string;
+};
 type Status = "idle" | "loading" | "ready" | "error";
 
 type LedgerState = {
@@ -69,6 +75,8 @@ type LedgerState = {
   customCategories: Category[];
   recurrings: Recurring[];
   pendingRecurringIds: string[];
+  cards: Card[];
+  pendingCardIds: string[];
   budgets: Record<string, number>;
   globalBudget: number;
   bookBudgets: Record<string, Record<string, number>>;
@@ -94,7 +102,7 @@ type LedgerState = {
   setSelectedDay: (day: string | null) => void;
   openQuick: (draft?: Draft) => void;
   closeQuick: () => void;
-  addTx: (tx: Omit<Transaction, "id" | "createdAt"> & { id?: string; createdAt?: string }) => void;
+  addTx: (tx: Omit<Transaction, "id" | "createdAt" | "cardPeriod"> & { id?: string; createdAt?: string; cardPeriod?: string }) => void;
   updateTx: (id: string, patch: Partial<Transaction>) => void;
   deleteTx: (id: string) => void;
   flushOutbox: (opts?: { force?: boolean }) => Promise<void>;
@@ -111,6 +119,10 @@ type LedgerState = {
   deleteRecurring: (id: string) => void;
   postRecurring: (id: string, ym?: string) => boolean;
   flushRecurrings: (opts?: { force?: boolean }) => Promise<void>;
+  /** Create (no id) or edit a card; creates/renames its two cajas. Returns the card. */
+  upsertCard: (input: CardInput) => Card | null;
+  archiveCard: (id: string) => void;
+  flushCards: () => Promise<void>;
   pushChat: (msg: ChatMessage) => void;
   clearChat: () => void;
   loadDemo: () => void;
@@ -148,6 +160,8 @@ function vaultInput(get: () => LedgerState) {
     outbox: s.outbox,
     recurrings: s.recurrings,
     pendingRecurringIds: s.pendingRecurringIds,
+    cards: s.cards,
+    pendingCardIds: s.pendingCardIds,
     budgets: s.budgets,
     globalBudget: s.globalBudget,
     bookBudgets: s.bookBudgets,
@@ -289,6 +303,8 @@ let flushBusy = false;
 let flushAgain = false;
 let recFlushBusy = false;
 let recFlushAgain = false;
+let cardFlushBusy = false;
+let cardFlushAgain = false;
 
 function pushSettings(get: () => LedgerState, revert?: Partial<LedgerState>, set?: (p: Partial<LedgerState>) => void) {
   persistLocal(get);
@@ -320,8 +336,11 @@ function pushSettings(get: () => LedgerState, revert?: Partial<LedgerState>, set
   });
 }
 
-function fillTx(get: () => LedgerState, tx: Omit<Transaction, "id" | "createdAt"> & { id?: string; createdAt?: string }): Transaction {
+type TxInput = Omit<Transaction, "id" | "createdAt" | "cardPeriod"> & { id?: string; createdAt?: string; cardPeriod?: string };
+
+function fillTx(get: () => LedgerState, tx: TxInput, previous?: Transaction): Transaction {
   const { activeBookId, accounts, usdRate, usdtRate } = get();
+  const cards = get().cards ?? [];
   const bookId = tx.bookId || activeBookId;
   const accountId = tx.accountId || inferAccount(accounts, bookId, tx.method, tx.currency);
   const rateArs = tx.rateLocked && tx.rateArs > 0 ? tx.rateArs : stampRate(tx.currency, usdRate, usdtRate, tx.rateArs > 0 ? tx.rateArs : undefined);
@@ -343,7 +362,29 @@ function fillTx(get: () => LedgerState, tx: Omit<Transaction, "id" | "createdAt"
     rateArs,
     rateLocked: Boolean(tx.rateLocked),
     recurringId: tx.recurringId ?? "",
+    cardPeriod: cardPeriodFor(cards, { type: tx.type, accountId, date: tx.date, cardPeriod: tx.cardPeriod }, previous),
   };
+}
+
+/**
+ * Cards from the server, plus local cards (and their cajas) that were created
+ * or edited on this phone and did not reach the server yet.
+ */
+function withPendingCards(
+  remoteCards: Card[],
+  remoteAccounts: Account[],
+  local: { cards: Card[]; accounts: Account[]; pendingCardIds: string[] },
+) {
+  const pending = new Set(local.pendingCardIds);
+  if (!pending.size) return { cards: remoteCards, accounts: remoteAccounts };
+  const mine = local.cards.filter((c) => pending.has(c.id));
+  const cards = [...remoteCards.filter((c) => !pending.has(c.id)), ...mine];
+  const cardAccIds = new Set(mine.flatMap((c) => [c.accountArsId, c.accountUsdId]));
+  const accounts = [
+    ...remoteAccounts.filter((a) => !cardAccIds.has(a.id)),
+    ...local.accounts.filter((a) => cardAccIds.has(a.id)),
+  ];
+  return { cards, accounts };
 }
 
 function ackOp(set: (p: Partial<LedgerState>) => void, get: () => LedgerState, op: OutboxOp) {
@@ -376,7 +417,17 @@ async function restoreVault(get: () => LedgerState, set: (p: Partial<LedgerState
     return;
   }
   const notes: string[] = [];
-  const accounts = vault ? applyOpenings(state.books, state.accounts, vault.openings) : null;
+  const lost = missingVaultCards(vault ?? backup!, state.books, state.cards, state.accounts);
+  if (lost.cards.length) {
+    set({
+      cards: [...get().cards, ...lost.cards],
+      accounts: [...get().accounts, ...lost.accounts],
+      pendingCardIds: [...new Set([...get().pendingCardIds, ...lost.cards.map((c) => c.id)])],
+    });
+    notes.push("tarjetas");
+    void get().flushCards();
+  }
+  const accounts = vault ? applyOpenings(state.books, get().accounts, vault.openings) : null;
   if (accounts) {
     set({ accounts });
     void saveAccounts({ data: { accounts: accounts.map((a) => ({ id: a.id, opening: a.opening })) } }).catch((err) =>
@@ -436,6 +487,8 @@ function paintVault(set: (p: Partial<LedgerState>) => void, get: () => LedgerSta
   set({
     books,
     accounts,
+    cards: vault.cards?.length ? vault.cards : get().cards,
+    pendingCardIds: vault.pendingCardIds?.length ? vault.pendingCardIds : get().pendingCardIds,
     activeBookId,
     onboarded: vault.onboarded || get().onboarded,
     recurrings: vault.recurrings.length ? remapVaultRecurrings(vault, books, accounts) : get().recurrings,
@@ -472,6 +525,8 @@ export const useLedger = create<LedgerState>()((set, get) => ({
   customCategories: [],
   recurrings: [],
   pendingRecurringIds: [],
+  cards: [],
+  pendingCardIds: [],
   budgets: { ...DEFAULT_BUDGETS },
   globalBudget: DEFAULT_GLOBAL_BUDGET,
   bookBudgets: {},
@@ -534,10 +589,16 @@ export const useLedger = create<LedgerState>()((set, get) => ({
             await replaceTransactions({ data: stamped });
             const vaultNow = readLocalVault(ownerEmail);
             const outbox = pruneOutbox(resetTries(get().outbox.length ? get().outbox : (vaultNow?.outbox ?? [])), stamped);
+            const legacyCards = withPendingCards(remote.cards ?? [], remote.accounts, {
+              cards: get().cards,
+              accounts: get().accounts,
+              pendingCardIds: get().pendingCardIds,
+            });
             set({
               status: "ready",
               books: remote.books,
-              accounts: remote.accounts,
+              accounts: legacyCards.accounts,
+              cards: legacyCards.cards,
               activeBookId: remote.activeBookId,
               onboarded: true,
               categoryNames: remote.categoryNames,
@@ -569,10 +630,16 @@ export const useLedger = create<LedgerState>()((set, get) => ({
         const vaultNow = readLocalVault(ownerEmail);
         const seed = get().outbox.length ? get().outbox : (vaultNow?.outbox ?? []);
         const outbox = pruneOutbox(resetTries(seed), remote.transactions);
+        const merged = withPendingCards(remote.cards ?? [], remote.accounts, {
+          cards: get().cards,
+          accounts: get().accounts,
+          pendingCardIds: get().pendingCardIds,
+        });
         set({
           status: "ready",
           books: remote.books,
-          accounts: remote.accounts,
+          accounts: merged.accounts,
+          cards: merged.cards,
           activeBookId: remote.activeBookId,
           onboarded: remote.onboarded,
           categoryNames: remote.categoryNames,
@@ -591,6 +658,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
         paint(set, get, { confirmed: remote.transactions, outbox });
         await restoreVault(get, set);
         void get().flushRecurrings({ force: true });
+        void get().flushCards();
         void get().refreshQuotes();
         offerDueRecurrings(get);
         void get().flushOutbox({ force: true });
@@ -621,6 +689,8 @@ export const useLedger = create<LedgerState>()((set, get) => ({
       accounts: [],
       recurrings: [],
       pendingRecurringIds: [],
+      cards: [],
+      pendingCardIds: [],
       chat: [],
       selectedDay: null,
       quickOpen: false,
@@ -704,7 +774,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
   updateTx: (id, patch) => {
     const current = get().transactions.find((t) => t.id === id);
     if (!current) return;
-    const next = fillTx(get, { ...current, ...patch, id });
+    const next = fillTx(get, { ...current, ...patch, id }, current);
     paint(set, get, { outbox: enqueue(get().outbox, { id, action: "update", row: next, at: Date.now(), tries: 0 }) });
     persistLocal(get);
     void get().flushOutbox();
@@ -948,6 +1018,92 @@ export const useLedger = create<LedgerState>()((set, get) => ({
       recFlushBusy = false;
     }
   },
+  upsertCard: (input) => {
+    const s = get();
+    const existing = input.id ? s.cards.find((c) => c.id === input.id) : undefined;
+    const bookId = existing?.bookId || input.bookId || s.activeBookId;
+    if (!bookId) return null;
+    const name = input.name.trim().slice(0, 60);
+    if (name.length < 2) {
+      toast.error("Poné un nombre para la tarjeta");
+      return null;
+    }
+    const card: Card = {
+      id: existing?.id ?? uid(),
+      bookId,
+      name,
+      bank: input.bank.trim().slice(0, 60),
+      network: input.network,
+      last4: input.last4,
+      closingDay: clampDay(input.closingDay),
+      dueDay: clampDay(input.dueDay),
+      limitArs: input.limitArs > 0 ? input.limitArs : 0,
+      accountArsId: existing?.accountArsId ?? uid(),
+      accountUsdId: existing?.accountUsdId ?? uid(),
+      payAccountId: input.payAccountId,
+      usdPerceptionPct: input.usdPerceptionPct,
+      archived: false,
+    };
+    const names = cardAccountNames(card.name);
+    const cajas: Account[] = [
+      { id: card.accountArsId, bookId, name: names.ars, kind: "card", currency: "ARS", opening: 0, archived: false },
+      { id: card.accountUsdId, bookId, name: names.usd, kind: "card", currency: "USD", opening: 0, archived: false },
+    ];
+    const ids = new Set([card.accountArsId, card.accountUsdId]);
+    set({
+      cards: existing ? s.cards.map((c) => (c.id === card.id ? card : c)) : [...s.cards, card],
+      accounts: [
+        ...s.accounts.filter((a) => !ids.has(a.id)),
+        ...cajas.map((a) => ({ ...a, opening: s.accounts.find((x) => x.id === a.id)?.opening ?? 0 })),
+      ],
+      pendingCardIds: [...new Set([...s.pendingCardIds, card.id])],
+    });
+    persistLocal(get);
+    void get().flushCards();
+    return card;
+  },
+  archiveCard: (id) => {
+    const s = get();
+    const card = s.cards.find((c) => c.id === id);
+    if (!card) return;
+    const ids = new Set([card.accountArsId, card.accountUsdId]);
+    set({
+      cards: s.cards.map((c) => (c.id === id ? { ...c, archived: true } : c)),
+      accounts: s.accounts.map((a) => (ids.has(a.id) ? { ...a, archived: true } : a)),
+      pendingCardIds: [...new Set([...s.pendingCardIds, id])],
+    });
+    persistLocal(get);
+    void get().flushCards();
+  },
+  flushCards: async () => {
+    if (cardFlushBusy) {
+      cardFlushAgain = true;
+      return;
+    }
+    cardFlushBusy = true;
+    try {
+      do {
+        cardFlushAgain = false;
+        const ids = get().pendingCardIds;
+        if (!ids.length) continue;
+        const rows = get().cards.filter((c) => ids.includes(c.id));
+        if (!rows.length) {
+          set({ pendingCardIds: [] });
+          persistLocal(get);
+          continue;
+        }
+        try {
+          await saveCards({ data: rows });
+          set({ pendingCardIds: get().pendingCardIds.filter((id) => !ids.includes(id)) });
+          persistLocal(get);
+        } catch (err) {
+          persistFail(err, () => void get().flushCards());
+        }
+      } while (cardFlushAgain);
+    } finally {
+      cardFlushBusy = false;
+    }
+  },
   pushChat: (msg) => {
     set({ chat: [...get().chat, msg].slice(-24) });
     persistLocal(get);
@@ -997,6 +1153,10 @@ export function useBookTxs() {
   return useLedger(
     useShallow((s) => s.transactions.filter((t) => !s.activeBookId || t.bookId === s.activeBookId)),
   );
+}
+
+export function useBookCards() {
+  return useLedger(useShallow((s) => s.cards.filter((c) => c.bookId === s.activeBookId && !c.archived)));
 }
 
 export function useBookAccounts() {

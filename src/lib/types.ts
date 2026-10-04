@@ -20,7 +20,9 @@ export type Category = {
 };
 
 export type BookKind = "personal" | "business";
-export type AccountKind = "cash" | "mp" | "bank" | "crypto";
+/** `card`: one of the two cajas (ARS, USD) of a credit card. Its balance is
+ * negative = what you owe; it does not count as money you have. */
+export type AccountKind = "cash" | "mp" | "bank" | "crypto" | "card";
 
 export type Book = {
   id: string;
@@ -56,6 +58,31 @@ export type Transaction = {
   rateArs: number;
   rateLocked: boolean;
   recurringId: string;
+  /** Card statement (YYYY-MM of its closing) for expenses on a card caja; "" otherwise. */
+  cardPeriod: string;
+};
+
+export type CardNetwork = "visa" | "master" | "amex" | "cabal" | "naranja" | "otra";
+
+/** A credit card: one row + two cajas of kind `card` (ARS and USD). */
+export type Card = {
+  id: string;
+  bookId: string;
+  name: string;
+  bank: string;
+  network: CardNetwork;
+  /** Only to recognise it. Never the full number. */
+  last4: string;
+  closingDay: number;
+  dueDay: number;
+  limitArs: number;
+  accountArsId: string;
+  accountUsdId: string;
+  /** Caja you usually pay it from ("" = none). */
+  payAccountId: string;
+  /** Perception on USD charges paid in pesos (RG 5617). Editable; default 30. */
+  usdPerceptionPct: number;
+  archived: boolean;
 };
 
 export type Recurring = {
@@ -94,4 +121,13 @@ export const PAY_METHODS: { id: PayMethod; label: string }[] = [
   { id: "mercadopago", label: "Mercado Pago" },
   { id: "crypto", label: "USDT / crypto" },
   { id: "otro", label: "Otro" },
+];
+
+export const CARD_NETWORKS: { id: CardNetwork; label: string }[] = [
+  { id: "visa", label: "Visa" },
+  { id: "master", label: "Mastercard" },
+  { id: "amex", label: "American Express" },
+  { id: "cabal", label: "Cabal" },
+  { id: "naranja", label: "Naranja X" },
+  { id: "otra", label: "Otra" },
 ];

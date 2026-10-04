@@ -17,6 +17,7 @@ import { signOut } from "@/lib/auth/client";
 import { signOutAndForget } from "@/lib/sign-out";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { Button } from "@/components/ui/button";
+import { CardSettings } from "@/components/card-settings";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -95,6 +96,16 @@ function Ajustes() {
     return () => window.clearInterval(id);
   }, []);
 
+  // "Ajustes → Tarjetas" links land here with #tarjetas: open that block.
+  useEffect(() => {
+    if (window.location.hash !== "#tarjetas") return;
+    const el = document.getElementById("tarjetas");
+    if (el instanceof HTMLDetailsElement) {
+      el.open = true;
+      el.scrollIntoView({ block: "start" });
+    }
+  }, []);
+
   const gastos = categories.filter((c) => c.kind === "expense");
   const ingresos = categories.filter((c) => c.kind === "income");
   const spentByCat = computeMonth(transactions, viewMonth, { usd: usdRate, usdt: usdtRate }).byCat;
@@ -105,7 +116,7 @@ function Ajustes() {
         <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Configuración</p>
         <h1 className="font-display text-4xl tracking-tight">Ajustes</h1>
         <p className="mt-1 text-sm text-muted">
-          Cotizaciones, cajas y categorías del libro {book?.name ?? "activo"}.
+          Cotizaciones, cajas, tarjetas y categorías del libro {book?.name ?? "activo"}.
         </p>
       </div>
 
@@ -238,7 +249,7 @@ function Ajustes() {
       <Section title={`Cajas · ${book?.name ?? ""}`} hint="Saldo inicial de cada caja">
         <p className="text-xs text-subtle">Saldo inicial. El de hoy se calcula encima de los movimientos.</p>
         <div className="mt-4 grid gap-2">
-          {accounts.map((a) => (
+          {accounts.filter((a) => a.kind !== "card").map((a) => (
             <div key={a.id} className="grid grid-cols-[1fr_7rem] items-center gap-2">
               <span className="truncate text-sm text-muted">
                 {a.name} · {a.currency}
@@ -253,6 +264,10 @@ function Ajustes() {
             </div>
           ))}
         </div>
+      </Section>
+
+      <Section id="tarjetas" title={`Tarjetas · ${book?.name ?? ""}`} hint="Crédito: cierre, vencimiento y resumen">
+        <CardSettings />
       </Section>
 
       <Section title="Categorías" hint="Nombres, visibilidad y topes">
@@ -550,18 +565,20 @@ function CatGroup({
  * screen readers). Only "Cuenta" starts open so the page fits on a phone.
  */
 function Section({
+  id,
   title,
   hint,
   defaultOpen = false,
   children,
 }: {
+  id?: string;
   title: string;
   hint?: string;
   defaultOpen?: boolean;
   children: ReactNode;
 }) {
   return (
-    <details open={defaultOpen} className="group rounded-3xl bg-surface shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
+    <details id={id} open={defaultOpen} className="group rounded-3xl bg-surface shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
       <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 rounded-3xl px-5 py-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
         <span className="min-w-0">
           <span className="block text-[11px] font-medium tracking-wide text-muted uppercase">{title}</span>

@@ -2,14 +2,16 @@ import type { AccountKind, BookKind, PayMethod, TxType } from "./types";
 
 /**
  * What payment method makes sense for a caja. USDT → crypto, cash → efectivo,
- * Mercado Pago → mercadopago. For a bank keep the bank method the user had
+ * Mercado Pago → mercadopago, card caja → credito. For a bank keep the bank method the user had
  * (débito/crédito/transferencia) instead of overwriting it.
  */
 export function methodForAccount(kind: AccountKind | undefined, current: PayMethod): PayMethod {
   if (kind === "crypto") return "crypto";
   if (kind === "cash") return "efectivo";
   if (kind === "mp") return "mercadopago";
+  if (kind === "card") return "credito";
   if (kind === "bank") {
+    // Crédito stays allowed on the bank for books without a card yet.
     return current === "debito" || current === "credito" || current === "transferencia" || current === "otro"
       ? current
       : "debito";

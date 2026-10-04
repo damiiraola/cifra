@@ -23,4 +23,5 @@ test("method follows the caja", () => {
   assert.equal(methodForAccount("mp", "credito"), "mercadopago");
   assert.equal(methodForAccount("bank", "credito"), "credito");
   assert.equal(methodForAccount("bank", "crypto"), "debito");
+  assert.equal(methodForAccount("card", "debito"), "credito");
 });

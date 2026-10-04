@@ -85,7 +85,7 @@ const CATALOG: {
   },
 ];
 
-const FIXED: Omit<Transaction, "id" | "createdAt" | "bookId" | "accountId" | "counterpartyId" | "amountTo" | "rateArs" | "rateLocked" | "recurringId">[] = [
+const FIXED: Omit<Transaction, "id" | "createdAt" | "bookId" | "accountId" | "counterpartyId" | "amountTo" | "rateArs" | "rateLocked" | "recurringId" | "cardPeriod">[] = [
   {
     type: "expense",
     amount: 450_000,
@@ -246,7 +246,7 @@ export function buildSeed(now = new Date()): Transaction[] {
 }
 
 function makeTx(
-  partial: Omit<Transaction, "id" | "createdAt" | "bookId" | "accountId" | "counterpartyId" | "amountTo" | "rateArs" | "rateLocked" | "recurringId">,
+  partial: Omit<Transaction, "id" | "createdAt" | "bookId" | "accountId" | "counterpartyId" | "amountTo" | "rateArs" | "rateLocked" | "recurringId" | "cardPeriod">,
   rng: () => number,
 ): Transaction {
   const hour = 8 + Math.floor(rng() * 12);

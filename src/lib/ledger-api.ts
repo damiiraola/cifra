@@ -9,7 +9,8 @@ import {
   inferAccount,
 } from "@/lib/books";
 import { DEFAULT_USD_RATE, DEFAULT_USDT_RATE, DEFAULT_USD_SOURCE, isUsdSource, type UsdSource } from "@/lib/fx";
-import type { Account, Book, BookKind, Category, Currency, PayMethod, Recurring, Transaction, TxType } from "@/lib/types";
+import type { Account, Book, BookKind, Card, CardNetwork, Category, Currency, PayMethod, Recurring, Transaction, TxType } from "@/lib/types";
+import { cardAccountNames, clampDay, validLast4 } from "@/lib/card-math";
 import { uid } from "@/lib/utils";
 import { MAIL, sendMailQuiet } from "@/lib/mail";
 
@@ -30,6 +31,7 @@ export type LedgerSnapshot = {
   hiddenCategoryIds: string[];
   customCategories: Category[];
   recurrings: Recurring[];
+  cards: Card[];
 };
 
 const TYPES = new Set<TxType>(["expense", "income", "transfer"]);
@@ -62,6 +64,7 @@ type TxRow = {
   rate_ars: number | null;
   rate_locked: boolean | number | null;
   recurring_id: string | null;
+  card_period: string | null;
 };
 
 function asTx(input: Transaction): Transaction {
@@ -92,6 +95,7 @@ function asTx(input: Transaction): Transaction {
     rateArs: Number.isFinite(rateArs) && rateArs > 0 ? rateArs : 1,
     rateLocked: Boolean(input.rateLocked),
     recurringId: String(input.recurringId ?? ""),
+    cardPeriod: /^\d{4}-\d{2}$/.test(String(input.cardPeriod ?? "")) ? String(input.cardPeriod) : "",
   };
 }
 
@@ -114,6 +118,7 @@ function rowToTx(row: TxRow): Transaction {
     rateArs: Number(row.rate_ars ?? 0),
     rateLocked: Boolean(row.rate_locked),
     recurringId: row.recurring_id ?? "",
+    cardPeriod: row.card_period ?? "",
   };
 }
 
@@ -123,7 +128,8 @@ const TX_SELECT = `id, type, amount, currency, category_id, note, merchant,
              coalesce(counterparty_id, '') as counterparty_id,
              coalesce(amount_to, 0) as amount_to, coalesce(rate_ars, 0) as rate_ars,
              coalesce(rate_locked, false) as rate_locked,
-             coalesce(recurring_id, '') as recurring_id`;
+             coalesce(recurring_id, '') as recurring_id,
+             coalesce(card_period, '') as card_period`;
 
 async function ensureSettings(sql: Awaited<ReturnType<typeof getSql>>, userId: string) {
   const existing = await sql<{
@@ -312,11 +318,11 @@ async function insertTx(
   await sql`
     insert into ledger_transactions (
       id, user_id, type, amount, currency, category_id, note, merchant, date, method, created_at,
-      book_id, account_id, counterparty_id, amount_to, rate_ars, rate_locked, recurring_id
+      book_id, account_id, counterparty_id, amount_to, rate_ars, rate_locked, recurring_id, card_period
     ) values (
       ${tx.id}, ${userId}, ${tx.type}, ${tx.amount}, ${tx.currency}, ${tx.categoryId},
       ${tx.note}, ${tx.merchant}, ${tx.date}, ${tx.method}, ${tx.createdAt},
-      ${tx.bookId}, ${tx.accountId}, ${tx.counterpartyId}, ${tx.amountTo}, ${tx.rateArs}, ${tx.rateLocked}, ${tx.recurringId}
+      ${tx.bookId}, ${tx.accountId}, ${tx.counterpartyId}, ${tx.amountTo}, ${tx.rateArs}, ${tx.rateLocked}, ${tx.recurringId}, ${tx.cardPeriod || null}
     )
     on conflict (id) do update set
       type = excluded.type,
@@ -333,7 +339,8 @@ async function insertTx(
       amount_to = excluded.amount_to,
       rate_ars = excluded.rate_ars,
       rate_locked = excluded.rate_locked,
-      recurring_id = excluded.recurring_id
+      recurring_id = excluded.recurring_id,
+      card_period = excluded.card_period
     where ledger_transactions.user_id = ${userId}
   `;
 }
@@ -350,7 +357,8 @@ export const loadLedger = createServerFn({ method: "GET" })
              coalesce(counterparty_id, '') as counterparty_id,
              coalesce(amount_to, 0) as amount_to, coalesce(rate_ars, 0) as rate_ars,
              coalesce(rate_locked, false) as rate_locked,
-             coalesce(recurring_id, '') as recurring_id
+             coalesce(recurring_id, '') as recurring_id,
+             coalesce(card_period, '') as card_period
       from ledger_transactions
       where user_id = ${context.userId}
       order by date desc, created_at desc
@@ -390,6 +398,7 @@ export const loadLedger = createServerFn({ method: "GET" })
       note: r.note ?? "",
       active: Boolean(r.active),
     }));
+    const cards = await loadCards(sql, context.userId);
     const money = hydrateBookMoney({
       books: books.books,
       legacyBudgets: settings.budgets,
@@ -405,6 +414,7 @@ export const loadLedger = createServerFn({ method: "GET" })
       ...money,
       ...scoped,
       recurrings,
+      cards,
     };
   });
 
@@ -432,7 +442,8 @@ export const patchTransaction = createServerFn({ method: "POST" })
              coalesce(counterparty_id, '') as counterparty_id,
              coalesce(amount_to, 0) as amount_to, coalesce(rate_ars, 0) as rate_ars,
              coalesce(rate_locked, false) as rate_locked,
-             coalesce(recurring_id, '') as recurring_id
+             coalesce(recurring_id, '') as recurring_id,
+             coalesce(card_period, '') as card_period
       from ledger_transactions
       where id = ${data.id} and user_id = ${context.userId}
       limit 1
@@ -647,6 +658,145 @@ export const removeRecurring = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
+const NETWORKS = new Set<CardNetwork>(["visa", "master", "amex", "cabal", "naranja", "otra"]);
+
+function money0(v: unknown) {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : 0;
+}
+
+function asCard(input: Card): Card {
+  if (!input?.id || typeof input.id !== "string") throw new Error("Tarjeta inválida");
+  if (!input.bookId) throw new Error("Tarjeta sin libro");
+  if (!input.accountArsId || !input.accountUsdId || input.accountArsId === input.accountUsdId) {
+    throw new Error("Tarjeta sin cajas");
+  }
+  const name = String(input.name ?? "").trim().slice(0, 60);
+  if (name.length < 2) throw new Error("Poné un nombre para la tarjeta");
+  const pct = Number(input.usdPerceptionPct);
+  return {
+    id: input.id,
+    bookId: String(input.bookId),
+    name,
+    bank: String(input.bank ?? "").trim().slice(0, 60),
+    network: NETWORKS.has(input.network) ? input.network : "otra",
+    last4: validLast4(input.last4),
+    closingDay: clampDay(input.closingDay),
+    dueDay: clampDay(input.dueDay),
+    limitArs: money0(input.limitArs),
+    accountArsId: String(input.accountArsId),
+    accountUsdId: String(input.accountUsdId),
+    payAccountId: String(input.payAccountId ?? ""),
+    usdPerceptionPct: Number.isFinite(pct) && pct >= 0 && pct <= 100 ? pct : 30,
+    archived: Boolean(input.archived),
+  };
+}
+
+type CardRow = {
+  id: string;
+  book_id: string;
+  name: string;
+  bank: string;
+  network: string;
+  last4: string;
+  closing_day: number;
+  due_day: number;
+  limit_ars: number;
+  account_ars_id: string;
+  account_usd_id: string;
+  pay_account_id: string;
+  usd_perception_pct: number;
+  archived: boolean | number;
+};
+
+async function loadCards(sql: Awaited<ReturnType<typeof getSql>>, userId: string): Promise<Card[]> {
+  const rows = await sql<CardRow>`
+    select id, book_id, name, bank, network, last4, closing_day, due_day, limit_ars,
+           account_ars_id, account_usd_id, pay_account_id, usd_perception_pct, archived
+    from ledger_cards
+    where user_id = ${userId}
+    order by created_at
+  `;
+  return rows.map((r) => ({
+    id: r.id,
+    bookId: r.book_id,
+    name: r.name,
+    bank: r.bank ?? "",
+    network: NETWORKS.has(r.network as CardNetwork) ? (r.network as CardNetwork) : "otra",
+    last4: r.last4 ?? "",
+    closingDay: Number(r.closing_day),
+    dueDay: Number(r.due_day),
+    limitArs: Number(r.limit_ars) || 0,
+    accountArsId: r.account_ars_id,
+    accountUsdId: r.account_usd_id,
+    payAccountId: r.pay_account_id ?? "",
+    usdPerceptionPct: Number(r.usd_perception_pct),
+    archived: Boolean(r.archived),
+  }));
+}
+
+/**
+ * Create or update cards with their two cajas, in one transaction. The cajas
+ * are always kind 'card' (an existing caja of another kind is never turned
+ * into a card), and the book must be the user's.
+ */
+export const saveCards = createServerFn({ method: "POST" })
+  .validator((input: Card[]) => (Array.isArray(input) ? input.slice(0, 50).map(asCard) : []))
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    await withTransaction(async (sql) => {
+      for (const c of data) {
+        const book = await sql<{ id: string }>`
+          select id from ledger_books where id = ${c.bookId} and user_id = ${context.userId} limit 1
+        `;
+        if (!book[0]) throw new Error("Libro inválido");
+        const names = cardAccountNames(c.name);
+        for (const [id, currency, name] of [
+          [c.accountArsId, "ARS", names.ars],
+          [c.accountUsdId, "USD", names.usd],
+        ] as const) {
+          const taken = await sql<{ kind: string; user_id: string }>`
+            select kind, user_id from ledger_accounts where id = ${id} limit 1
+          `;
+          if (taken[0] && (taken[0].kind !== "card" || taken[0].user_id !== context.userId)) {
+            throw new Error("Caja inválida");
+          }
+          await sql`
+            insert into ledger_accounts (id, user_id, book_id, name, kind, currency, opening, archived)
+            values (${id}, ${context.userId}, ${c.bookId}, ${name}, 'card', ${currency}, 0, ${c.archived})
+            on conflict (id) do update set
+              name = excluded.name,
+              archived = excluded.archived
+            where ledger_accounts.user_id = ${context.userId} and ledger_accounts.kind = 'card'
+          `;
+        }
+        await sql`
+          insert into ledger_cards (
+            id, user_id, book_id, name, bank, network, last4, closing_day, due_day, limit_ars,
+            account_ars_id, account_usd_id, pay_account_id, usd_perception_pct, archived
+          ) values (
+            ${c.id}, ${context.userId}, ${c.bookId}, ${c.name}, ${c.bank}, ${c.network}, ${c.last4},
+            ${c.closingDay}, ${c.dueDay}, ${c.limitArs}, ${c.accountArsId}, ${c.accountUsdId},
+            ${c.payAccountId}, ${c.usdPerceptionPct}, ${c.archived}
+          )
+          on conflict (id) do update set
+            name = excluded.name,
+            bank = excluded.bank,
+            network = excluded.network,
+            last4 = excluded.last4,
+            closing_day = excluded.closing_day,
+            due_day = excluded.due_day,
+            limit_ars = excluded.limit_ars,
+            pay_account_id = excluded.pay_account_id,
+            usd_perception_pct = excluded.usd_perception_pct,
+            archived = excluded.archived
+          where ledger_cards.user_id = ${context.userId}
+        `;
+      }
+    });
+    return { ok: true as const, count: data.length };
+  });
+
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const BACKUP_KEEP_DAYS = 30;
 
@@ -714,6 +864,7 @@ export const deleteAccount = createServerFn({ method: "POST" })
     await withTransaction(async (tx) => {
       await tx`delete from ledger_transactions where user_id = ${context.userId}`;
       await tx`delete from ledger_recurring where user_id = ${context.userId}`;
+      await tx`delete from ledger_cards where user_id = ${context.userId}`;
       await tx`delete from ledger_accounts where user_id = ${context.userId}`;
       await tx`delete from ledger_books where user_id = ${context.userId}`;
       await tx`delete from ledger_settings where user_id = ${context.userId}`;

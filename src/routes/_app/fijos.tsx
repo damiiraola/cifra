@@ -5,6 +5,7 @@ import { money, parseAmount, amountInput } from "@/lib/format";
 import { FIJO_TEMPLATES, dueUnposted, isDue, isPosted, likelyDuplicate } from "@/lib/recurring";
 import { PAY_METHODS, type AccountKind, type Currency, type PayMethod, type Recurring, type TxType } from "@/lib/types";
 import { methodForAccount } from "@/lib/quick-defaults";
+import { accountLabel, inferAccount } from "@/lib/books";
 import { cn, uid } from "@/lib/utils";
 import { useAllCategories, useVisibleCategories, useBookAccounts, useBookTxs, useLedger } from "@/lib/store";
 import { MonthSwitcher } from "@/components/month-switcher";
@@ -129,7 +130,8 @@ function Fijos() {
                 key={t.name}
                 type="button"
                 onClick={() => {
-                  const acc = accounts.find((a) => a.currency === "ARS") ?? accounts[0];
+                  const accId = inferAccount(accounts, activeBookId, t.method, "ARS");
+                  const acc = accounts.find((a) => a.id === accId) ?? accounts[0];
                   setEditing({
                     id: uid(),
                     bookId: activeBookId,
@@ -305,7 +307,7 @@ function FijoEditor({
           >
             {accounts.map((a) => (
               <option key={a.id} value={a.id}>
-                {a.name} · {a.currency}
+                {accountLabel(a)}
               </option>
             ))}
           </select>

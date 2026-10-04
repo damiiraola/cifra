@@ -22,6 +22,7 @@ function tx(id: string, amount = 100, extra: Partial<Transaction> = {}): Transac
     rateArs: 1,
     rateLocked: false,
     recurringId: "",
+    cardPeriod: "",
     ...extra,
   };
 }

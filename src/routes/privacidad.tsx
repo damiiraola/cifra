@@ -69,7 +69,9 @@ function Privacidad() {
         <Section title="Qué guardamos y para qué">
           <p>
             Tu mail, tu nombre y tu contraseña (guardada cifrada, nunca en texto plano), para que entres a tu cuenta.
-            Tus movimientos, fijos, cajas, presupuestos, categorías y cotizaciones, para mostrarte tu libro. La sesión,
+            Tus movimientos, fijos, cajas, tarjetas, presupuestos, categorías y cotizaciones, para mostrarte tu libro. De
+            una tarjeta guardamos el nombre que le pongas, la red, el banco, los días de cierre y vencimiento, el límite y,
+            si querés, los últimos 4 números; nunca el número completo, el vencimiento del plástico ni el código. La sesión,
             para no pedirte la clave cada vez. Datos técnicos mínimos (fecha de inicio de sesión, dirección IP y
             navegador) por seguridad y para frenar abusos.
           </p>

@@ -49,8 +49,9 @@ DNS de Resend ya está en `send.cifra.lol` (SPF, DKIM). Falta DMARC; no bloquea 
 - Alta rápida: `src/components/quick-add.tsx`.
 - Libros: `src/lib/books.ts`, `src/components/book-mode.tsx`. Entrar a Negocio tiene transición propia.
 - Presupuestos por libro: migración `0008_book_budgets.sql`, `src/lib/budget-math.ts`.
+- Tarjetas de crédito (fase 1): migración `0011_cards.sql` (`ledger_cards` + `card_period` en movimientos). Una tarjeta = fila en `ledger_cards` + dos cajas `kind = 'card'` (ARS y "<nombre> USD"). Su saldo negativo es lo que se debe; no suma a la plata. Cálculo puro en `src/lib/card-math.ts` (resumen = mes del cierre; comprar el día del cierre entra en ese resumen). Crédito va a la tarjeta (`inferAccount`), sin tarjeta cae al banco como antes. Alta en Ajustes → Tarjetas (`src/components/card-settings.tsx`), guardado con reintento (`saveCards`, `pendingCardIds`). Pagar el resumen = Cambio del banco a la tarjeta. Diseño completo: `cifra-design/tarjetas-y-asesor.md`.
 - Escrituras: primero local, después Neon. Si Neon falla, el movimiento queda en la outbox (`src/lib/outbox.ts`, `outbox-flusher.tsx`) y se reintenta. No mostrar un gasto que después desaparece al recargar.
-- Borrar cuenta: `deleteAccount` en `src/lib/ledger-api.ts`. Manda el mail y después borra.
+- Borrar cuenta: `deleteAccount` en `src/lib/ledger-api.ts`. Borra todo (incluidas tarjetas) en una transacción y después manda el mail.
 - Privacidad: `src/routes/privacidad.tsx`.
 - iOS no debe hacer zoom al enfocar un campo: inputs y selects en 16px (`src/styles.css`, `src/components/ui/input.tsx`).
 - Ícono de inicio: `public/icon-192.png`, `public/icon-512.png`, `public/__grok/icon-180.png`. El nombre en `cifra.lol` sale de `appNameFromHost` en `scripts/grok-pwa-shared.mjs`. No lo vuelvas a “Grok App”.
