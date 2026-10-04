@@ -9,8 +9,8 @@ import {
   inferAccount,
 } from "@/lib/books";
 import { DEFAULT_USD_RATE, DEFAULT_USDT_RATE, DEFAULT_USD_SOURCE, isUsdSource, type UsdSource } from "@/lib/fx";
-import type { Account, Book, BookKind, Card, CardNetwork, Category, Currency, PayMethod, Recurring, Transaction, TxType } from "@/lib/types";
-import { cardAccountNames, clampDay, validLast4 } from "@/lib/card-math";
+import type { Account, Book, BookKind, Card, CardNetwork, CardPurchase, Category, Currency, PayMethod, Recurring, Transaction, TxType } from "@/lib/types";
+import { cardAccountNames, clampDay, MAX_INSTALLMENTS, validLast4 } from "@/lib/card-math";
 import { uid } from "@/lib/utils";
 import { MAIL, sendMailQuiet } from "@/lib/mail";
 
@@ -32,6 +32,7 @@ export type LedgerSnapshot = {
   customCategories: Category[];
   recurrings: Recurring[];
   cards: Card[];
+  purchases: CardPurchase[];
 };
 
 const TYPES = new Set<TxType>(["expense", "income", "transfer"]);
@@ -65,6 +66,9 @@ type TxRow = {
   rate_locked: boolean | number | null;
   recurring_id: string | null;
   card_period: string | null;
+  purchase_id: string | null;
+  installment_no: number | null;
+  installment_count: number | null;
 };
 
 function asTx(input: Transaction): Transaction {
@@ -96,7 +100,19 @@ function asTx(input: Transaction): Transaction {
     rateLocked: Boolean(input.rateLocked),
     recurringId: String(input.recurringId ?? ""),
     cardPeriod: /^\d{4}-\d{2}$/.test(String(input.cardPeriod ?? "")) ? String(input.cardPeriod) : "",
+    ...installmentOf(input),
   };
+}
+
+/** Installment fields: only together, 1 ≤ no ≤ count ≤ 72, with a purchase id. */
+function installmentOf(input: Partial<Transaction>) {
+  const purchaseId = String(input.purchaseId ?? "").slice(0, 80);
+  const no = Math.round(Number(input.installmentNo ?? 0));
+  const count = Math.round(Number(input.installmentCount ?? 0));
+  if (!purchaseId || !(no >= 1 && count >= 1 && no <= count && count <= 72)) {
+    return { purchaseId: "", installmentNo: 0, installmentCount: 0 };
+  }
+  return { purchaseId, installmentNo: no, installmentCount: count };
 }
 
 function rowToTx(row: TxRow): Transaction {
@@ -119,6 +135,9 @@ function rowToTx(row: TxRow): Transaction {
     rateLocked: Boolean(row.rate_locked),
     recurringId: row.recurring_id ?? "",
     cardPeriod: row.card_period ?? "",
+    purchaseId: row.purchase_id ?? "",
+    installmentNo: Number(row.installment_no ?? 0),
+    installmentCount: Number(row.installment_count ?? 0),
   };
 }
 
@@ -129,7 +148,10 @@ const TX_SELECT = `id, type, amount, currency, category_id, note, merchant,
              coalesce(amount_to, 0) as amount_to, coalesce(rate_ars, 0) as rate_ars,
              coalesce(rate_locked, false) as rate_locked,
              coalesce(recurring_id, '') as recurring_id,
-             coalesce(card_period, '') as card_period`;
+             coalesce(card_period, '') as card_period,
+             coalesce(purchase_id, '') as purchase_id,
+             coalesce(installment_no, 0) as installment_no,
+             coalesce(installment_count, 0) as installment_count`;
 
 async function ensureSettings(sql: Awaited<ReturnType<typeof getSql>>, userId: string) {
   const existing = await sql<{
@@ -318,11 +340,13 @@ async function insertTx(
   await sql`
     insert into ledger_transactions (
       id, user_id, type, amount, currency, category_id, note, merchant, date, method, created_at,
-      book_id, account_id, counterparty_id, amount_to, rate_ars, rate_locked, recurring_id, card_period
+      book_id, account_id, counterparty_id, amount_to, rate_ars, rate_locked, recurring_id, card_period,
+      purchase_id, installment_no, installment_count
     ) values (
       ${tx.id}, ${userId}, ${tx.type}, ${tx.amount}, ${tx.currency}, ${tx.categoryId},
       ${tx.note}, ${tx.merchant}, ${tx.date}, ${tx.method}, ${tx.createdAt},
-      ${tx.bookId}, ${tx.accountId}, ${tx.counterpartyId}, ${tx.amountTo}, ${tx.rateArs}, ${tx.rateLocked}, ${tx.recurringId}, ${tx.cardPeriod || null}
+      ${tx.bookId}, ${tx.accountId}, ${tx.counterpartyId}, ${tx.amountTo}, ${tx.rateArs}, ${tx.rateLocked}, ${tx.recurringId}, ${tx.cardPeriod || null},
+      ${tx.purchaseId || null}, ${tx.purchaseId ? tx.installmentNo : null}, ${tx.purchaseId ? tx.installmentCount : null}
     )
     on conflict (id) do update set
       type = excluded.type,
@@ -340,7 +364,10 @@ async function insertTx(
       rate_ars = excluded.rate_ars,
       rate_locked = excluded.rate_locked,
       recurring_id = excluded.recurring_id,
-      card_period = excluded.card_period
+      card_period = excluded.card_period,
+      purchase_id = excluded.purchase_id,
+      installment_no = excluded.installment_no,
+      installment_count = excluded.installment_count
     where ledger_transactions.user_id = ${userId}
   `;
 }
@@ -358,7 +385,10 @@ export const loadLedger = createServerFn({ method: "GET" })
              coalesce(amount_to, 0) as amount_to, coalesce(rate_ars, 0) as rate_ars,
              coalesce(rate_locked, false) as rate_locked,
              coalesce(recurring_id, '') as recurring_id,
-             coalesce(card_period, '') as card_period
+             coalesce(card_period, '') as card_period,
+             coalesce(purchase_id, '') as purchase_id,
+             coalesce(installment_no, 0) as installment_no,
+             coalesce(installment_count, 0) as installment_count
       from ledger_transactions
       where user_id = ${context.userId}
       order by date desc, created_at desc
@@ -399,6 +429,7 @@ export const loadLedger = createServerFn({ method: "GET" })
       active: Boolean(r.active),
     }));
     const cards = await loadCards(sql, context.userId);
+    const purchases = await loadPurchases(sql, context.userId);
     const money = hydrateBookMoney({
       books: books.books,
       legacyBudgets: settings.budgets,
@@ -415,6 +446,7 @@ export const loadLedger = createServerFn({ method: "GET" })
       ...scoped,
       recurrings,
       cards,
+      purchases,
     };
   });
 
@@ -443,7 +475,10 @@ export const patchTransaction = createServerFn({ method: "POST" })
              coalesce(amount_to, 0) as amount_to, coalesce(rate_ars, 0) as rate_ars,
              coalesce(rate_locked, false) as rate_locked,
              coalesce(recurring_id, '') as recurring_id,
-             coalesce(card_period, '') as card_period
+             coalesce(card_period, '') as card_period,
+             coalesce(purchase_id, '') as purchase_id,
+             coalesce(installment_no, 0) as installment_no,
+             coalesce(installment_count, 0) as installment_count
       from ledger_transactions
       where id = ${data.id} and user_id = ${context.userId}
       limit 1
@@ -800,6 +835,134 @@ export const saveCards = createServerFn({ method: "POST" })
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const BACKUP_KEEP_DAYS = 30;
 
+function asPurchase(input: CardPurchase): CardPurchase {
+  if (!input?.id || typeof input.id !== "string" || input.id.length > 80) throw new Error("Compra inválida");
+  if (!input.cardId) throw new Error("Compra sin tarjeta");
+  if (!DAY_RE.test(String(input.date ?? ""))) throw new Error("Fecha inválida");
+  const installments = Math.round(Number(input.installments));
+  if (!(installments >= 1 && installments <= MAX_INSTALLMENTS)) throw new Error("Cuotas inválidas");
+  const paidBefore = Math.round(Number(input.paidBefore ?? 0));
+  if (!(paidBefore >= 0 && paidBefore < installments)) throw new Error("Cuotas pagas inválidas");
+  const interestFree = input.interestFree !== false;
+  const total = Number(input.total);
+  const each = Number(input.installmentAmount);
+  if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(each) || each <= 0) throw new Error("Monto inválido");
+  return {
+    id: input.id,
+    bookId: String(input.bookId ?? ""),
+    cardId: String(input.cardId),
+    date: input.date,
+    merchant: String(input.merchant ?? "").slice(0, 120),
+    categoryId: String(input.categoryId ?? "otros").slice(0, 60),
+    currency: input.currency === "USD" ? "USD" : "ARS",
+    installments,
+    installmentAmount: Math.round(each * 100) / 100,
+    total: Math.round(total * 100) / 100,
+    interestFree,
+    cashPrice: money0(input.cashPrice),
+    paidBefore,
+    note: String(input.note ?? "").slice(0, 200),
+  };
+}
+
+type PurchaseRow = {
+  id: string;
+  book_id: string;
+  card_id: string;
+  date: string;
+  merchant: string;
+  category_id: string;
+  currency: string;
+  installments: number;
+  installment_amount: number;
+  total: number;
+  interest_free: boolean | number;
+  cash_price: number;
+  paid_before: number;
+  note: string;
+};
+
+async function loadPurchases(sql: Awaited<ReturnType<typeof getSql>>, userId: string): Promise<CardPurchase[]> {
+  const rows = await sql<PurchaseRow>`
+    select id, book_id, card_id, date::text as date, merchant, category_id, currency, installments,
+           installment_amount, total, interest_free, cash_price, paid_before, note
+    from ledger_card_purchases
+    where user_id = ${userId}
+    order by date desc, created_at desc
+  `;
+  return rows.map((r) => ({
+    id: r.id,
+    bookId: r.book_id,
+    cardId: r.card_id,
+    date: String(r.date).slice(0, 10),
+    merchant: r.merchant ?? "",
+    categoryId: r.category_id,
+    currency: r.currency === "USD" ? "USD" : "ARS",
+    installments: Number(r.installments),
+    installmentAmount: Number(r.installment_amount),
+    total: Number(r.total),
+    interestFree: Boolean(r.interest_free),
+    cashPrice: Number(r.cash_price) || 0,
+    paidBefore: Number(r.paid_before) || 0,
+    note: r.note ?? "",
+  }));
+}
+
+/** Create or update purchases in cuotas. The card must be the user's; the book comes from the card. */
+export const savePurchases = createServerFn({ method: "POST" })
+  .validator((input: CardPurchase[]) => (Array.isArray(input) ? input.slice(0, 100).map(asPurchase) : []))
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    await withTransaction(async (sql) => {
+      for (const p of data) {
+        const card = await sql<{ book_id: string }>`
+          select book_id from ledger_cards where id = ${p.cardId} and user_id = ${context.userId} limit 1
+        `;
+        if (!card[0]) throw new Error("Tarjeta inválida");
+        await sql`
+          insert into ledger_card_purchases (
+            id, user_id, book_id, card_id, date, merchant, category_id, currency, installments,
+            installment_amount, total, interest_free, cash_price, paid_before, note
+          ) values (
+            ${p.id}, ${context.userId}, ${card[0].book_id}, ${p.cardId}, ${p.date}, ${p.merchant}, ${p.categoryId},
+            ${p.currency}, ${p.installments}, ${p.installmentAmount}, ${p.total}, ${p.interestFree},
+            ${p.cashPrice}, ${p.paidBefore}, ${p.note}
+          )
+          on conflict (id) do update set
+            card_id = excluded.card_id,
+            book_id = excluded.book_id,
+            date = excluded.date,
+            merchant = excluded.merchant,
+            category_id = excluded.category_id,
+            currency = excluded.currency,
+            installments = excluded.installments,
+            installment_amount = excluded.installment_amount,
+            total = excluded.total,
+            interest_free = excluded.interest_free,
+            cash_price = excluded.cash_price,
+            paid_before = excluded.paid_before,
+            note = excluded.note
+          where ledger_card_purchases.user_id = ${context.userId}
+        `;
+      }
+    });
+    return { ok: true as const, count: data.length };
+  });
+
+/** Delete purchases and every cuota they derived, in one transaction. */
+export const removePurchases = createServerFn({ method: "POST" })
+  .validator((ids: string[]) => (Array.isArray(ids) ? ids.map(String).filter(Boolean).slice(0, 100) : []))
+  .middleware([authMiddleware])
+  .handler(async ({ context, data }) => {
+    await withTransaction(async (sql) => {
+      for (const id of data) {
+        await sql`delete from ledger_transactions where user_id = ${context.userId} and purchase_id = ${id}`;
+        await sql`delete from ledger_card_purchases where user_id = ${context.userId} and id = ${id}`;
+      }
+    });
+    return { ok: true as const, count: data.length };
+  });
+
 export const saveDailyBackup = createServerFn({ method: "POST" })
   .validator((input: { day: string; payloadJson: string }) => {
     if (!DAY_RE.test(input?.day ?? "")) throw new Error("Día inválido");
@@ -865,6 +1028,7 @@ export const deleteAccount = createServerFn({ method: "POST" })
       await tx`delete from ledger_transactions where user_id = ${context.userId}`;
       await tx`delete from ledger_recurring where user_id = ${context.userId}`;
       await tx`delete from ledger_cards where user_id = ${context.userId}`;
+      await tx`delete from ledger_card_purchases where user_id = ${context.userId}`;
       await tx`delete from ledger_accounts where user_id = ${context.userId}`;
       await tx`delete from ledger_books where user_id = ${context.userId}`;
       await tx`delete from ledger_settings where user_id = ${context.userId}`;

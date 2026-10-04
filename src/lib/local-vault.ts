@@ -1,4 +1,4 @@
-import type { Account, Book, Card, Category, ChatMessage, Recurring, Transaction } from "./types";
+import type { Account, Book, Card, CardPurchase, Category, ChatMessage, Recurring, Transaction } from "./types";
 import { parseOutbox, type OutboxOp } from "./outbox";
 import { remapRecurrings } from "./recurring-sync";
 
@@ -52,6 +52,9 @@ export type LocalVault = {
   /** Credit cards (their two cajas are in `accounts`). */
   cards?: Card[];
   pendingCardIds?: string[];
+  /** Purchases in cuotas (their cuotas are in `transactions`). */
+  purchases?: CardPurchase[];
+  pendingPurchaseIds?: string[];
 };
 
 function mailOf(email: string | null | undefined) {
@@ -89,6 +92,8 @@ export function buildLocalVault(input: {
   bookGlobals?: Record<string, number>;
   cards?: Card[];
   pendingCardIds?: string[];
+  purchases?: CardPurchase[];
+  pendingPurchaseIds?: string[];
 }): LocalVault | null {
   const email = mailOf(input.email);
   if (!email) return null;
@@ -134,6 +139,8 @@ export function buildLocalVault(input: {
     bookGlobals: input.bookGlobals ?? {},
     cards: input.cards ?? [],
     pendingCardIds: [...new Set(input.pendingCardIds ?? [])],
+    purchases: input.purchases ?? [],
+    pendingPurchaseIds: [...new Set(input.pendingPurchaseIds ?? [])],
   };
 }
 
@@ -243,6 +250,10 @@ export function asVault(raw: unknown): LocalVault | null {
       ? p.cards.filter((c): c is Card => Boolean(c && typeof c === "object" && c.id && c.accountArsId && c.accountUsdId))
       : [],
     pendingCardIds: Array.isArray(p.pendingCardIds) ? p.pendingCardIds.map(String).filter(Boolean) : [],
+    purchases: Array.isArray(p.purchases)
+      ? p.purchases.filter((x): x is CardPurchase => Boolean(x && typeof x === "object" && x.id && x.cardId))
+      : [],
+    pendingPurchaseIds: Array.isArray(p.pendingPurchaseIds) ? p.pendingPurchaseIds.map(String).filter(Boolean) : [],
   };
 }
 

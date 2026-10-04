@@ -25,6 +25,8 @@ import {
   saveAccounts,
   replaceRecurrings,
   saveCards,
+  savePurchases,
+  removePurchases,
   loadLatestBackup,
   saveDailyBackup,
   saveSettings,
@@ -41,18 +43,27 @@ import {
   type UsdSource,
 } from "./fx";
 import { inferAccount, stampRate } from "./books";
-import { cardAccountNames, cardPeriodFor, clampDay, missingVaultCards } from "./card-math";
+import {
+  cardAccountNames,
+  cardPeriodFor,
+  clampDay,
+  deriveInstallments,
+  MAX_INSTALLMENTS,
+  missingVaultCards,
+  staleCuotaIds,
+} from "./card-math";
 import { dueDate, dueUnposted, isPosted, likelyDuplicate, postedTxId } from "./recurring";
 import { buildSeed } from "./seed";
 import { monthISO, uid } from "./utils";
 import { applyOutbox, enqueue, OUTBOX_MAX_TRIES, pruneOutbox, resetTries, type OutboxOp } from "./outbox";
 import { mergeRecurrings } from "./recurring-sync";
 import { hydrateBookMoney, moneyForBook } from "./budget-math";
-import type { Account, Book, Card, Category, CategoryKind, ChatMessage, Recurring, Transaction } from "./types";
+import type { Account, Book, Card, CardPurchase, Category, CategoryKind, ChatMessage, Recurring, Transaction } from "./types";
 
 const LOCAL_KEY = "cifra-ledger-v1";
 
 type Draft = Partial<Transaction> & { id?: string };
+export type PurchaseInput = Omit<CardPurchase, "id" | "bookId"> & { id?: string };
 export type CardInput = Omit<Card, "id" | "accountArsId" | "accountUsdId" | "archived" | "bookId"> & {
   id?: string;
   bookId?: string;
@@ -77,6 +88,9 @@ type LedgerState = {
   pendingRecurringIds: string[];
   cards: Card[];
   pendingCardIds: string[];
+  purchases: CardPurchase[];
+  /** Purchases to send (if they exist) or to delete on the server (if not). */
+  pendingPurchaseIds: string[];
   budgets: Record<string, number>;
   globalBudget: number;
   bookBudgets: Record<string, Record<string, number>>;
@@ -102,7 +116,7 @@ type LedgerState = {
   setSelectedDay: (day: string | null) => void;
   openQuick: (draft?: Draft) => void;
   closeQuick: () => void;
-  addTx: (tx: Omit<Transaction, "id" | "createdAt" | "cardPeriod"> & { id?: string; createdAt?: string; cardPeriod?: string }) => void;
+  addTx: (tx: TxInput) => void;
   updateTx: (id: string, patch: Partial<Transaction>) => void;
   deleteTx: (id: string) => void;
   flushOutbox: (opts?: { force?: boolean }) => Promise<void>;
@@ -123,6 +137,11 @@ type LedgerState = {
   upsertCard: (input: CardInput) => Card | null;
   archiveCard: (id: string) => void;
   flushCards: () => Promise<void>;
+  /** Create or edit a purchase in cuotas and redo its cuotas. Returns the purchase. */
+  savePurchase: (input: PurchaseInput) => CardPurchase | null;
+  /** Delete a purchase and all its cuotas. */
+  removePurchase: (id: string) => void;
+  flushPurchases: () => Promise<void>;
   pushChat: (msg: ChatMessage) => void;
   clearChat: () => void;
   loadDemo: () => void;
@@ -162,6 +181,8 @@ function vaultInput(get: () => LedgerState) {
     pendingRecurringIds: s.pendingRecurringIds,
     cards: s.cards,
     pendingCardIds: s.pendingCardIds,
+    purchases: s.purchases,
+    pendingPurchaseIds: s.pendingPurchaseIds,
     budgets: s.budgets,
     globalBudget: s.globalBudget,
     bookBudgets: s.bookBudgets,
@@ -305,6 +326,9 @@ let recFlushBusy = false;
 let recFlushAgain = false;
 let cardFlushBusy = false;
 let cardFlushAgain = false;
+let purchaseFlushBusy = false;
+let purchaseFlushAgain = false;
+let purchaseFlushLock: Promise<void> | null = null;
 
 function pushSettings(get: () => LedgerState, revert?: Partial<LedgerState>, set?: (p: Partial<LedgerState>) => void) {
   persistLocal(get);
@@ -336,7 +360,11 @@ function pushSettings(get: () => LedgerState, revert?: Partial<LedgerState>, set
   });
 }
 
-type TxInput = Omit<Transaction, "id" | "createdAt" | "cardPeriod"> & { id?: string; createdAt?: string; cardPeriod?: string };
+type InstallmentFields = "cardPeriod" | "purchaseId" | "installmentNo" | "installmentCount";
+type TxInput = Omit<Transaction, "id" | "createdAt" | InstallmentFields> & {
+  id?: string;
+  createdAt?: string;
+} & Partial<Pick<Transaction, InstallmentFields>>;
 
 function fillTx(get: () => LedgerState, tx: TxInput, previous?: Transaction): Transaction {
   const { activeBookId, accounts, usdRate, usdtRate } = get();
@@ -362,7 +390,14 @@ function fillTx(get: () => LedgerState, tx: TxInput, previous?: Transaction): Tr
     rateArs,
     rateLocked: Boolean(tx.rateLocked),
     recurringId: tx.recurringId ?? "",
-    cardPeriod: cardPeriodFor(cards, { type: tx.type, accountId, date: tx.date, cardPeriod: tx.cardPeriod }, previous),
+    cardPeriod: cardPeriodFor(
+      cards,
+      { type: tx.type, accountId, date: tx.date, cardPeriod: tx.cardPeriod, purchaseId: tx.purchaseId },
+      previous,
+    ),
+    purchaseId: tx.purchaseId ?? "",
+    installmentNo: tx.installmentNo ?? 0,
+    installmentCount: tx.installmentCount ?? 0,
   };
 }
 
@@ -385,6 +420,13 @@ function withPendingCards(
     ...local.accounts.filter((a) => cardAccIds.has(a.id)),
   ];
   return { cards, accounts };
+}
+
+/** Server purchases, with this phone's unsynced edits and deletions on top. */
+function withPendingPurchases(remote: CardPurchase[], local: CardPurchase[], pendingIds: string[]) {
+  const pending = new Set(pendingIds);
+  if (!pending.size) return remote;
+  return [...remote.filter((p) => !pending.has(p.id)), ...local.filter((p) => pending.has(p.id))];
 }
 
 function ackOp(set: (p: Partial<LedgerState>) => void, get: () => LedgerState, op: OutboxOp) {
@@ -426,6 +468,18 @@ async function restoreVault(get: () => LedgerState, set: (p: Partial<LedgerState
     });
     notes.push("tarjetas");
     void get().flushCards();
+  }
+  const src = vault ?? backup!;
+  const cardIds = new Set(get().cards.map((c) => c.id));
+  const havePurchases = new Set(get().purchases.map((p) => p.id));
+  const lostPurchases = (src.purchases ?? []).filter((p) => cardIds.has(p.cardId) && !havePurchases.has(p.id));
+  if (lostPurchases.length) {
+    const bookOf = new Map(get().cards.map((c) => [c.id, c.bookId]));
+    set({
+      purchases: [...get().purchases, ...lostPurchases.map((p) => ({ ...p, bookId: bookOf.get(p.cardId) ?? p.bookId }))],
+      pendingPurchaseIds: [...new Set([...get().pendingPurchaseIds, ...lostPurchases.map((p) => p.id)])],
+    });
+    void get().flushPurchases();
   }
   const accounts = vault ? applyOpenings(state.books, get().accounts, vault.openings) : null;
   if (accounts) {
@@ -489,6 +543,8 @@ function paintVault(set: (p: Partial<LedgerState>) => void, get: () => LedgerSta
     accounts,
     cards: vault.cards?.length ? vault.cards : get().cards,
     pendingCardIds: vault.pendingCardIds?.length ? vault.pendingCardIds : get().pendingCardIds,
+    purchases: vault.purchases?.length ? vault.purchases : get().purchases,
+    pendingPurchaseIds: vault.pendingPurchaseIds?.length ? vault.pendingPurchaseIds : get().pendingPurchaseIds,
     activeBookId,
     onboarded: vault.onboarded || get().onboarded,
     recurrings: vault.recurrings.length ? remapVaultRecurrings(vault, books, accounts) : get().recurrings,
@@ -527,6 +583,8 @@ export const useLedger = create<LedgerState>()((set, get) => ({
   pendingRecurringIds: [],
   cards: [],
   pendingCardIds: [],
+  purchases: [],
+  pendingPurchaseIds: [],
   budgets: { ...DEFAULT_BUDGETS },
   globalBudget: DEFAULT_GLOBAL_BUDGET,
   bookBudgets: {},
@@ -599,6 +657,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
               books: remote.books,
               accounts: legacyCards.accounts,
               cards: legacyCards.cards,
+              purchases: withPendingPurchases(remote.purchases ?? [], get().purchases, get().pendingPurchaseIds),
               activeBookId: remote.activeBookId,
               onboarded: true,
               categoryNames: remote.categoryNames,
@@ -640,6 +699,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
           books: remote.books,
           accounts: merged.accounts,
           cards: merged.cards,
+          purchases: withPendingPurchases(remote.purchases ?? [], get().purchases, get().pendingPurchaseIds),
           activeBookId: remote.activeBookId,
           onboarded: remote.onboarded,
           categoryNames: remote.categoryNames,
@@ -659,6 +719,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
         await restoreVault(get, set);
         void get().flushRecurrings({ force: true });
         void get().flushCards();
+        void get().flushPurchases();
         void get().refreshQuotes();
         offerDueRecurrings(get);
         void get().flushOutbox({ force: true });
@@ -691,6 +752,8 @@ export const useLedger = create<LedgerState>()((set, get) => ({
       pendingRecurringIds: [],
       cards: [],
       pendingCardIds: [],
+      purchases: [],
+      pendingPurchaseIds: [],
       chat: [],
       selectedDay: null,
       quickOpen: false,
@@ -1104,6 +1167,92 @@ export const useLedger = create<LedgerState>()((set, get) => ({
       cardFlushBusy = false;
     }
   },
+  savePurchase: (input) => {
+    const s = get();
+    const card = s.cards.find((c) => c.id === input.cardId && !c.archived);
+    if (!card) {
+      toast.error("Elegí una tarjeta");
+      return null;
+    }
+    const installments = Math.max(1, Math.min(MAX_INSTALLMENTS, Math.round(input.installments)));
+    const paidBefore = Math.max(0, Math.min(installments - 1, Math.round(input.paidBefore)));
+    const each = input.interestFree ? Math.round((input.total / installments) * 100) / 100 : input.installmentAmount;
+    const total = input.interestFree ? input.total : Math.round(input.installmentAmount * installments * 100) / 100;
+    if (!(total > 0) || !(each > 0)) {
+      toast.error("Ingresá un monto válido");
+      return null;
+    }
+    const purchase: CardPurchase = {
+      ...input,
+      id: input.id ?? uid(),
+      bookId: card.bookId,
+      installments,
+      paidBefore,
+      installmentAmount: each,
+      total,
+      cashPrice: input.cashPrice > 0 ? input.cashPrice : 0,
+    };
+    const cuotas = deriveInstallments(purchase, card);
+    const stale = staleCuotaIds(s.transactions, purchase.id, cuotas);
+    const exists = s.purchases.some((p) => p.id === purchase.id);
+    set({
+      purchases: exists ? s.purchases.map((p) => (p.id === purchase.id ? purchase : p)) : [purchase, ...s.purchases],
+      pendingPurchaseIds: [...new Set([...s.pendingPurchaseIds, purchase.id])],
+    });
+    persistLocal(get);
+    // Purchase first, so the server never holds cuotas of a purchase it does not know.
+    void get()
+      .flushPurchases()
+      .finally(() => {
+        for (const id of stale) get().deleteTx(id);
+        for (const row of cuotas) {
+          if (get().transactions.some((t) => t.id === row.id)) get().updateTx(row.id, row);
+          else get().addTx(row);
+        }
+      });
+    return purchase;
+  },
+  removePurchase: (id) => {
+    const s = get();
+    const ids = s.transactions.filter((t) => t.purchaseId === id).map((t) => t.id);
+    set({
+      purchases: s.purchases.filter((p) => p.id !== id),
+      pendingPurchaseIds: [...new Set([...s.pendingPurchaseIds, id])],
+    });
+    for (const txId of ids) get().deleteTx(txId);
+    persistLocal(get);
+    void get().flushPurchases();
+  },
+  flushPurchases: async () => {
+    if (purchaseFlushBusy) {
+      purchaseFlushAgain = true;
+      return purchaseFlushLock ?? undefined;
+    }
+    purchaseFlushBusy = true;
+    purchaseFlushLock = (async () => {
+      try {
+        do {
+          purchaseFlushAgain = false;
+          const ids = get().pendingPurchaseIds;
+          if (!ids.length) continue;
+          const rows = get().purchases.filter((p) => ids.includes(p.id));
+          const gone = ids.filter((id) => !rows.some((p) => p.id === id));
+          try {
+            if (rows.length) await savePurchases({ data: rows });
+            if (gone.length) await removePurchases({ data: gone });
+            set({ pendingPurchaseIds: get().pendingPurchaseIds.filter((id) => !ids.includes(id)) });
+            persistLocal(get);
+          } catch (err) {
+            persistFail(err, () => void get().flushPurchases());
+          }
+        } while (purchaseFlushAgain);
+      } finally {
+        purchaseFlushBusy = false;
+        purchaseFlushLock = null;
+      }
+    })();
+    return purchaseFlushLock;
+  },
   pushChat: (msg) => {
     set({ chat: [...get().chat, msg].slice(-24) });
     persistLocal(get);
@@ -1118,7 +1267,10 @@ export const useLedger = create<LedgerState>()((set, get) => ({
       fillTx(() => ({ ...get(), activeBookId, accounts, usdRate, usdtRate }) as LedgerState, t),
     );
     paint(set, get, { confirmed: transactions, outbox: [] });
+    const dropped = get().purchases.map((p) => p.id);
     set({
+      purchases: [],
+      pendingPurchaseIds: [...new Set([...get().pendingPurchaseIds, ...dropped])],
       budgets: { ...DEFAULT_BUDGETS },
       globalBudget: DEFAULT_GLOBAL_BUDGET,
       bookBudgets: {},
@@ -1129,6 +1281,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
     });
     persistLocal(get);
     void replaceTransactions({ data: transactions }).catch((err) => persistFail(err));
+    if (dropped.length) void get().flushPurchases();
     pushSettings(get);
   },
   wipe: () => {
@@ -1139,8 +1292,15 @@ export const useLedger = create<LedgerState>()((set, get) => ({
       return row?.bookId && row.bookId !== activeBookId;
     });
     paint(set, get, { confirmed: kept, outbox: nextOutbox });
-    set({ chat: [] });
+    // Its cuotas just went with the movements: the purchases go too.
+    const dropped = get().purchases.filter((p) => p.bookId === activeBookId).map((p) => p.id);
+    set({
+      chat: [],
+      purchases: get().purchases.filter((p) => p.bookId !== activeBookId),
+      pendingPurchaseIds: [...new Set([...get().pendingPurchaseIds, ...dropped])],
+    });
     persistLocal(get);
+    if (dropped.length) void get().flushPurchases();
     void replaceTransactions({ data: kept }).catch((err) => {
       persistFail(err);
       paint(set, get, { confirmed, outbox });
@@ -1157,6 +1317,10 @@ export function useBookTxs() {
 
 export function useBookCards() {
   return useLedger(useShallow((s) => s.cards.filter((c) => c.bookId === s.activeBookId && !c.archived)));
+}
+
+export function useBookPurchases() {
+  return useLedger(useShallow((s) => s.purchases.filter((p) => p.bookId === s.activeBookId)));
 }
 
 export function useBookAccounts() {

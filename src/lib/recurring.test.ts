@@ -38,6 +38,9 @@ const tx = (extra: Partial<Transaction> = {}): Transaction => ({
   rateLocked: false,
   recurringId: "",
   cardPeriod: "",
+  purchaseId: "",
+  installmentNo: 0,
+  installmentCount: 0,
   ...extra,
 });
 

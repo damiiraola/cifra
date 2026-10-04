@@ -23,6 +23,9 @@ function tx(id: string, amount = 100, extra: Partial<Transaction> = {}): Transac
     rateLocked: false,
     recurringId: "",
     cardPeriod: "",
+    purchaseId: "",
+    installmentNo: 0,
+    installmentCount: 0,
     ...extra,
   };
 }
@@ -74,6 +77,17 @@ describe("outbox", () => {
     );
     const ids = kept.map((o) => `${o.action}:${o.id}`);
     assert.deepEqual(ids, ["add:c", "update:b", "delete:a"]);
+  });
+
+  it("keeps an update that only moved a cuota to another statement", () => {
+    const remote = [tx("c", 10, { purchaseId: "p", installmentNo: 2, installmentCount: 6, cardPeriod: "2026-10" })];
+    const kept = pruneOutbox(
+      [{ id: "c", action: "update", row: tx("c", 10, { purchaseId: "p", installmentNo: 2, installmentCount: 6, cardPeriod: "2026-11" }), at: 1, tries: 0 }],
+      remote,
+    );
+    assert.equal(kept.length, 1);
+    const same = pruneOutbox([{ id: "c", action: "update", row: remote[0]!, at: 1, tries: 0 }], remote);
+    assert.equal(same.length, 0);
   });
 
   it("parses only valid ops", () => {

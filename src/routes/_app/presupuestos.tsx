@@ -2,9 +2,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { budgetAllocation, liveCategoryRows } from "@/lib/budget-math";
 import { DEFAULT_BUDGETS } from "@/lib/categories";
 import { computeMonth } from "@/lib/analytics";
-import { moneyARS, parseAmount, amountInput } from "@/lib/format";
+import { moneyARS, monthLabel, parseAmount, amountInput } from "@/lib/format";
 import { CatIcon } from "@/lib/icons";
 import { useAllCategories, useBookTxs, useLedger } from "@/lib/store";
+import { committedForMonth } from "@/lib/card-math";
+import { monthISO } from "@/lib/utils";
 import { MonthSwitcher } from "@/components/month-switcher";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -23,6 +25,8 @@ function Presupuestos() {
     setBudget,
     globalBudget,
     setGlobalBudget,
+    recurrings,
+    activeBookId,
   } = useLedger();
   const transactions = useBookTxs();
   const allCats = useAllCategories();
@@ -33,6 +37,10 @@ function Presupuestos() {
   const { assigned, unassigned, overAssigned } = budgetAllocation(rows, globalBudget);
   const used = globalBudget ? (stats.spent / globalBudget) * 100 : 0;
   const assignedPct = globalBudget ? Math.min(100, (assigned / globalBudget) * 100) : 0;
+  const future = viewMonth > monthISO();
+  const committed = future
+    ? committedForMonth(transactions, recurrings.filter((r) => r.bookId === activeBookId), viewMonth, usdRate)
+    : null;
 
   return (
     <div className="grid gap-6">
@@ -41,7 +49,7 @@ function Presupuestos() {
           <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Límites</p>
           <h1 className="font-display text-4xl tracking-tight">Presupuestos</h1>
         </div>
-        <MonthSwitcher value={viewMonth} onChange={setViewMonth} />
+        <MonthSwitcher value={viewMonth} onChange={setViewMonth} ahead={12} />
       </div>
 
       <section>
@@ -66,9 +74,16 @@ function Presupuestos() {
           />
         </div>
         <p className="mt-2 text-sm text-muted">
-          Gastado {moneyARS(stats.spent)}
+          {future ? "Ya cargado" : "Gastado"} {moneyARS(stats.spent)}
           {globalBudget ? ` · ${used.toFixed(0)}% del tope` : ""}
         </p>
+        {committed && committed.total > 0 ? (
+          <p className="mt-1 text-sm text-subtle">
+            Para {monthLabel(viewMonth, "LLLL")} ya tenés {moneyARS(committed.cuotas)} en cuotas
+            {committed.fijos > 0 ? ` y ${moneyARS(committed.fijos)} de fijos sin anotar` : ""}
+            {globalBudget ? `. Te quedan ${moneyARS(Math.max(0, globalBudget - committed.fijos - stats.spent))} antes de gastar.` : "."}
+          </p>
+        ) : null}
       </section>
 
       <section>

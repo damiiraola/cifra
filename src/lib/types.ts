@@ -60,6 +60,37 @@ export type Transaction = {
   recurringId: string;
   /** Card statement (YYYY-MM of its closing) for expenses on a card caja; "" otherwise. */
   cardPeriod: string;
+  /** Installment of a card purchase (`ledger_card_purchases.id`); "" otherwise. */
+  purchaseId: string;
+  /** 3 of 12. 0 when it is not an installment. */
+  installmentNo: number;
+  installmentCount: number;
+};
+
+/**
+ * A purchase in cuotas as it reads on the ticket. Its installments are
+ * derived movements (`cuo_<id>_<k>`), so editing or deleting it redoes them.
+ */
+export type CardPurchase = {
+  id: string;
+  bookId: string;
+  cardId: string;
+  /** Purchase date, or the date of the first cuota loaded (when it already came with paid ones). */
+  date: string;
+  merchant: string;
+  categoryId: string;
+  currency: "ARS" | "USD";
+  installments: number;
+  /** Interest-free: total / installments. With interest: what the bank charges per cuota. */
+  installmentAmount: number;
+  /** What you pay in total (interest-free: the price). */
+  total: number;
+  interestFree: boolean;
+  /** Cash price, only to show what the financing costs (0 = unknown). */
+  cashPrice: number;
+  /** Cuotas already paid before loading it in Cifra ("voy por la 5 de 12" = 4). */
+  paidBefore: number;
+  note: string;
 };
 
 export type CardNetwork = "visa" | "master" | "amex" | "cabal" | "naranja" | "otra";

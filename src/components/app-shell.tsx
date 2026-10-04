@@ -8,8 +8,7 @@ import {
   Plus,
   Repeat,
   Settings,
-  Target,
-} from "lucide-react";
+  Target, CreditCard } from "lucide-react";
 import { UserButton } from "@/lib/auth/gates";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { useLedger } from "@/lib/store";
@@ -33,6 +32,7 @@ const NAV = [
 ] as const;
 
 const MORE = [
+  { to: "/tarjetas", label: "Tarjetas", icon: CreditCard },
   { to: "/presupuestos", label: "Presupuestos", icon: Target },
   { to: "/ia", label: "Asistente", icon: Brain },
   { to: "/ajustes", label: "Ajustes", icon: Settings },
