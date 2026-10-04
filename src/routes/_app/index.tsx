@@ -3,7 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Plus, Search, X } from "lucide-react";
 import { computeMonth, pickDiaryDay, toARS } from "@/lib/analytics";
 import { dayLabel, moneyARS } from "@/lib/format";
-import { isPosted } from "@/lib/recurring";
+import { dueUnposted } from "@/lib/recurring";
 import { useAllCategories, useBookTxs, useLedger } from "@/lib/store";
 import { monthISO, shiftMonth, todayISO } from "@/lib/utils";
 import { Heatmap } from "@/components/heatmap";
@@ -57,8 +57,11 @@ function Diario() {
   const spent = dayTx.filter((t) => t.type === "expense").reduce((s, t) => s + toARS(t, fx), 0);
   const earned = dayTx.filter((t) => t.type === "income").reduce((s, t) => s + toARS(t, fx), 0);
   const vsAvg = spent - stats.avgDaily;
-  const fijosPendientes = recurrings.filter(
-    (r) => r.bookId === activeBookId && r.active && !isPosted(r, transactions, viewMonth),
+  // Only fijos whose day already came; future ones are not "sin anotar".
+  const fijosPendientes = dueUnposted(
+    recurrings.filter((r) => r.bookId === activeBookId),
+    transactions,
+    viewMonth,
   ).length;
 
   const query = q.trim().toLowerCase();

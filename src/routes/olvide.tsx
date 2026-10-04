@@ -5,6 +5,7 @@ import { AuthScreen } from "@/components/auth-screen";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { authErrorMessage } from "@/lib/auth/errors";
 
 export const Route = createFileRoute("/olvide")({
   component: Forgot,
@@ -26,12 +27,12 @@ function Forgot() {
         redirectTo: `${window.location.origin}/reset`,
       });
       if (err) {
-        setError(err.message || "No pude pedir el reset.");
+        setError(authErrorMessage(err, "No pude pedir el enlace. Probá de nuevo en un rato."));
         return;
       }
       setSent(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No pude pedir el reset.");
+      setError(authErrorMessage(err, "No pude pedir el enlace. Probá de nuevo en un rato."));
     } finally {
       setBusy(false);
     }
@@ -41,8 +42,8 @@ function Forgot() {
     <AuthScreen kicker="Te mandamos un enlace para elegir una clave nueva. Si el mail no existe, no avisamos nada.">
       {sent ? (
         <div className="mt-8">
-          <p className="text-sm text-fg">Si ese mail está en Cifra, ya salió el enlace. Revisá spam.</p>
-          <Link to="/login" className="mt-6 block text-sm text-muted underline-offset-4 hover:text-fg hover:underline">
+          <p className="text-sm text-fg">Si ese mail tiene cuenta en Cifra, te mandamos el enlace. Si no llega en unos minutos, mirá en spam.</p>
+          <Link to="/login" className="mt-3 block py-3 text-sm text-muted underline-offset-4 hover:text-fg hover:underline">
             Volver a entrar
           </Link>
         </div>
@@ -60,11 +61,15 @@ function Forgot() {
               placeholder="vos@mail.com"
             />
           </div>
-          {error ? <p className="text-sm text-red-400">{error}</p> : null}
+          {error ? (
+            <p role="alert" className="text-sm text-red-400">
+              {error}
+            </p>
+          ) : null}
           <Button type="submit" disabled={busy}>
             {busy ? "Enviando…" : "Mandar enlace"}
           </Button>
-          <Link to="/login" className="mt-2 block text-center text-sm text-muted underline-offset-4 hover:text-fg hover:underline">
+          <Link to="/login" className="mt-1 block py-3 text-center text-sm text-muted underline-offset-4 hover:text-fg hover:underline">
             Volver
           </Link>
         </form>

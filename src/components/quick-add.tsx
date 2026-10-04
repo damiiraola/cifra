@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { money, parseAmount } from "@/lib/format";
+import { money, parseAmount, amountInput } from "@/lib/format";
 import { toARS } from "@/lib/analytics";
 import { inferAccount, stampRate } from "@/lib/books";
 import { CatIcon } from "@/lib/icons";
 import { PAY_METHODS, type Currency, type PayMethod, type TxType } from "@/lib/types";
 import { cn, todayISO } from "@/lib/utils";
 import { useBookAccounts, useLedger, useVisibleCategories } from "@/lib/store";
+import { defaultCategory, lastCategory, methodForAccount, rememberCategory } from "@/lib/quick-defaults";
 import { Button } from "@/components/ui/button";
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
 import { Input } from "@/components/ui/input";
@@ -31,6 +32,7 @@ export function QuickAdd() {
     usdRate,
     usdtRate,
     activeBookId,
+    books,
   } = useLedger();
   const accounts = useBookAccounts();
   const visible = useVisibleCategories();
@@ -39,7 +41,7 @@ export function QuickAdd() {
   const [type, setType] = useState<TxType>("expense");
   const [amount, setAmount] = useState("");
   const [amountTo, setAmountTo] = useState("");
-  const [categoryId, setCategoryId] = useState("alimentos");
+  const [categoryId, setCategoryId] = useState("");
   const [merchant, setMerchant] = useState("");
   const [note, setNote] = useState("");
   const [date, setDate] = useState(todayISO());
@@ -49,6 +51,15 @@ export function QuickAdd() {
   const [counterpartyId, setCounterpartyId] = useState("");
   const [rate, setRate] = useState("");
 
+  const bookKind = books.find((b) => b.id === activeBookId)?.kind;
+  const startCategory = (t: TxType) =>
+    defaultCategory(
+      t,
+      bookKind,
+      lastCategory(activeBookId, t),
+      new Set(visible.filter((c) => c.kind === (t === "income" ? "income" : "expense")).map((c) => c.id)),
+    );
+
   useEffect(() => {
     if (!quickOpen) return;
     const src = editing ?? draft;
@@ -56,17 +67,22 @@ export function QuickAdd() {
     const nextCurrency = src.currency ?? "ARS";
     const nextMethod = src.method ?? (nextCurrency === "USDT" ? "crypto" : "debito");
     setType(nextType);
-    setAmount(src.amount != null ? String(src.amount) : "");
-    setAmountTo(src.amountTo ? String(src.amountTo) : "");
-    setCategoryId(src.categoryId ?? (nextType === "income" ? "sueldo" : nextType === "transfer" ? "transferencias" : "alimentos"));
+    setAmount(amountInput(src.amount));
+    setAmountTo(amountInput(src.amountTo));
+    setCategoryId(src.categoryId ?? startCategory(nextType));
     setMerchant(src.merchant ?? "");
     setNote(src.note ?? "");
     setDate(src.date ?? todayISO());
-    setMethod(nextMethod);
+    const nextAccount = src.accountId || inferAccount(accounts, activeBookId, nextMethod, nextCurrency);
+    const acc = accounts.find((a) => a.id === nextAccount);
+    // No method given (new movement, shortcut with caja=usdt…): follow the caja.
+    setMethod(src.method ?? methodForAccount(acc?.kind, nextMethod));
     setCurrency(nextCurrency);
-    setAccountId(src.accountId || inferAccount(accounts, activeBookId, nextMethod, nextCurrency));
+    setAccountId(nextAccount);
     setCounterpartyId(src.counterpartyId ?? "");
-    setRate(src.rateLocked && src.rateArs ? String(src.rateArs) : "");
+    setRate(src.rateLocked && src.rateArs ? amountInput(src.rateArs) : "");
+    // startCategory reads the latest categories; only re-run when the sheet opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quickOpen, editing, draft, accounts, activeBookId]);
 
   const fx = { usd: usdRate, usdt: usdtRate };
@@ -83,11 +99,8 @@ export function QuickAdd() {
 
   function setKind(next: TxType) {
     setType(next);
-    if (next === "income") setCategoryId("sueldo");
-    else if (next === "transfer") {
-      setCategoryId("transferencias");
-      setMethod("transferencia");
-    } else setCategoryId("alimentos");
+    setCategoryId(startCategory(next));
+    if (next === "transfer") setMethod("transferencia");
   }
 
   function submit() {
@@ -98,6 +111,10 @@ export function QuickAdd() {
     }
     if (type === "transfer" && !counterpartyId) {
       toast.error("Elegí a qué caja va");
+      return;
+    }
+    if (type !== "transfer" && !categoryId) {
+      toast.error("Elegí una categoría");
       return;
     }
     const dest = accounts.find((a) => a.id === counterpartyId);
@@ -130,6 +147,7 @@ export function QuickAdd() {
       toast.success("Movimiento actualizado");
     } else {
       addTx(payload);
+      rememberCategory(activeBookId, type, payload.categoryId);
       toast.success(type === "expense" ? "Gasto registrado" : type === "income" ? "Ingreso registrado" : "Cambio registrado");
     }
     closeQuick();
@@ -227,7 +245,10 @@ export function QuickAdd() {
                 const id = e.target.value;
                 setAccountId(id);
                 const acc = accounts.find((a) => a.id === id);
-                if (acc) setCurrency(acc.currency);
+                if (acc) {
+                  setCurrency(acc.currency);
+                  if (type !== "transfer") setMethod(methodForAccount(acc.kind, method));
+                }
               }}
               className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)] outline-none"
             >
@@ -270,6 +291,10 @@ export function QuickAdd() {
                   />
                 </div>
               ) : null}
+              <div className="mt-3">
+                <Label htmlFor="date">Fecha</Label>
+                <Input id="date" type="date" className="mt-1.5" value={date} onChange={(e) => setDate(e.target.value)} />
+              </div>
             </div>
           ) : (
             <>
@@ -284,7 +309,7 @@ export function QuickAdd() {
                         type="button"
                         onClick={() => setCategoryId(c.id)}
                         className={cn(
-                          "inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-sm font-medium transition-colors duration-150",
+                          "inline-flex h-11 items-center gap-1.5 rounded-full px-3.5 text-sm font-medium transition-colors duration-150",
                           on ? "bg-accent text-accent-fg" : "bg-elevated text-muted",
                         )}
                       >
@@ -359,9 +384,13 @@ export function QuickAdd() {
                 variant="danger"
                 className="flex-1"
                 onClick={() => {
-                  deleteTx(editing.id);
-                  toast.success("Movimiento eliminado");
+                  const row = editing;
+                  deleteTx(row.id);
                   closeQuick();
+                  toast.success("Movimiento eliminado", {
+                    duration: 8000,
+                    action: { label: "Deshacer", onClick: () => addTx(row) },
+                  });
                 }}
               >
                 Eliminar

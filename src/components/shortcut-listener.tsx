@@ -5,7 +5,6 @@ import { shareVaultToIcloud } from "@/lib/local-vault";
 import { captureShortcutSearch, parseShortcutSearch, takeShortcutSearch } from "@/lib/shortcut-intent";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { useAllCategories, useLedger } from "@/lib/store";
-import { todayISO } from "@/lib/utils";
 
 export function ShortcutListener() {
   const user = useCurrentUser();
@@ -15,7 +14,6 @@ export function ShortcutListener() {
   const accounts = useLedger((s) => s.accounts);
   const setActiveBook = useLedger((s) => s.setActiveBook);
   const openQuick = useLedger((s) => s.openQuick);
-  const addTx = useLedger((s) => s.addTx);
   const cats = useAllCategories();
   const [icloud, setIcloud] = useState(false);
 
@@ -31,29 +29,15 @@ export function ShortcutListener() {
     if (!intent) return;
     if (intent.icloud) setIcloud(true);
     if (intent.bookId) setActiveBook(intent.bookId);
-    if (intent.save && intent.draft.amount && intent.draft.type !== "transfer") {
-      addTx({
-        type: intent.draft.type ?? "expense",
-        amount: intent.draft.amount,
-        currency: intent.draft.currency ?? "ARS",
-        categoryId: intent.draft.categoryId ?? (intent.draft.type === "income" ? "sueldo" : "otros"),
-        note: intent.draft.note ?? "",
-        merchant: intent.draft.merchant ?? "",
-        date: intent.draft.date ?? todayISO(),
-        method: intent.draft.method ?? "debito",
-        accountId: intent.draft.accountId ?? "",
-        bookId: intent.bookId ?? "",
-        counterpartyId: "",
-        amountTo: 0,
-        rateArs: 0,
-        rateLocked: false,
-        recurringId: "",
-      });
-      toast.success(`Anoté ${money(intent.draft.amount, intent.draft.currency ?? "ARS", true)}`);
-      if (!intent.icloud) return;
+    // `guardar=1` used to save straight away. A link can come from anywhere,
+    // so we now open the form already filled and the user taps "Guardar".
+    if (intent.save && intent.draft.amount) {
+      openQuick(intent.draft);
+      toast.info(`Revisá ${money(intent.draft.amount, intent.draft.currency ?? "ARS", true)} y tocá Guardar`);
+      return;
     }
     if (intent.open) openQuick(intent.draft);
-  }, [status, onboarded, books, accounts, cats, addTx, openQuick, setActiveBook]);
+  }, [status, onboarded, books, accounts, cats, openQuick, setActiveBook]);
 
   if (!icloud) return null;
 

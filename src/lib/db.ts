@@ -46,6 +46,7 @@ export interface Sql {
  */
 const globalRef = globalThis as typeof globalThis & {
   __pgSqlPromise__?: Promise<Sql>;
+  __pgPool__?: import("pg").Pool;
   __pgliteInstance__?: Promise<import("@electric-sql/pglite").PGlite>;
   __pgliteMigrateChain__?: Promise<void>;
 };
@@ -94,6 +95,7 @@ function createNeonSql(): Promise<Sql> {
     types.setTypeParser(OID_DATE, identity);
     types.setTypeParser(OID_INTERVAL, identity);
     const pool = new Pool({ connectionString: databaseUrl });
+    globalRef.__pgPool__ = pool;
     return toSql(async <T>(text: string, params: unknown[]) => {
       const res = await pool.query(text, params);
       return res.rows as T[];
@@ -192,6 +194,39 @@ export function getSql(): Promise<Sql> {
     throw err;
   });
   return sqlPromise;
+}
+
+/**
+ * Run several statements as ONE transaction: all of them apply, or none do
+ * (e.g. deleting an account or restoring a backup must never stop halfway).
+ * The callback gets its own `Sql` bound to the transaction; use only that one
+ * inside it. Throwing inside the callback rolls everything back.
+ */
+export async function withTransaction<T>(fn: (tx: Sql) => Promise<T>): Promise<T> {
+  await getSql();
+  if (dbSource === "neon") {
+    const pool = globalRef.__pgPool__;
+    if (!pool) throw new Error("Postgres pool not initialized");
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      const out = await fn(
+        toSql(async <R>(text: string, params: unknown[]) => (await client.query(text, params)).rows as R[]),
+      );
+      await client.query("commit");
+      return out;
+    } catch (err) {
+      await client.query("rollback").catch(() => undefined);
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+  const pg = await globalRef.__pgliteInstance__;
+  if (!pg) throw new Error("PGLite instance failed to initialize");
+  return pg.transaction((tx) =>
+    fn(toSql(async <R>(text: string, params: unknown[]) => (await tx.query<R>(text, params)).rows)),
+  );
 }
 
 /**

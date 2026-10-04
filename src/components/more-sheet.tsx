@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { Brain, LogOut, Settings, Shield, Target } from "lucide-react";
-import { signOut } from "@/lib/auth/client";
+import { toast } from "sonner";
+import { signOutAndForget } from "@/lib/sign-out";
 import { cn } from "@/lib/utils";
 import { BookEntryButton } from "@/components/book-mode";
 import {
@@ -67,7 +68,7 @@ export function MoreSheet({
               className="mt-2 flex h-12 items-center gap-3 rounded-xl px-3 text-sm font-medium text-muted hover:bg-elevated hover:text-fg"
               onClick={() => {
                 onOpenChange(false);
-                void signOut("/login").catch(() => undefined);
+                void signOutAndForget("/login").catch(() => toast.error("No pude cerrar sesión. Reintentá."));
               }}
             >
               <LogOut className="size-4" />
