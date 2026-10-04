@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { money, parseAmount } from "@/lib/format";
-import { FIJO_TEMPLATES, isDue, isPosted } from "@/lib/recurring";
-import { PAY_METHODS, type Currency, type PayMethod, type Recurring, type TxType } from "@/lib/types";
+import { money, parseAmount, amountInput } from "@/lib/format";
+import { FIJO_TEMPLATES, dueUnposted, isDue, isPosted, likelyDuplicate } from "@/lib/recurring";
+import { PAY_METHODS, type AccountKind, type Currency, type PayMethod, type Recurring, type TxType } from "@/lib/types";
+import { methodForAccount } from "@/lib/quick-defaults";
 import { cn, uid } from "@/lib/utils";
 import { useAllCategories, useVisibleCategories, useBookAccounts, useBookTxs, useLedger } from "@/lib/store";
 import { MonthSwitcher } from "@/components/month-switcher";
@@ -31,15 +32,27 @@ function Fijos() {
   const txs = useBookTxs();
   const mine = recurrings.filter((r) => r.bookId === activeBookId);
   const unsaved = useMemo(() => new Set(pendingRecurringIds), [pendingRecurringIds]);
-  const pending = mine.filter((r) => r.active && !isPosted(r, txs, viewMonth));
+  // Only the ones whose day already came (or the month is over). Future
+  // fijos of this month are "programado", not pending.
+  const pending = dueUnposted(mine, txs, viewMonth);
   const [editing, setEditing] = useState<Recurring | null>(null);
 
   function postPending() {
+    const twins = pending.filter((r) => likelyDuplicate(r, txs, viewMonth));
+    let list = pending;
+    if (twins.length) {
+      const names = twins.map((r) => r.name).join(", ");
+      const all = window.confirm(
+        `Parece que ya cargaste a mano: ${names} (mismo monto y categoría este mes).\n\n` +
+          "Aceptar: anotar igual todos. Cancelar: anotar solo los demás.",
+      );
+      if (!all) list = pending.filter((r) => !twins.includes(r));
+    }
     let n = 0;
-    for (const r of pending) {
+    for (const r of list) {
       if (postRecurring(r.id, viewMonth)) n += 1;
     }
-    if (n === 0) toast.message("No hay fijos pendientes en este mes");
+    if (n === 0) toast.message("No anoté ningún fijo");
     else toast.success(n === 1 ? "Anoté 1 fijo" : `Anoté ${n} fijos`);
   }
 
@@ -57,8 +70,8 @@ function Fijos() {
       </div>
 
       <p className="max-w-xl text-sm text-muted">
-        Alquiler, Edenor, Netflix, sueldo. El día que toca se anotan solos. Si el mes ya pasó, cargalos
-        acá.
+        Alquiler, Edenor, Netflix, sueldo. Cuando llega el día, Cifra te avisa y vos decidís si
+        anotarlos. Si el mes ya pasó, cargalos acá.
       </p>
 
       {pending.length > 0 ? (
@@ -78,6 +91,7 @@ function Fijos() {
         {mine.map((r) => {
           const posted = isPosted(r, txs, viewMonth);
           const due = isDue(r, viewMonth);
+          const twin = !posted && due && likelyDuplicate(r, txs, viewMonth);
           return (
             <button
               key={r.id}
@@ -92,6 +106,7 @@ function Fijos() {
                   {" · "}
                   {allCats.find((c) => c.id === r.categoryId)?.name}
                   {posted ? " · cargado" : due ? " · pendiente" : " · programado"}
+                  {twin ? " · ¿ya lo cargaste a mano?" : ""}
                   {unsaved.has(r.id) ? " · sin guardar" : ""}
                   {!r.active ? " · pausado" : ""}
                 </span>
@@ -130,7 +145,7 @@ function Fijos() {
                     active: true,
                   });
                 }}
-                className="h-9 rounded-full bg-elevated px-3 text-sm text-muted hover:text-fg"
+                className="h-11 rounded-full bg-elevated px-3.5 text-sm text-muted hover:text-fg"
               >
                 {t.name}
               </button>
@@ -173,9 +188,13 @@ function Fijos() {
             toast.success("Fijo guardado");
           }}
           onDelete={(id) => {
+            const row = recurrings.find((r) => r.id === id);
             deleteRecurring(id);
             setEditing(null);
-            toast.success("Fijo eliminado");
+            toast.success("Fijo eliminado", {
+              duration: 8000,
+              action: row ? { label: "Deshacer", onClick: () => upsertRecurring(row) } : undefined,
+            });
           }}
         />
       ) : null}
@@ -191,13 +210,13 @@ function FijoEditor({
   onDelete,
 }: {
   value: Recurring;
-  accounts: { id: string; name: string; currency: Currency }[];
+  accounts: { id: string; name: string; currency: Currency; kind?: AccountKind }[];
   onClose: () => void;
   onSave: (row: Recurring) => void;
   onDelete: (id: string) => void;
 }) {
   const [name, setName] = useState(value.name);
-  const [amount, setAmount] = useState(value.amount ? String(value.amount) : "");
+  const [amount, setAmount] = useState(amountInput(value.amount));
   const [day, setDay] = useState(String(value.day));
   const [type, setType] = useState<TxType>(value.type);
   const [categoryId, setCategoryId] = useState(value.categoryId);
@@ -244,12 +263,23 @@ function FijoEditor({
           </div>
           <div>
             <Label htmlFor="fday">Día del mes</Label>
-            <Input id="fday" className="mt-1.5" inputMode="numeric" value={day} onChange={(e) => setDay(e.target.value)} />
+            <Input
+              id="fday"
+              className="mt-1.5"
+              inputMode="numeric"
+              value={day}
+              onChange={(e) => setDay(e.target.value)}
+              aria-describedby="fday-hint"
+            />
           </div>
         </div>
+        <p id="fday-hint" className="-mt-1 text-xs text-subtle">
+          Del 1 al 31. Si el mes tiene menos días, va el último (ej. 31 → 28 de febrero).
+        </p>
         <div>
-          <Label>Categoría</Label>
+          <Label htmlFor="fcat">Categoría</Label>
           <select
+            id="fcat"
             value={categoryId}
             onChange={(e) => setCategoryId(e.target.value)}
             className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)]"
@@ -262,10 +292,15 @@ function FijoEditor({
           </select>
         </div>
         <div>
-          <Label>Caja</Label>
+          <Label htmlFor="facc">Caja</Label>
           <select
+            id="facc"
             value={accountId}
-            onChange={(e) => setAccountId(e.target.value)}
+            onChange={(e) => {
+              setAccountId(e.target.value);
+              const acc = accounts.find((a) => a.id === e.target.value);
+              if (acc) setMethod(methodForAccount(acc.kind, method));
+            }}
             className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)]"
           >
             {accounts.map((a) => (
@@ -276,8 +311,9 @@ function FijoEditor({
           </select>
         </div>
         <div>
-          <Label>Medio</Label>
+          <Label htmlFor="fmethod">Medio</Label>
           <select
+            id="fmethod"
             value={method}
             onChange={(e) => setMethod(e.target.value as PayMethod)}
             className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)]"
@@ -291,7 +327,7 @@ function FijoEditor({
         </div>
         <label className="flex h-11 items-center gap-2 text-sm text-fg">
           <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
-          Activo — se anota solo el día que toca
+          Activo — el día que toca, Cifra te avisa para anotarlo
         </label>
       </div>
       <div className="mt-5 flex gap-2">
@@ -321,7 +357,7 @@ function FijoEditor({
               ...value,
               name: name.trim(),
               amount: n,
-              day: Math.min(28, Math.max(1, Number(day) || 1)),
+              day: Math.min(31, Math.max(1, Math.round(Number(day)) || 1)),
               type: type === "income" ? "income" : "expense",
               categoryId,
               accountId,

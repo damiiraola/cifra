@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { getSql } from "@/lib/db";
+import { getSql, withTransaction } from "@/lib/db";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { DEFAULT_BUDGETS, DEFAULT_GLOBAL_BUDGET, parseCustomCategories, parseHiddenIds } from "@/lib/categories";
 import { hydrateBookMoney, moneyForBook, parseBookBudgets, parseBookGlobals } from "@/lib/budget-math";
@@ -551,11 +551,14 @@ export const replaceTransactions = createServerFn({ method: "POST" })
   .validator((input: Transaction[]) => (Array.isArray(input) ? input.map(asTx) : []))
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
-    const sql = await getSql();
-    await sql`delete from ledger_transactions where user_id = ${context.userId}`;
-    for (const tx of data) {
-      await insertTx(sql, context.userId, tx);
-    }
+    // One transaction: a restore that fails halfway must not leave the
+    // ledger empty or half-loaded.
+    await withTransaction(async (sql) => {
+      await sql`delete from ledger_transactions where user_id = ${context.userId}`;
+      for (const tx of data) {
+        await insertTx(sql, context.userId, tx);
+      }
+    });
     return { ok: true as const, count: data.length };
   });
 
@@ -563,7 +566,8 @@ function asRecurring(input: Recurring): Recurring {
   if (!input?.id) throw new Error("Fijo inválido");
   const amount = Number(input.amount);
   if (!Number.isFinite(amount) || amount <= 0) throw new Error("Monto inválido");
-  const day = Math.min(28, Math.max(1, Math.round(Number(input.day) || 1)));
+  // 29–31 are fine: months that are shorter use their last day (dueDate).
+  const day = Math.min(31, Math.max(1, Math.round(Number(input.day) || 1)));
   if (!CURRENCIES.has(input.currency)) throw new Error("Moneda inválida");
   if (!METHODS.has(input.method)) throw new Error("Medio inválido");
   return {
@@ -623,10 +627,11 @@ export const replaceRecurrings = createServerFn({ method: "POST" })
   .validator((input: Recurring[]) => (Array.isArray(input) ? input.map(asRecurring) : []))
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
-    const sql = await getSql();
-    for (const row of data) {
-      await upsertRecurringRow(sql, context.userId, row);
-    }
+    await withTransaction(async (sql) => {
+      for (const row of data) {
+        await upsertRecurringRow(sql, context.userId, row);
+      }
+    });
     return { ok: true as const, count: data.length };
   });
 
@@ -703,16 +708,21 @@ export const deleteAccount = createServerFn({ method: "POST" })
     `;
     const actual = String(rows[0]?.email ?? "").trim().toLowerCase();
     if (!actual || actual !== data.email) throw new Error("El mail no coincide");
+    // Everything goes in one transaction: if any delete fails, nothing is
+    // deleted and the user can retry. The goodbye mail goes only after it
+    // worked (it used to go first, even when the delete then failed).
+    await withTransaction(async (tx) => {
+      await tx`delete from ledger_transactions where user_id = ${context.userId}`;
+      await tx`delete from ledger_recurring where user_id = ${context.userId}`;
+      await tx`delete from ledger_accounts where user_id = ${context.userId}`;
+      await tx`delete from ledger_books where user_id = ${context.userId}`;
+      await tx`delete from ledger_settings where user_id = ${context.userId}`;
+      await tx`delete from ledger_backups where user_id = ${context.userId}`;
+      await tx`delete from "session" where "userId" = ${context.userId}`;
+      await tx`delete from "account" where "userId" = ${context.userId}`;
+      await tx`delete from "verification" where "identifier" = ${actual}`;
+      await tx`delete from "user" where "id" = ${context.userId}`;
+    });
     await sendMailQuiet({ to: actual, ...MAIL.deleted });
-    await sql`delete from ledger_transactions where user_id = ${context.userId}`;
-    await sql`delete from ledger_recurring where user_id = ${context.userId}`;
-    await sql`delete from ledger_accounts where user_id = ${context.userId}`;
-    await sql`delete from ledger_books where user_id = ${context.userId}`;
-    await sql`delete from ledger_settings where user_id = ${context.userId}`;
-    await sql`delete from ledger_backups where user_id = ${context.userId}`;
-    await sql`delete from "session" where "userId" = ${context.userId}`;
-    await sql`delete from "account" where "userId" = ${context.userId}`;
-    await sql`delete from "verification" where "identifier" = ${actual}`;
-    await sql`delete from "user" where "id" = ${context.userId}`;
     return { ok: true as const };
   });

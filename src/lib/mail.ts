@@ -647,13 +647,10 @@ export async function sendTemplatePreviews(to: string): Promise<SendResult> {
     { to, ...MAIL.deleted },
     { to, url: origin, ...MAIL.welcome, body: `${greeting(name)} ${MAIL.welcome.body}` },
   ];
-  let from: string | undefined;
+  // Always from the configured MAIL_FROM. (It used to retry from a
+  // placeholder example.com address when the domain was not verified.)
   for (const job of jobs) {
-    let result = await sendCifraMail(job, from ? { from } : undefined);
-    if (!result.ok && /not verified|domain/i.test(result.error)) {
-      from = "Cifra <beth.t@example.com>";
-      result = await sendCifraMail(job, { from });
-    }
+    const result = await sendCifraMail(job);
     if (!result.ok) return result;
   }
   return { ok: true };

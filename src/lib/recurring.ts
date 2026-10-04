@@ -1,4 +1,4 @@
-import { daysInMonth, todayISO } from "./utils";
+import { daysInMonth, todayISO } from "./utils.ts";
 import type { PayMethod, Recurring, Transaction, TxType } from "./types";
 
 export const FIJO_TEMPLATES: {
@@ -41,4 +41,33 @@ export function isDue(r: Recurring, ym: string, today = todayISO()) {
   if (today.slice(0, 7) > ym) return true;
   if (today.slice(0, 7) < ym) return false;
   return today >= date;
+}
+
+/**
+ * Fijos that should be on this month's books but are not yet: due (their
+ * day already passed, or the month is over) and not posted. Future ones in
+ * the current month do NOT count.
+ */
+export function dueUnposted(rs: Recurring[], txs: Transaction[], ym: string, today = todayISO()) {
+  return rs.filter((r) => isDue(r, ym, today) && !isPosted(r, txs, ym));
+}
+
+/**
+ * A movement loaded by hand that looks like this fijo (same book, type,
+ * category and amount, same month, not already linked to a fijo). Posting the
+ * fijo on top of it would count the expense twice.
+ */
+export function likelyDuplicate(r: Recurring, txs: Transaction[], ym: string): Transaction | null {
+  return (
+    txs.find(
+      (t) =>
+        !t.recurringId &&
+        t.bookId === r.bookId &&
+        t.type === r.type &&
+        t.categoryId === r.categoryId &&
+        t.date.startsWith(ym) &&
+        t.currency === r.currency &&
+        Math.abs(t.amount - r.amount) <= Math.max(1, r.amount * 0.01),
+    ) ?? null
+  );
 }
