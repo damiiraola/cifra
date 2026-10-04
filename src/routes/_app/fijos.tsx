@@ -145,7 +145,7 @@ function Fijos() {
                     active: true,
                   });
                 }}
-                className="h-9 rounded-full bg-elevated px-3 text-sm text-muted hover:text-fg"
+                className="h-11 rounded-full bg-elevated px-3.5 text-sm text-muted hover:text-fg"
               >
                 {t.name}
               </button>

@@ -3,7 +3,7 @@ import { createFileRoute, Link, useSearch } from "@tanstack/react-router";
 import { authClient } from "@/lib/auth/client";
 import { AuthScreen } from "@/components/auth-screen";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AUTH_MESSAGES, authErrorMessage, isExpiredLinkError } from "@/lib/auth/errors";
 
@@ -101,9 +101,8 @@ function Reset() {
         <form className="mt-8 grid gap-3" onSubmit={(e) => void onSubmit(e)}>
           <div className="grid gap-1.5">
             <Label htmlFor="password">Nueva contraseña</Label>
-            <Input
+            <PasswordInput
               id="password"
-              type="password"
               autoComplete="new-password"
               required
               minLength={8}

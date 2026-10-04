@@ -20,7 +20,7 @@ export function FxStrip() {
     <button
       type="button"
       onClick={() => void refreshQuotes()}
-      className="flex w-full items-baseline justify-between gap-3 text-left"
+      className="flex min-h-11 w-full items-center justify-between gap-3 text-left"
     >
       <span className="text-[11px] text-muted">
         {quotesBusy ? "Actualizando…" : live ? `En vivo · ${age}` : `Fin de semana · ${age}`}

@@ -4,7 +4,7 @@ import { authClient, authEnabled } from "@/lib/auth/client";
 import { useSessionWait } from "@/lib/auth/use-current-user";
 import { AuthScreen } from "@/components/auth-screen";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Input, PasswordInput } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AUTH_MESSAGES, authErrorMessage, isExpiredLinkError } from "@/lib/auth/errors";
 
@@ -150,7 +150,7 @@ function Login() {
       <div className="mt-6 grid grid-cols-2 gap-1 rounded-xl bg-elevated p-1">
         <button
           type="button"
-          className={`h-9 rounded-lg text-sm font-medium ${mode === "in" ? "bg-surface text-fg" : "text-muted"}`}
+          className={`h-11 rounded-lg text-sm font-medium ${mode === "in" ? "bg-surface text-fg" : "text-muted"}`}
           onClick={() => {
             setMode("in");
             setError(null);
@@ -160,7 +160,7 @@ function Login() {
         </button>
         <button
           type="button"
-          className={`h-9 rounded-lg text-sm font-medium ${mode === "up" ? "bg-surface text-fg" : "text-muted"}`}
+          className={`h-11 rounded-lg text-sm font-medium ${mode === "up" ? "bg-surface text-fg" : "text-muted"}`}
           onClick={() => {
             setMode("up");
             setError(null);
@@ -197,9 +197,8 @@ function Login() {
         </div>
         <div className="grid gap-1.5">
           <Label htmlFor="password">Contraseña</Label>
-          <Input
+          <PasswordInput
             id="password"
-            type="password"
             autoComplete={mode === "up" ? "new-password" : "current-password"}
             required
             minLength={8}
@@ -209,7 +208,10 @@ function Login() {
           />
         </div>
         {mode === "in" ? (
-          <Link to="/olvide" className="text-sm text-muted underline-offset-4 hover:text-fg hover:underline">
+          <Link
+            to="/olvide"
+            className="inline-flex min-h-11 items-center self-start text-sm text-muted underline-offset-4 hover:text-fg hover:underline"
+          >
             Olvidé la contraseña
           </Link>
         ) : null}
@@ -224,7 +226,7 @@ function Login() {
         {mode === "up" ? (
           <p className="text-center text-xs text-subtle">
             Al crear la cuenta, Cifra guarda tu mail y el libro.{" "}
-            <Link to="/privacidad" className="underline-offset-4 hover:text-muted hover:underline">
+            <Link to="/privacidad" className="-my-3.5 inline-block py-3.5 underline-offset-4 hover:text-muted hover:underline">
               Privacidad
             </Link>
             .

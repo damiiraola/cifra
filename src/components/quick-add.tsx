@@ -309,7 +309,7 @@ export function QuickAdd() {
                         type="button"
                         onClick={() => setCategoryId(c.id)}
                         className={cn(
-                          "inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-sm font-medium transition-colors duration-150",
+                          "inline-flex h-11 items-center gap-1.5 rounded-full px-3.5 text-sm font-medium transition-colors duration-150",
                           on ? "bg-accent text-accent-fg" : "bg-elevated text-muted",
                         )}
                       >
