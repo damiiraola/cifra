@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { userMessage } from "@/lib/user-error";
 import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import { toast } from "sonner";
@@ -117,13 +118,13 @@ type LedgerState = {
 };
 
 function persistFail(err: unknown, retry?: () => void) {
-  const msg = err instanceof Error ? err.message : "No pude guardar";
+  const msg = err instanceof Error ? err.message : "";
   const session = msg === "Unauthorized";
   const desc = session
     ? "Entrá de nuevo. El movimiento sigue acá."
     : retry
       ? "El movimiento sigue acá."
-      : msg;
+      : userMessage(err, "Probá de nuevo en un rato.");
   toast.error("No pude guardar en tu libro", {
     description: desc,
     action: retry
