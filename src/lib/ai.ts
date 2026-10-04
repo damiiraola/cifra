@@ -1,5 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
+import { getSql } from "@/lib/db";
+import { aiDailyLimit, aiLimitMessage, aiUsageDay, cleanAskInput } from "@/lib/ai-limit";
 
 type Mode = "chat" | "parse" | "report";
 
@@ -13,8 +15,8 @@ type AskInput = {
   categories?: CatHint[];
 };
 
-export const AI_UNAVAILABLE = "El asistente no está activo en este entorno.";
-export const AI_TIMEOUT = "El asistente no respondió. Reintentá.";
+export const AI_UNAVAILABLE = "El asistente todavía no está disponible. Lo estamos activando.";
+export const AI_TIMEOUT = "El asistente no respondió a tiempo. Probá de nuevo.";
 const ASK_MS = 20_000;
 
 const BASE_CHAT = `Sos el analista financiero de Cifra, una app de control de gastos personales. Hablás en español rioplatense, claro y directo. No uses emojis.
@@ -58,12 +60,32 @@ export const aiStatus = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async () => ({ active: Boolean(process.env.XAI_API_KEY?.trim()) }));
 
+/**
+ * Count one question for today and say whether it is still under the cap.
+ * Atomic upsert, so parallel requests cannot sneak past the limit.
+ */
+async function takeAiQuota(userId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const limit = aiDailyLimit(process.env.AI_DAILY_LIMIT);
+  if (limit === 0) return { ok: false, error: aiLimitMessage(0) };
+  const sql = await getSql();
+  const rows = await sql<{ count: number }>`
+    insert into ai_usage (user_id, day, count)
+    values (${userId}, ${aiUsageDay()}::date, 1)
+    on conflict (user_id, day) do update set count = ai_usage.count + 1
+    returning count
+  `;
+  const used = Number(rows[0]?.count ?? 0);
+  return used > limit ? { ok: false, error: aiLimitMessage(limit) } : { ok: true };
+}
+
 export const askCifra = createServerFn({ method: "POST" })
-  .validator((input: AskInput) => input)
+  .validator((input: AskInput) => cleanAskInput(input) as AskInput)
   .middleware([authMiddleware])
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const apiKey = process.env.XAI_API_KEY?.trim();
     if (!apiKey) return { ok: false as const, error: AI_UNAVAILABLE };
+    const quota = await takeAiQuota(context.userId);
+    if (!quota.ok) return { ok: false as const, error: quota.error };
 
     const messages: { role: "system" | "user" | "assistant"; content: string }[] = [
       { role: "system", content: systemFor(data.mode, data.categories) },

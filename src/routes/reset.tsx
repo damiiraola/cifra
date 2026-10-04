@@ -5,29 +5,48 @@ import { AuthScreen } from "@/components/auth-screen";
 import { Button } from "@/components/ui/button";
 import { PasswordInput } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AUTH_MESSAGES, authErrorMessage, isExpiredLinkError } from "@/lib/auth/errors";
 
-type ResetSearch = { token?: string };
+// Better Auth sends people here as `/reset?token=…`, or `/reset?error=INVALID_TOKEN`
+// when the link from the mail already expired.
+type ResetSearch = { token?: string; error?: string };
 
 export const Route = createFileRoute("/reset")({
   validateSearch: (search: Record<string, unknown>): ResetSearch => ({
     token: typeof search.token === "string" ? search.token : undefined,
+    error: typeof search.error === "string" ? search.error : undefined,
   }),
   component: Reset,
 });
 
+function ExpiredLink() {
+  return (
+    <AuthScreen kicker={AUTH_MESSAGES.linkExpired}>
+      <p className="mt-6 text-sm text-muted">Los enlaces para cambiar la clave duran un rato y sirven una sola vez.</p>
+      <Link
+        to="/olvide"
+        className="mt-6 flex h-11 w-full items-center justify-center rounded-lg bg-accent text-sm font-medium text-accent-fg"
+      >
+        Pedí uno nuevo
+      </Link>
+      <Link to="/login" className="mt-4 block text-center text-sm text-muted underline-offset-4 hover:text-fg hover:underline">
+        Volver a entrar
+      </Link>
+    </AuthScreen>
+  );
+}
+
 function Reset() {
-  const { token } = useSearch({ from: "/reset" });
+  const { token, error: linkError } = useSearch({ from: "/reset" });
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [expired, setExpired] = useState(false);
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!token) {
-      setError("Falta el token. Pedí el mail de nuevo.");
-      return;
-    }
+    if (!token) return;
     setError(null);
     setBusy(true);
     try {
@@ -36,22 +55,29 @@ function Reset() {
         token,
       });
       if (err) {
-        setError(err.message || "El enlace venció o es inválido.");
+        if (isExpiredLinkError(err)) setExpired(true);
+        else setError(authErrorMessage(err, "No pude cambiar la clave. Probá de nuevo."));
         return;
       }
       setDone(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No pude cambiar la clave.");
+      setError(authErrorMessage(err, "No pude cambiar la clave. Probá de nuevo."));
     } finally {
       setBusy(false);
     }
   }
 
+  // Any `?error=` from Better Auth here means the mail link is no good anymore.
+  if (expired || linkError) return <ExpiredLink />;
+
   if (!token) {
     return (
-      <AuthScreen kicker="Este enlace está incompleto.">
-        <Link to="/olvide" className="mt-5 block py-3 text-sm text-muted underline-offset-4 hover:text-fg hover:underline">
-          Pedir uno nuevo
+      <AuthScreen kicker="A este enlace le falta una parte. Abrilo de nuevo desde el mail o pedí uno nuevo.">
+        <Link
+          to="/olvide"
+          className="mt-8 flex h-11 w-full items-center justify-center rounded-lg bg-accent text-sm font-medium text-accent-fg"
+        >
+          Pedí uno nuevo
         </Link>
       </AuthScreen>
     );
@@ -61,9 +87,14 @@ function Reset() {
     <AuthScreen kicker="Elegí una clave nueva. Mínimo 8 caracteres.">
       {done ? (
         <div className="mt-8">
-          <p className="text-sm">Listo. Ya podés entrar con la clave nueva.</p>
-          <Link to="/login" className="mt-3 block py-3 text-sm text-muted underline-offset-4 hover:text-fg hover:underline">
-            Ir a entrar
+          <p role="status" className="text-sm">
+            Listo. Ya podés entrar con la clave nueva.
+          </p>
+          <Link
+            to="/login"
+            className="mt-6 flex h-11 w-full items-center justify-center rounded-lg bg-accent text-sm font-medium text-accent-fg"
+          >
+            Entrar
           </Link>
         </div>
       ) : (
@@ -79,7 +110,11 @@ function Reset() {
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
-          {error ? <p className="text-sm text-red-400">{error}</p> : null}
+          {error ? (
+            <p role="alert" className="text-sm text-red-400">
+              {error}
+            </p>
+          ) : null}
           <Button type="submit" disabled={busy}>
             {busy ? "Guardando…" : "Guardar clave"}
           </Button>
