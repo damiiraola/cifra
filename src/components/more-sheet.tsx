@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Brain, LogOut, Settings, Shield, Target } from "lucide-react";
+import { Brain, LogOut, Settings, Shield, Target, CreditCard } from "lucide-react";
 import { toast } from "sonner";
 import { signOutAndForget } from "@/lib/sign-out";
 import { cn } from "@/lib/utils";
@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/drawer";
 
 const ITEMS = [
+  { to: "/tarjetas", label: "Tarjetas", icon: CreditCard },
   { to: "/presupuestos", label: "Presupuestos", icon: Target },
   { to: "/ia", label: "Asistente", icon: Brain },
   { to: "/ajustes", label: "Ajustes", icon: Settings },

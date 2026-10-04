@@ -79,7 +79,7 @@ export function stampRate(currency: Currency, usd: number, usdt: number, overrid
 
 export function emptyTxFields(bookId = "", accountId = ""): Pick<
   Transaction,
-  "bookId" | "accountId" | "counterpartyId" | "amountTo" | "rateArs" | "rateLocked" | "recurringId" | "cardPeriod"
+  "bookId" | "accountId" | "counterpartyId" | "amountTo" | "rateArs" | "rateLocked" | "recurringId" | "cardPeriod" | "purchaseId" | "installmentNo" | "installmentCount"
 > {
   return {
     bookId,
@@ -90,6 +90,9 @@ export function emptyTxFields(bookId = "", accountId = ""): Pick<
     rateLocked: false,
     recurringId: "",
     cardPeriod: "",
+    purchaseId: "",
+    installmentNo: 0,
+    installmentCount: 0,
   };
 }
 

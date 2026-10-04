@@ -85,6 +85,10 @@ function sig(t: Transaction) {
     t.amountTo,
     t.rateArs,
     t.rateLocked,
+    t.cardPeriod ?? "",
+    t.purchaseId ?? "",
+    t.installmentNo ?? 0,
+    t.installmentCount ?? 0,
   ].join("|");
 }
 

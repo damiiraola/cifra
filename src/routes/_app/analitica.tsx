@@ -5,7 +5,8 @@ import { budgetAllocation, liveCategoryRows } from "@/lib/budget-math";
 import { catColorVar, DEFAULT_BUDGETS } from "@/lib/categories";
 import { moneyARS, monthLabel } from "@/lib/format";
 import { CatIcon } from "@/lib/icons";
-import { useAllCategories, useBookTxs, useLedger } from "@/lib/store";
+import { useAllCategories, useBookPurchases, useBookTxs, useLedger } from "@/lib/store";
+import { financedInMonth } from "@/lib/card-math";
 import { RhythmChart } from "@/components/charts";
 import { DrillSheet } from "@/components/drill-sheet";
 import { MonthSwitcher } from "@/components/month-switcher";
@@ -36,6 +37,8 @@ function Analitica() {
     .filter((c) => c.earned > 0)
     .sort((a, b) => b.earned - a.earned);
   const { assigned, unassigned, overAssigned } = budgetAllocation(rows, globalBudget);
+  const purchases = useBookPurchases();
+  const financed = financedInMonth(purchases, viewMonth, usdRate);
   const spentDelta = prevMtdSpent ? ((stats.spent - prevMtdSpent) / prevMtdSpent) * 100 : 0;
   const [drill, setDrill] = useState<Drill>(null);
 
@@ -125,6 +128,15 @@ function Analitica() {
             {overAssigned
               ? `categorías ${moneyARS(assigned)} (de más ${moneyARS(overAssigned)})`
               : `categorías ${moneyARS(assigned)} · sin repartir ${moneyARS(unassigned)}`}
+          </p>
+        ) : null}
+        {financed.count ? (
+          <p className="mt-1 text-sm text-subtle">
+            Compraste en cuotas este mes: {moneyARS(financed.total)} financiados
+            {financed.count > 1 ? ` (${financed.count} compras)` : ""}. Acá cuenta solo la cuota de cada mes.{" "}
+            <Link to="/tarjetas" className="underline">
+              Ver tarjetas
+            </Link>
           </p>
         ) : null}
       </section>

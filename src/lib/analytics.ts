@@ -32,6 +32,11 @@ export function signedARS(tx: Transaction, rates: FxRates) {
   return tx.type === "expense" ? -v : v;
 }
 
+/** Fijo-like expense or a cuota of a card purchase: not part of the daily pace. */
+export function isCommittedExpense(t: Transaction) {
+  return isFixedExpense(t) || Boolean(t.purchaseId);
+}
+
 export type MonthStats = ReturnType<typeof computeMonth>;
 
 export function computeMonth(txs: Transaction[], ym: string, rates: FxRates) {
@@ -65,8 +70,12 @@ export function computeMonth(txs: Transaction[], ym: string, rates: FxRates) {
 
   const today = todayISO();
   const elapsed = ym === today.slice(0, 7) ? Number(today.slice(8)) : last;
-  const avgDaily = elapsed > 0 ? spent / elapsed : 0;
-  const projected = avgDaily * last;
+  // Only the variable part is extrapolated: fijos and cuotas (often dated the
+  // 1st) are already the month's full amount and would inflate the pace.
+  const committed = expenses.filter(isCommittedExpense).reduce((s, t) => s + toARS(t, rates), 0);
+  const variableSpent = spent - committed;
+  const avgDaily = elapsed > 0 ? variableSpent / elapsed : 0;
+  const projected = committed + avgDaily * last;
 
   const byMethod: Record<string, number> = {};
   for (const t of expenses) {

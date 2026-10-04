@@ -2,6 +2,16 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   cardDebt,
+  committedForMonth,
+  cuotaId,
+  deriveInstallments,
+  financedInMonth,
+  financingCost,
+  installmentAmounts,
+  limitUse,
+  purchaseProgress,
+  staleCuotaIds,
+  upcomingStatements,
   cardForAccount,
   cardPeriodFor,
   closingDate,
@@ -14,7 +24,7 @@ import {
   validLast4,
 } from "./card-math.ts";
 import { accountBalance, accountLabel, inferAccount } from "./books.ts";
-import type { Account, Card, Transaction } from "./types.ts";
+import type { Account, Card, CardPurchase, Recurring, Transaction } from "./types.ts";
 
 const card: Card = {
   id: "visa",
@@ -60,6 +70,9 @@ const tx = (extra: Partial<Transaction>): Transaction => ({
   rateLocked: false,
   recurringId: "",
   cardPeriod: "",
+  purchaseId: "",
+  installmentNo: 0,
+  installmentCount: 0,
   ...extra,
 });
 
@@ -200,5 +213,172 @@ describe("helpers", () => {
       ["visa-usd", "new-p", "card"],
     ]);
     assert.equal(missingVaultCards(vault, books, [card], []).cards.length, 0, "already there");
+  });
+});
+
+const purchase = (extra: Partial<CardPurchase>): CardPurchase => ({
+  id: "p1",
+  bookId: "p",
+  cardId: "visa",
+  date: "2026-10-10",
+  merchant: "Heladera",
+  categoryId: "hogar",
+  currency: "ARS",
+  installments: 12,
+  installmentAmount: 50_000,
+  total: 600_000,
+  interestFree: true,
+  cashPrice: 0,
+  paidBefore: 0,
+  note: "",
+  ...extra,
+});
+
+describe("cuotas", () => {
+  it("interest-free cuotas add up to the total, rounding on the last", () => {
+    const a = installmentAmounts({ installments: 3, installmentAmount: 0, total: 100, interestFree: true });
+    assert.deepEqual(a, [33.33, 33.33, 33.34]);
+    assert.equal(a.reduce((x, y) => x + y, 0).toFixed(2), "100.00");
+    const b = installmentAmounts({ installments: 6, installmentAmount: 12_345.67, total: 0, interestFree: false });
+    assert.equal(b.length, 6);
+    assert.ok(b.every((x) => x === 12_345.67));
+  });
+
+  it("12 cuotas: one per month, one per statement, starting at the purchase", () => {
+    const cs = deriveInstallments(purchase({}), card);
+    assert.equal(cs.length, 12);
+    assert.equal(cs[0]!.id, cuotaId("p1", 1));
+    assert.equal(cs[0]!.date, "2026-10-10");
+    assert.equal(cs[0]!.cardPeriod, "2026-10");
+    assert.equal(cs[1]!.date, "2026-11-01");
+    assert.equal(cs[1]!.cardPeriod, "2026-11");
+    assert.equal(cs[11]!.date, "2027-09-01");
+    assert.equal(cs[11]!.cardPeriod, "2027-09");
+    assert.ok(cs.every((t) => t.accountId === "visa-ars" && t.method === "credito" && t.amount === 50_000));
+    assert.equal(cs[3]!.installmentNo, 4);
+    assert.equal(cs[3]!.installmentCount, 12);
+    assert.match(cs[3]!.note, /^Cuota 4\/12/);
+  });
+
+  it("bought after the closing: first cuota goes to the next statement", () => {
+    const cs = deriveInstallments(purchase({ date: "2026-10-25", installments: 3, total: 300 }), card);
+    assert.deepEqual(cs.map((t) => t.cardPeriod), ["2026-11", "2026-12", "2027-01"]);
+    assert.deepEqual(cs.map((t) => t.date), ["2026-10-25", "2026-11-01", "2026-12-01"]);
+  });
+
+  it("a purchase already running loads only from the current cuota", () => {
+    const cs = deriveInstallments(purchase({ paidBefore: 4 }), card);
+    assert.equal(cs.length, 8);
+    assert.equal(cs[0]!.installmentNo, 5);
+    assert.equal(cs[0]!.date, "2026-10-10");
+    assert.equal(cs[7]!.installmentNo, 12);
+  });
+
+  it("USD purchases go to the USD caja of the card", () => {
+    const cs = deriveInstallments(purchase({ currency: "USD", installments: 2, total: 200 }), card);
+    assert.ok(cs.every((t) => t.accountId === "visa-usd" && t.currency === "USD"));
+  });
+
+  it("cuotas keep their statement even if dated before the closing", () => {
+    const [, second] = deriveInstallments(purchase({ date: "2026-10-25", installments: 2, total: 2 }), card);
+    assert.equal(cardPeriodFor([card], second!), "2026-12");
+  });
+
+  it("an edit to fewer cuotas drops the extra ones", () => {
+    const now = deriveInstallments(purchase({}), card);
+    const next = deriveInstallments(purchase({ installments: 6, total: 300_000 }), card);
+    const stale = staleCuotaIds([...now, tx({ id: "other" })], "p1", next);
+    assert.deepEqual(stale, [7, 8, 9, 10, 11, 12].map((k) => cuotaId("p1", k)));
+  });
+
+  it("progress: cuota you are on and what is left", () => {
+    const cs = deriveInstallments(purchase({}), card);
+    const pr = purchaseProgress(purchase({}), cs, "2026-12-15");
+    assert.equal(pr.current, 3);
+    assert.equal(pr.left, 450_000);
+  });
+});
+
+describe("financing cost", () => {
+  it("no cost when cuotas add up to the cash price", () => {
+    const c = financingCost(120_000, 10_000, 12);
+    assert.equal(c.extra, 0);
+    assert.equal(c.tea, 0);
+  });
+
+  it("finds the implicit rate", () => {
+    // 12 cuotas at 1 % monthly over 100.000: cuota ≈ 8884.88.
+    const c = financingCost(100_000, 8884.88, 12);
+    assert.ok(Math.abs(c.monthly - 0.01) < 1e-4, String(c.monthly));
+    assert.ok(Math.abs(c.tea - 0.1268) < 1e-3, String(c.tea));
+    assert.equal(c.extra, 6618.56);
+  });
+});
+
+describe("next statements", () => {
+  const fijo: Recurring = {
+    id: "netflix",
+    bookId: "p",
+    type: "expense",
+    name: "Netflix",
+    amount: 9000,
+    currency: "ARS",
+    categoryId: "ocio",
+    accountId: "visa-ars",
+    method: "credito",
+    day: 15,
+    note: "",
+    active: true,
+  };
+
+  it("adds cuotas, unposted fijos on the card and cuotas that end", () => {
+    const cs = deriveInstallments(purchase({ installments: 3, total: 300_000 }), card);
+    const txs = [...cs, tx({ id: "super", amount: 20_000, date: "2026-10-12" })];
+    const up = upcomingStatements(card, txs, [fijo], "2026-10-12", 4);
+    assert.deepEqual(up.map((u) => u.period), ["2026-10", "2026-11", "2026-12", "2027-01"]);
+    // October: cuota 1 + super + Netflix of 15/10 (not posted yet).
+    assert.equal(up[0]!.ars, 100_000 + 20_000 + 9000);
+    assert.equal(up[0]!.cuotasArs, 100_000);
+    assert.equal(up[0]!.fijosArs, 9000);
+    assert.equal(up[2]!.ending.count, 1);
+    assert.equal(up[2]!.ending.ars, 100_000);
+    assert.equal(up[3]!.ars, 9000, "only the fijo after cuotas end");
+  });
+
+  it("a posted fijo is not counted twice", () => {
+    const posted = tx({ id: "rec_netflix_2026-10", recurringId: "netflix", amount: 9000, date: "2026-10-15" });
+    const up = upcomingStatements(card, [posted], [fijo], "2026-10-16", 1);
+    assert.equal(up[0]!.ars, 9000);
+    assert.equal(up[0]!.fijosArs, 0);
+  });
+});
+
+describe("limit and commitments", () => {
+  it("limit use counts USD at the rate", () => {
+    assert.equal(limitUse(card, 100, 0, 1000), null, "no limit set");
+    const u = limitUse({ ...card, limitArs: 1_000_000 }, 400_000, 100, 1000)!;
+    assert.equal(u.used, 500_000);
+    assert.equal(u.pct, 0.5);
+    assert.equal(u.free, 500_000);
+  });
+
+  it("committed for a month: cuotas dated that month + fijos not loaded", () => {
+    const cs = deriveInstallments(purchase({}), card);
+    const usd = deriveInstallments(purchase({ id: "p2", currency: "USD", installments: 2, total: 20 }), card).map((t) => ({ ...t, rateArs: 1000 }));
+    const r: Recurring = { id: "gym", bookId: "p", type: "expense", name: "Gym", amount: 30_000, currency: "ARS", categoryId: "salud", accountId: "bank", method: "debito", day: 5, note: "", active: true };
+    const c = committedForMonth([...cs, ...usd], [r], "2026-11", 1200);
+    assert.equal(c.cuotas, 50_000 + 10 * 1000);
+    assert.equal(c.fijos, 30_000);
+    assert.equal(c.total, 90_000);
+  });
+
+  it("financed this month: new purchases only", () => {
+    const f = financedInMonth(
+      [purchase({}), purchase({ id: "old", paidBefore: 3 }), purchase({ id: "usd", currency: "USD", total: 100 }), purchase({ id: "nov", date: "2026-11-02" })],
+      "2026-10",
+      1000,
+    );
+    assert.equal(f.count, 2);
+    assert.equal(f.total, 600_000 + 100_000);
   });
 });
