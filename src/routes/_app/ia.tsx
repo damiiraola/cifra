@@ -200,8 +200,8 @@ export function Asistente() {
           <div className="flex h-56 flex-col items-center justify-center text-center">
             <p className="font-display text-2xl tracking-tight">Preguntale a tu libro</p>
             <p className="mt-2 max-w-sm text-sm text-muted">
-              Si no responde en 20 segundos, el input se habilita y podés reintentar. La plata fina
-              queda en el libro.
+              Preguntá por tus gastos, topes o fijos. Si tarda más de 20 segundos, podés volver a
+              preguntar. Los números exactos siempre están en el libro.
             </p>
           </div>
         ) : (

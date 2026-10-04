@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { budgetAllocation, liveCategoryRows } from "@/lib/budget-math";
 import { DEFAULT_BUDGETS } from "@/lib/categories";
 import { computeMonth } from "@/lib/analytics";
-import { moneyARS, parseAmount } from "@/lib/format";
+import { moneyARS, parseAmount, amountInput } from "@/lib/format";
 import { CatIcon } from "@/lib/icons";
 import { useAllCategories, useBookTxs, useLedger } from "@/lib/store";
 import { MonthSwitcher } from "@/components/month-switcher";
@@ -51,7 +51,7 @@ function Presupuestos() {
           <Input
             className="w-40"
             inputMode="decimal"
-            defaultValue={globalBudget ? String(globalBudget) : ""}
+            defaultValue={amountInput(globalBudget)}
             aria-label="Tope global"
             onBlur={(e) => {
               const n = parseAmount(e.target.value);
@@ -195,7 +195,7 @@ function EnvelopeRow({
       </div>
       <Input
         inputMode="decimal"
-        defaultValue={budget ? String(budget) : ""}
+        defaultValue={amountInput(budget)}
         placeholder="Sin tope"
         aria-label={`Tope de ${name}`}
         onBlur={(e) => {
