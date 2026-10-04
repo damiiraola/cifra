@@ -24,7 +24,7 @@ Hay dos modos. El código es el mismo (`getSql()`).
 - **Preview / desarrollo local:** si no hay `DATABASE_URL`, corre **PGLite** (Postgres compilado a WASM). Los datos viven en memoria del proceso: se pierden al reiniciar el servidor.
 - **Producción:** `DATABASE_URL` apunta a **Neon Postgres**. Ahí el libro queda persistente, por usuario, listo para un servidor externo.
 
-Las tablas están en `migrations/` (`ledger_transactions`, `ledger_accounts`, `ledger_recurring`, auth, etc.). Se aplican solas al levantar o al hacer `npm run build`.
+Las tablas están en `migrations/` (`ledger_transactions`, `ledger_accounts`, `ledger_recurring`, auth, etc.). Se aplican solas al levantar (PGLite local) o en el build de **producción** de Vercel (`npm run build`); los previews no migran. Ver `docs/deploy.md`.
 
 ## Dominio propio
 
@@ -114,7 +114,7 @@ En Vercel, Environment Variables (Production + Preview):
 ## Scripts
 
 - `npm run dev` — desarrollo
-- `npm run build` — build + migraciones
+- `npm run build` — en producción (Vercel): typecheck + tests, build y migraciones. En previews: solo build (sin migrar). Ver `docs/deploy.md`.
 - `npm run typecheck`
 
 ## Licencia
