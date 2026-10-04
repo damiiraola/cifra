@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
   applyOpenings,
   asVault,
+  clearLocalVault,
   buildLocalVault,
   markAutoBackup,
   readLocalVault,
@@ -233,6 +234,16 @@ function clearLocalSnapshot() {
   } catch {
     /* ignore */
   }
+}
+
+/**
+ * Forget every copy of the ledger kept in this browser (local vault, old
+ * snapshot, auto-backup marker). Called after a confirmed sign-out so the next
+ * person on a shared phone does not inherit the previous user's numbers.
+ */
+export function forgetLocalLedger() {
+  clearLocalVault();
+  clearLocalSnapshot();
 }
 
 let hydrateLock: Promise<void> | null = null;
