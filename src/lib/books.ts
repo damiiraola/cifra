@@ -18,11 +18,17 @@ const METHOD_KIND: Record<PayMethod, AccountKind> = {
   mercadopago: "mp",
   crypto: "crypto",
   debito: "bank",
-  credito: "bank",
+  credito: "card",
   transferencia: "bank",
   otro: "bank",
 };
 
+/**
+ * Default caja for a payment method. Crédito goes to a card caja in that
+ * currency (it used to go to the bank, so buying with credit lowered the bank
+ * the day you bought). Without a card in the book it falls back to the bank,
+ * as before. Other methods never land on a card caja by accident.
+ */
 export function inferAccount(
   accounts: Account[],
   bookId: string,
@@ -31,12 +37,23 @@ export function inferAccount(
 ): string {
   const mine = accounts.filter((a) => a.bookId === bookId && !a.archived);
   const kind = METHOD_KIND[method];
+  if (kind === "card") {
+    const card = mine.find((a) => a.kind === "card" && a.currency === currency);
+    if (card) return card.id;
+  }
+  const money = mine.filter((a) => a.kind !== "card");
+  const want = kind === "card" ? "bank" : kind;
   return (
-    mine.find((a) => a.currency === currency && a.kind === kind)?.id ??
-    mine.find((a) => a.currency === currency)?.id ??
-    mine[0]?.id ??
+    money.find((a) => a.currency === currency && a.kind === want)?.id ??
+    money.find((a) => a.currency === currency)?.id ??
+    money[0]?.id ??
     ""
   );
+}
+
+/** "Banco · ARS", or just the name when it already says the currency ("Visa USD"). */
+export function accountLabel(a: Pick<Account, "name" | "currency">): string {
+  return a.name.endsWith(` ${a.currency}`) ? a.name : `${a.name} · ${a.currency}`;
 }
 
 export function accountBalance(account: Account, txs: Transaction[]): number {
@@ -62,7 +79,7 @@ export function stampRate(currency: Currency, usd: number, usdt: number, overrid
 
 export function emptyTxFields(bookId = "", accountId = ""): Pick<
   Transaction,
-  "bookId" | "accountId" | "counterpartyId" | "amountTo" | "rateArs" | "rateLocked" | "recurringId"
+  "bookId" | "accountId" | "counterpartyId" | "amountTo" | "rateArs" | "rateLocked" | "recurringId" | "cardPeriod"
 > {
   return {
     bookId,
@@ -72,6 +89,7 @@ export function emptyTxFields(bookId = "", accountId = ""): Pick<
     rateArs: 0,
     rateLocked: false,
     recurringId: "",
+    cardPeriod: "",
   };
 }
 

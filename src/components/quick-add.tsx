@@ -2,11 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { money, parseAmount, amountInput } from "@/lib/format";
 import { toARS } from "@/lib/analytics";
-import { inferAccount, stampRate } from "@/lib/books";
+import { Link } from "@tanstack/react-router";
+import { accountLabel, inferAccount, stampRate } from "@/lib/books";
+import { cardForAccount, dueDate as cardDueDate, closingDate, periodFor } from "@/lib/card-math";
 import { CatIcon } from "@/lib/icons";
 import { PAY_METHODS, type Currency, type PayMethod, type TxType } from "@/lib/types";
 import { cn, todayISO } from "@/lib/utils";
-import { useBookAccounts, useLedger, useVisibleCategories } from "@/lib/store";
+import type { Account } from "@/lib/types";
+import { useBookAccounts, useBookCards, useLedger, useVisibleCategories } from "@/lib/store";
 import { defaultCategory, lastCategory, methodForAccount, rememberCategory } from "@/lib/quick-defaults";
 import { Button } from "@/components/ui/button";
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
@@ -35,6 +38,7 @@ export function QuickAdd() {
     books,
   } = useLedger();
   const accounts = useBookAccounts();
+  const cards = useBookCards();
   const visible = useVisibleCategories();
   const editing = editingId ? transactions.find((t) => t.id === editingId) : null;
 
@@ -91,6 +95,12 @@ export function QuickAdd() {
   const fromAcc = accounts.find((a) => a.id === accountId);
   const toAcc = accounts.find((a) => a.id === counterpartyId);
   const liveRate = stampRate(currency, usdRate, usdtRate, customRate ?? undefined);
+  const card = type !== "transfer" ? cardForAccount(cards, accountId) : undefined;
+  const cardPeriod = card && date ? periodFor(date, card.closingDay) : "";
+  // Crédito with a card in the book: the caja picker only shows cards.
+  const creditOnly = Boolean(card) && method === "credito";
+  const moneyCajas = accounts.filter((a) => a.kind !== "card");
+  const cardCajas = accounts.filter((a) => a.kind === "card");
 
   const cats = useMemo(
     () => (type === "transfer" ? [] : visible.filter((c) => c.kind === (type === "income" ? "income" : "expense"))),
@@ -217,6 +227,7 @@ export function QuickAdd() {
                   rateArs: liveRate,
                   rateLocked: Boolean(customRate),
                   recurringId: "",
+                  cardPeriod: "",
                 }, fx), "ARS")}
               </p>
             ) : null}
@@ -237,7 +248,7 @@ export function QuickAdd() {
           ) : null}
 
           <div className="mt-5">
-            <Label htmlFor="account">{type === "transfer" ? "Desde" : "Caja"}</Label>
+            <Label htmlFor="account">{type === "transfer" ? "Desde" : creditOnly ? "Tarjeta" : "Caja"}</Label>
             <select
               id="account"
               value={accountId}
@@ -252,12 +263,22 @@ export function QuickAdd() {
               }}
               className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)] outline-none"
             >
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name} · {a.currency}
-                </option>
-              ))}
+              <CajaOptions cajas={creditOnly ? [] : moneyCajas} cards={cardCajas} />
             </select>
+            {card ? (
+              <p className="mt-1 text-xs text-subtle">
+                Va al resumen que cierra el {dm(closingDate(cardPeriod, card.closingDay))} y vence el{" "}
+                {dm(cardDueDate(cardPeriod, card.closingDay, card.dueDay))}. No baja tu banco hoy.
+              </p>
+            ) : type !== "transfer" && method === "credito" && cards.length === 0 ? (
+              <p className="mt-1 text-xs text-subtle">
+                Cargá tu tarjeta en{" "}
+                <Link to="/ajustes" hash="tarjetas" onClick={() => closeQuick()} className="underline">
+                  Ajustes → Tarjetas
+                </Link>{" "}
+                y el gasto con crédito deja de bajar el banco.
+              </p>
+            ) : null}
           </div>
 
           {type === "transfer" ? (
@@ -270,13 +291,10 @@ export function QuickAdd() {
                 className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)] outline-none"
               >
                 <option value="">Elegí caja</option>
-                {accounts
-                  .filter((a) => a.id !== accountId)
-                  .map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name} · {a.currency}
-                    </option>
-                  ))}
+                <CajaOptions
+                  cajas={moneyCajas.filter((a) => a.id !== accountId)}
+                  cards={cardCajas.filter((a) => a.id !== accountId)}
+                />
               </select>
               {toAcc && fromAcc && toAcc.currency !== fromAcc.currency ? (
                 <div className="mt-3">
@@ -361,7 +379,12 @@ export function QuickAdd() {
                       onChange={(e) => {
                         const m = e.target.value as PayMethod;
                         setMethod(m);
-                        const inferred = inferAccount(accounts, activeBookId, m, currency);
+                        let inferred = inferAccount(accounts, activeBookId, m, currency);
+                        const firstCard = cardCajas[0];
+                        if (m === "credito" && firstCard && !cardCajas.some((a) => a.id === inferred)) {
+                          inferred = firstCard.id;
+                          setCurrency(firstCard.currency);
+                        }
                         if (inferred) setAccountId(inferred);
                       }}
                       className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)] outline-none"
@@ -403,5 +426,31 @@ export function QuickAdd() {
         </div>
       </DrawerContent>
     </Drawer>
+  );
+}
+
+function dm(iso: string) {
+  return `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+}
+
+/** Money cajas first, then card cajas grouped under "Tarjetas". */
+function CajaOptions({ cajas, cards }: { cajas: Account[]; cards: Account[] }) {
+  return (
+    <>
+      {cajas.map((a) => (
+        <option key={a.id} value={a.id}>
+          {accountLabel(a)}
+        </option>
+      ))}
+      {cards.length ? (
+        <optgroup label="Tarjetas">
+          {cards.map((a) => (
+            <option key={a.id} value={a.id}>
+              {accountLabel(a)}
+            </option>
+          ))}
+        </optgroup>
+      ) : null}
+    </>
   );
 }

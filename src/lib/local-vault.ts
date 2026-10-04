@@ -1,4 +1,4 @@
-import type { Account, Book, Category, ChatMessage, Recurring, Transaction } from "./types";
+import type { Account, Book, Card, Category, ChatMessage, Recurring, Transaction } from "./types";
 import { parseOutbox, type OutboxOp } from "./outbox";
 import { remapRecurrings } from "./recurring-sync";
 
@@ -49,6 +49,9 @@ export type LocalVault = {
   pendingRecurringIds: string[];
   bookBudgets?: Record<string, Record<string, number>>;
   bookGlobals?: Record<string, number>;
+  /** Credit cards (their two cajas are in `accounts`). */
+  cards?: Card[];
+  pendingCardIds?: string[];
 };
 
 function mailOf(email: string | null | undefined) {
@@ -84,6 +87,8 @@ export function buildLocalVault(input: {
   pendingRecurringIds?: string[];
   bookBudgets?: Record<string, Record<string, number>>;
   bookGlobals?: Record<string, number>;
+  cards?: Card[];
+  pendingCardIds?: string[];
 }): LocalVault | null {
   const email = mailOf(input.email);
   if (!email) return null;
@@ -127,6 +132,8 @@ export function buildLocalVault(input: {
     pendingRecurringIds: [...new Set(input.pendingRecurringIds ?? [])],
     bookBudgets: input.bookBudgets ?? {},
     bookGlobals: input.bookGlobals ?? {},
+    cards: input.cards ?? [],
+    pendingCardIds: [...new Set(input.pendingCardIds ?? [])],
   };
 }
 
@@ -232,6 +239,10 @@ export function asVault(raw: unknown): LocalVault | null {
       : [],
     bookBudgets: p.bookBudgets && typeof p.bookBudgets === "object" ? p.bookBudgets : {},
     bookGlobals: p.bookGlobals && typeof p.bookGlobals === "object" ? p.bookGlobals : {},
+    cards: Array.isArray(p.cards)
+      ? p.cards.filter((c): c is Card => Boolean(c && typeof c === "object" && c.id && c.accountArsId && c.accountUsdId))
+      : [],
+    pendingCardIds: Array.isArray(p.pendingCardIds) ? p.pendingCardIds.map(String).filter(Boolean) : [],
   };
 }
 
@@ -387,3 +398,4 @@ export async function shareVaultToIcloud(email: string | null | undefined): Prom
   URL.revokeObjectURL(url);
   return "downloaded";
 }
+

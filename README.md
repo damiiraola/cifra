@@ -1,6 +1,6 @@
 # Cifra
 
-Libro personal de gastos para Argentina. ARS, USD y USDT. Cotización en vivo, cajas, fijos, analítica e IA.
+Libro personal de gastos para Argentina. ARS, USD y USDT. Cotización en vivo, cajas, tarjetas de crédito, fijos, analítica e IA.
 
 Cada usuario entra con mail y contraseña (no hay login con Google, X ni Grok) y ve solo su libro. Dos libros: Personal y Negocio.
 
@@ -24,7 +24,7 @@ Hay dos modos. El código es el mismo (`getSql()`).
 - **Preview / desarrollo local:** si no hay `DATABASE_URL`, corre **PGLite** (Postgres compilado a WASM). Los datos viven en memoria del proceso: se pierden al reiniciar el servidor.
 - **Producción:** `DATABASE_URL` apunta a **Neon Postgres**. Ahí el libro queda persistente, por usuario, listo para un servidor externo.
 
-Las tablas están en `migrations/` (`ledger_transactions`, `ledger_accounts`, `ledger_recurring`, auth, etc.). Se aplican solas al levantar (PGLite local) o en el build de **producción** de Vercel (`npm run build`); los previews no migran. Ver `docs/deploy.md`.
+Las tablas están en `migrations/` (`ledger_transactions`, `ledger_accounts`, `ledger_recurring`, `ledger_cards`, auth, etc.). Se aplican solas al levantar (PGLite local) o en el build de **producción** de Vercel (`npm run build`); los previews no migran. Ver `docs/deploy.md`.
 
 ## Dominio propio
 
