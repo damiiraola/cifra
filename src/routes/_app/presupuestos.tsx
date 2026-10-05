@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { budgetAllocation, liveCategoryRows } from "@/lib/budget-math";
+import { budgetAllocation, fijoTopes, liveCategoryRows } from "@/lib/budget-math";
 import { DEFAULT_BUDGETS } from "@/lib/categories";
 import { computeMonth } from "@/lib/analytics";
 import { moneyARS, monthLabel, parseAmount, amountInput } from "@/lib/format";
@@ -33,9 +33,10 @@ function Presupuestos() {
   const transactions = useBookTxs();
   const allCats = useAllCategories();
   const stats = computeMonth(transactions, viewMonth, { usd: usdRate, usdt: usdtRate });
-  const rows = liveCategoryRows(stats.byCat, budgets, allCats, DEFAULT_BUDGETS, budgetLocks);
-  const live = rows.filter((c) => c.spent > 0);
-  const idle = rows.filter((c) => c.spent <= 0);
+  const planned = fijoTopes(recurrings, activeBookId, { usd: usdRate, usdt: usdtRate });
+  const rows = liveCategoryRows(stats.byCat, budgets, allCats, DEFAULT_BUDGETS, budgetLocks, planned);
+  const live = rows.filter((c) => c.spent > 0 || c.budget > 0);
+  const idle = rows.filter((c) => c.spent <= 0 && c.budget <= 0);
   const { assigned, unassigned, overAssigned } = budgetAllocation(rows, globalBudget);
   const used = globalBudget ? (stats.spent / globalBudget) * 100 : 0;
   const assignedPct = globalBudget ? Math.min(100, (assigned / globalBudget) * 100) : 0;
@@ -120,7 +121,7 @@ function Presupuestos() {
           </p>
         </div>
         <p className="mt-3 text-xs text-subtle">
-          Si no escribís un tope, Cifra usa lo que cargaste en el mes, fijos incluidos. Si escribís uno, ese queda fijo.
+          Si no escribís un tope, Cifra usa los fijos de esa categoría. Si no hay fijos, usa lo que ya gastaste.
         </p>
       </section>
 

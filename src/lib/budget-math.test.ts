@@ -4,6 +4,7 @@ import {
   budgetAllocation,
   budgetsFromSpend,
   effectiveCategoryBudget,
+  fijoTopes,
   hydrateBookMoney,
   liveCategoryRows,
   moneyForBook,
@@ -64,8 +65,16 @@ describe("effectiveCategoryBudget", () => {
     assert.equal(effectiveCategoryBudget("alimentos", 300_000, 0, SEED, true), 300_000);
   });
 
-  it("follows new fijos when the old tope was only the previous spend", () => {
-    assert.equal(effectiveCategoryBudget("vivienda", 200_000, 1_000_000, SEED, false), 1_000_000);
+  it("loads the assigned fijo as the tope even before it is spent", () => {
+    assert.equal(effectiveCategoryBudget("vivienda", 0, 0, SEED, false, 800_000), 800_000);
+  });
+
+  it("keeps the fijo tope when the month already spent more", () => {
+    assert.equal(effectiveCategoryBudget("vivienda", 200_000, 900_000, SEED, false, 800_000), 800_000);
+  });
+
+  it("a locked tope still wins over the fijo", () => {
+    assert.equal(effectiveCategoryBudget("vivienda", 1_200_000, 900_000, SEED, true, 800_000), 1_200_000);
   });
 });
 
@@ -90,6 +99,26 @@ describe("liveCategoryRows + allocation", () => {
   });
 });
 
+describe("fijoTopes", () => {
+  it("sums active expense fijos of this book into the category, in pesos", () => {
+    assert.deepEqual(
+      fijoTopes(
+        [
+          { bookId: "p", type: "expense", active: true, categoryId: "vivienda", amount: 500_000, currency: "ARS" },
+          { bookId: "p", type: "expense", active: true, categoryId: "vivienda", amount: 80_000, currency: "ARS" },
+          { bookId: "p", type: "expense", active: true, categoryId: "servicios", amount: 20, currency: "USDT" },
+          { bookId: "p", type: "income", active: true, categoryId: "sueldo", amount: 1, currency: "ARS" },
+          { bookId: "p", type: "expense", active: false, categoryId: "salud", amount: 10, currency: "ARS" },
+          { bookId: "n", type: "expense", active: true, categoryId: "vivienda", amount: 9, currency: "ARS" },
+        ],
+        "p",
+        { usd: 1400, usdt: 1614 },
+      ),
+      { vivienda: 580_000, servicios: 32_280 },
+    );
+  });
+});
+
 describe("budgetsFromSpend", () => {
   it("copies this month's spend into envelopes", () => {
     assert.deepEqual(budgetsFromSpend({ vivienda: 1_550_000, alimentos: 0 }), {
@@ -108,9 +137,14 @@ describe("unsetBudgetPatch", () => {
     assert.deepEqual(patch, { vivienda: 1_550_000, salud: 700_000 });
   });
 
-  it("raises a stale auto tope when fijos land", () => {
-    const patch = unsetBudgetPatch({ vivienda: 1_000_000 }, { vivienda: 200_000 }, SEED);
-    assert.deepEqual(patch, { vivienda: 1_000_000 });
+  it("saves the assigned fijo as the tope before any spend", () => {
+    const patch = unsetBudgetPatch({}, { vivienda: 0 }, SEED, {}, { vivienda: 800_000 });
+    assert.deepEqual(patch, { vivienda: 800_000 });
+  });
+
+  it("does not replace a fijo tope with a higher spend", () => {
+    const patch = unsetBudgetPatch({ vivienda: 900_000 }, { vivienda: 800_000 }, SEED, {}, { vivienda: 800_000 });
+    assert.equal(patch, null);
   });
 
   it("does not overwrite a tope the user locked", () => {

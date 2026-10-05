@@ -16,8 +16,10 @@ export function effectiveCategoryBudget(
   spent: number,
   seedDefaults: Record<string, number> = {},
   locked = false,
+  planned = 0,
 ) {
   if (isUserSetTope(id, stored, seedDefaults, locked)) return Number(stored) || 0;
+  if (planned > 0) return Math.round(planned);
   if (spent > 0) return Math.round(spent);
   return 0;
 }
@@ -33,6 +35,7 @@ export function liveCategoryRows(
   cats: Category[],
   seedDefaults: Record<string, number> = {},
   locks: Record<string, boolean> = {},
+  planned: Record<string, number> = {},
 ): LiveCategoryRow[] {
   return cats
     .filter((c) => c.kind === "expense")
@@ -42,10 +45,10 @@ export function liveCategoryRows(
       return {
         ...c,
         spent,
-        budget: effectiveCategoryBudget(c.id, stored, spent, seedDefaults, Boolean(locks[c.id])),
+        budget: effectiveCategoryBudget(c.id, stored, spent, seedDefaults, Boolean(locks[c.id]), planned[c.id] ?? 0),
       };
     })
-    .sort((a, b) => b.spent - a.spent || a.name.localeCompare(b.name, "es"));
+    .sort((a, b) => b.spent - a.spent || b.budget - a.budget || a.name.localeCompare(b.name, "es"));
 }
 
 export function budgetAllocation(rows: { spent: number; budget: number }[], globalBudget: number) {
@@ -54,6 +57,29 @@ export function budgetAllocation(rows: { spent: number; budget: number }[], glob
   const unassigned = Math.max(0, globalBudget - assigned);
   const overAssigned = Math.max(0, assigned - globalBudget);
   return { assigned, unassigned, overAssigned };
+}
+
+export function fijoTopes(
+  rows: { bookId: string; type: string; active: boolean; categoryId: string; amount: number; currency: string }[],
+  bookId: string,
+  rates: { usd: number; usdt: number },
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const r of rows) {
+    if (!r.active || r.type !== "expense" || r.bookId !== bookId || !(r.amount > 0) || !r.categoryId) continue;
+    const ars =
+      r.currency === "ARS"
+        ? r.amount
+        : r.currency === "USD"
+          ? r.amount * (rates.usd > 0 ? rates.usd : 0)
+          : r.currency === "USDT"
+            ? r.amount * (rates.usdt > 0 ? rates.usdt : 0)
+            : 0;
+    if (!(ars > 0)) continue;
+    out[r.categoryId] = (out[r.categoryId] ?? 0) + ars;
+  }
+  for (const id of Object.keys(out)) out[id] = Math.round(out[id]!);
+  return out;
 }
 
 export function budgetsFromSpend(byCat: Record<string, number>): Record<string, number> {
@@ -69,12 +95,16 @@ export function unsetBudgetPatch(
   budgets: Record<string, number>,
   seedDefaults: Record<string, number> = {},
   locks: Record<string, boolean> = {},
+  planned: Record<string, number> = {},
 ): Record<string, number> | null {
   const patch: Record<string, number> = {};
-  for (const [id, spent] of Object.entries(byCat)) {
-    if (!(spent > 0)) continue;
+  const ids = new Set([...Object.keys(byCat), ...Object.keys(planned)]);
+  for (const id of ids) {
+    const spent = byCat[id] ?? 0;
+    const plan = planned[id] ?? 0;
+    if (!(spent > 0) && !(plan > 0)) continue;
     if (isUserSetTope(id, budgets[id] ?? 0, seedDefaults, Boolean(locks[id]))) continue;
-    const next = Math.round(spent);
+    const next = plan > 0 ? Math.round(plan) : Math.round(spent);
     if ((budgets[id] ?? 0) === next) continue;
     patch[id] = next;
   }
