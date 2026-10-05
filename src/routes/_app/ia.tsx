@@ -32,8 +32,12 @@ export function Asistente() {
     budgets,
     globalBudget,
     chat,
+    chatThreads,
+    activeChatId,
     pushChat,
-    clearChat,
+    startChat,
+    openChat,
+    deleteChat,
     openQuick,
     recurrings,
     activeBookId,
@@ -165,8 +169,13 @@ export function Asistente() {
             Informe del mes
           </Button>
           {chat.length > 0 ? (
-            <Button variant="ghost" size="sm" onClick={clearChat}>
-              Limpiar
+            <Button variant="ghost" size="sm" onClick={startChat}>
+              Nueva
+            </Button>
+          ) : null}
+          {activeChatId && chatThreads.some((t) => t.id === activeChatId) ? (
+            <Button variant="ghost" size="sm" onClick={() => deleteChat(activeChatId)}>
+              Borrar
             </Button>
           ) : null}
         </div>
@@ -174,8 +183,28 @@ export function Asistente() {
 
       <p className="max-w-xl text-sm text-muted">
         Totales, categorías, fijos y presupuestos del mes. No se mandan comercios, notas ni cada
-        movimiento.
+        movimiento. Las conversaciones quedan en tu cuenta.
       </p>
+
+      {chatThreads.length > 0 ? (
+        <div className="flex gap-1.5 overflow-x-auto pb-1">
+          {chatThreads.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => openChat(t.id)}
+              aria-pressed={t.id === activeChatId}
+              className={
+                t.id === activeChatId
+                  ? "h-11 shrink-0 rounded-full bg-elevated px-3.5 text-sm text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.16)]"
+                  : "h-11 shrink-0 rounded-full bg-elevated px-3.5 text-sm text-muted"
+              }
+            >
+              {t.title}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       {blocked ? (
         <p className="rounded-2xl bg-elevated px-4 py-3 text-sm text-fg">{AI_UNAVAILABLE}</p>

@@ -1,4 +1,5 @@
 import type { Account, Book, Card, CardPurchase, Category, ChatMessage, Recurring, Transaction } from "./types";
+import { parseChatThreads, threadFromMessages, type ChatThread } from "./chat-threads";
 import { parseOutbox, type OutboxOp } from "./outbox";
 import { remapRecurrings } from "./recurring-sync";
 
@@ -46,6 +47,7 @@ export type LocalVault = {
   usdtRate: number;
   usdSource: string;
   chat: ChatMessage[];
+  chatThreads?: ChatThread[];
   pendingRecurringIds: string[];
   bookBudgets?: Record<string, Record<string, number>>;
   bookGlobals?: Record<string, number>;
@@ -88,6 +90,7 @@ export function buildLocalVault(input: {
   usdtRate?: number;
   usdSource?: string;
   chat?: ChatMessage[];
+  chatThreads?: ChatThread[];
   pendingRecurringIds?: string[];
   bookBudgets?: Record<string, Record<string, number>>;
   bookGlobals?: Record<string, number>;
@@ -135,7 +138,8 @@ export function buildLocalVault(input: {
     usdRate: input.usdRate ?? 0,
     usdtRate: input.usdtRate ?? 0,
     usdSource: input.usdSource ?? "",
-    chat: (input.chat ?? []).slice(-24),
+    chat: (input.chat ?? []).slice(-40),
+    chatThreads: input.chatThreads ?? [],
     pendingRecurringIds: [...new Set(input.pendingRecurringIds ?? [])],
     bookBudgets: input.bookBudgets ?? {},
     bookGlobals: input.bookGlobals ?? {},
@@ -244,6 +248,12 @@ export function asVault(raw: unknown): LocalVault | null {
     usdtRate: Number(p.usdtRate) || 0,
     usdSource: String(p.usdSource ?? ""),
     chat: parseChat(p.chat),
+    chatThreads: (() => {
+      const saved = parseChatThreads(p.chatThreads);
+      if (saved.length) return saved;
+      const legacy = threadFromMessages("legacy", parseChat(p.chat));
+      return legacy ? [legacy] : [];
+    })(),
     pendingRecurringIds: Array.isArray(p.pendingRecurringIds)
       ? p.pendingRecurringIds.map(String).filter(Boolean)
       : [],

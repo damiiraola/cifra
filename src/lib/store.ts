@@ -55,6 +55,7 @@ import {
 import { dueDate, dueUnposted, isPosted, likelyDuplicate, postedTxId } from "./recurring";
 import { buildSeed } from "./seed";
 import { monthISO, todayISO, uid } from "./utils";
+import { mergeChatThreads, threadFromMessages, upsertThread, type ChatThread } from "./chat-threads";
 import { applyOutbox, enqueue, OUTBOX_MAX_TRIES, pruneOutbox, resetTries, type OutboxOp } from "./outbox";
 import { mergeRecurrings } from "./recurring-sync";
 import { hydrateBookMoney, locksForBook, moneyForBook } from "./budget-math";
@@ -109,6 +110,8 @@ type LedgerState = {
   editingId: string | null;
   draft: Draft;
   chat: ChatMessage[];
+  chatThreads: ChatThread[];
+  activeChatId: string;
   hydrate: (identity?: { id: string; email?: string | null }) => Promise<void>;
   resetClient: () => void;
   refreshQuotes: (quiet?: boolean) => Promise<void>;
@@ -145,7 +148,9 @@ type LedgerState = {
   removePurchase: (id: string) => void;
   flushPurchases: () => Promise<void>;
   pushChat: (msg: ChatMessage) => void;
-  clearChat: () => void;
+  startChat: () => void;
+  openChat: (id: string) => void;
+  deleteChat: (id: string) => void;
   loadDemo: () => void;
   wipe: () => void;
 };
@@ -197,6 +202,7 @@ function vaultInput(get: () => LedgerState) {
     usdtRate: s.usdtRate,
     usdSource: s.usdSource,
     chat: s.chat,
+    chatThreads: s.chatThreads,
   };
 }
 
@@ -347,6 +353,7 @@ function pushSettings(get: () => LedgerState, revert?: Partial<LedgerState>, set
       bookBudgets,
       bookGlobals,
       bookBudgetLocks,
+      chatThreads: s.chatThreads,
       usdRate: s.usdRate,
       usdtRate: s.usdtRate,
       usdSource: s.usdSource,
@@ -528,6 +535,16 @@ async function restoreVault(get: () => LedgerState, set: (p: Partial<LedgerState
   if (get().pendingRecurringIds.length) void get().flushRecurrings();
 }
 
+function chatsFrom(get: () => LedgerState, remote: ChatThread[] | undefined) {
+  const merged = mergeChatThreads(get().chatThreads ?? [], remote ?? []);
+  const active = merged.find((t) => t.id === get().activeChatId) ?? merged[0];
+  return {
+    chatThreads: merged,
+    activeChatId: active?.id ?? "",
+    chat: active?.messages ?? [],
+  };
+}
+
 function paintVault(set: (p: Partial<LedgerState>) => void, get: () => LedgerState, vault: NonNullable<ReturnType<typeof readLocalVault>>) {
   const books = vault.books.length ? vault.books : get().books;
   const accounts = vault.accounts.length ? vault.accounts : get().accounts;
@@ -565,7 +582,17 @@ function paintVault(set: (p: Partial<LedgerState>) => void, get: () => LedgerSta
     usdRate: vault.usdRate || get().usdRate,
     usdtRate: vault.usdtRate || get().usdtRate,
     usdSource: isUsdSource(vault.usdSource) ? vault.usdSource : get().usdSource,
-    chat: vault.chat.length ? vault.chat : get().chat,
+    chat: vault.chatThreads?.length
+      ? (vault.chatThreads[0]?.messages ?? [])
+      : vault.chat.length
+        ? vault.chat
+        : get().chat,
+    chatThreads: vault.chatThreads?.length
+      ? vault.chatThreads
+      : threadFromMessages("legacy", vault.chat)
+        ? [threadFromMessages("legacy", vault.chat)!]
+        : get().chatThreads,
+    activeChatId: vault.chatThreads?.[0]?.id || (vault.chat.length ? "legacy" : get().activeChatId),
     pendingRecurringIds: vault.pendingRecurringIds.length ? vault.pendingRecurringIds : get().pendingRecurringIds,
   });
   paint(set, get, { confirmed, outbox });
@@ -610,6 +637,8 @@ export const useLedger = create<LedgerState>()((set, get) => ({
   editingId: null,
   draft: {},
   chat: [],
+  chatThreads: [],
+  activeChatId: "",
   hydrate: (identity) => {
     const ownerId = identity?.id ?? "";
     const ownerEmail = identity?.email ?? "";
@@ -683,6 +712,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
               usdRate: remote.usdRate,
               usdtRate: remote.usdtRate,
               usdSource: remote.usdSource,
+              ...chatsFrom(get, remote.chatThreads),
             });
             paint(set, get, { confirmed: stamped, outbox });
             pushSettings(get);
@@ -727,6 +757,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
           usdRate: remote.usdRate,
           usdtRate: remote.usdtRate,
           usdSource: remote.usdSource,
+          ...chatsFrom(get, remote.chatThreads),
         });
         paint(set, get, { confirmed: remote.transactions, outbox });
         await restoreVault(get, set);
@@ -768,6 +799,8 @@ export const useLedger = create<LedgerState>()((set, get) => ({
       purchases: [],
       pendingPurchaseIds: [],
       chat: [],
+      chatThreads: [],
+      activeChatId: "",
       selectedDay: null,
       quickOpen: false,
       editingId: null,
@@ -1287,12 +1320,36 @@ export const useLedger = create<LedgerState>()((set, get) => ({
     return purchaseFlushLock;
   },
   pushChat: (msg) => {
-    set({ chat: [...get().chat, msg].slice(-24) });
+    const id = get().activeChatId || uid();
+    const messages = [...get().chat, msg].slice(-40);
+    const thread = threadFromMessages(id, messages, new Date().toISOString());
+    if (!thread) return;
+    const chatThreads = upsertThread(get().chatThreads, thread);
+    set({ chat: messages, activeChatId: id, chatThreads });
+    persistLocal(get);
+    pushSettings(get);
+  },
+  startChat: () => {
+    if (!get().chat.length) return;
+    set({ chat: [], activeChatId: uid() });
     persistLocal(get);
   },
-  clearChat: () => {
-    set({ chat: [] });
+  openChat: (id) => {
+    const thread = get().chatThreads.find((t) => t.id === id);
+    if (!thread) return;
+    set({ chat: thread.messages, activeChatId: thread.id });
     persistLocal(get);
+  },
+  deleteChat: (id) => {
+    const chatThreads = get().chatThreads.filter((t) => t.id !== id);
+    if (get().activeChatId !== id) {
+      set({ chatThreads });
+    } else {
+      const next = chatThreads[0];
+      set({ chatThreads, activeChatId: next?.id ?? "", chat: next?.messages ?? [] });
+    }
+    persistLocal(get);
+    pushSettings(get);
   },
   loadDemo: () => {
     const { activeBookId, accounts, usdRate, usdtRate } = get();
@@ -1311,6 +1368,8 @@ export const useLedger = create<LedgerState>()((set, get) => ({
       budgetLocks: {},
       bookBudgetLocks: {},
       chat: [],
+      chatThreads: [],
+      activeChatId: "",
       viewMonth: monthISO(),
       onboarded: true,
     });
@@ -1330,7 +1389,6 @@ export const useLedger = create<LedgerState>()((set, get) => ({
     // Its cuotas just went with the movements: the purchases go too.
     const dropped = get().purchases.filter((p) => p.bookId === activeBookId).map((p) => p.id);
     set({
-      chat: [],
       purchases: get().purchases.filter((p) => p.bookId !== activeBookId),
       pendingPurchaseIds: [...new Set([...get().pendingPurchaseIds, ...dropped])],
     });
