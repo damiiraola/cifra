@@ -57,7 +57,7 @@ import { buildSeed } from "./seed";
 import { monthISO, uid } from "./utils";
 import { applyOutbox, enqueue, OUTBOX_MAX_TRIES, pruneOutbox, resetTries, type OutboxOp } from "./outbox";
 import { mergeRecurrings } from "./recurring-sync";
-import { hydrateBookMoney, moneyForBook } from "./budget-math";
+import { hydrateBookMoney, locksForBook, moneyForBook } from "./budget-math";
 import type { Account, Book, Card, CardPurchase, Category, CategoryKind, ChatMessage, Recurring, Transaction } from "./types";
 
 const LOCAL_KEY = "cifra-ledger-v1";
@@ -95,6 +95,8 @@ type LedgerState = {
   globalBudget: number;
   bookBudgets: Record<string, Record<string, number>>;
   bookGlobals: Record<string, number>;
+  budgetLocks: Record<string, boolean>;
+  bookBudgetLocks: Record<string, Record<string, boolean>>;
   usdRate: number;
   usdtRate: number;
   usdSource: UsdSource;
@@ -187,6 +189,7 @@ function vaultInput(get: () => LedgerState) {
     globalBudget: s.globalBudget,
     bookBudgets: s.bookBudgets,
     bookGlobals: s.bookGlobals,
+    bookBudgetLocks: s.bookBudgetLocks,
     categoryNames: s.categoryNames,
     hiddenCategoryIds: s.hiddenCategoryIds,
     customCategories: s.customCategories,
@@ -335,6 +338,7 @@ function pushSettings(get: () => LedgerState, revert?: Partial<LedgerState>, set
   const s = get();
   const bookBudgets = { ...s.bookBudgets, [s.activeBookId]: s.budgets };
   const bookGlobals = { ...s.bookGlobals, [s.activeBookId]: s.globalBudget };
+  const bookBudgetLocks = { ...s.bookBudgetLocks, [s.activeBookId]: s.budgetLocks };
   const personal = s.books.find((b) => b.kind === "personal")?.id;
   void saveSettings({
     data: {
@@ -342,6 +346,7 @@ function pushSettings(get: () => LedgerState, revert?: Partial<LedgerState>, set
       globalBudget: personal ? (bookGlobals[personal] ?? 0) : s.globalBudget,
       bookBudgets,
       bookGlobals,
+      bookBudgetLocks,
       usdRate: s.usdRate,
       usdtRate: s.usdtRate,
       usdSource: s.usdSource,
@@ -552,6 +557,8 @@ function paintVault(set: (p: Partial<LedgerState>) => void, get: () => LedgerSta
     globalBudget: scoped.globalBudget,
     bookBudgets: money.bookBudgets,
     bookGlobals: money.bookGlobals,
+    budgetLocks: locksForBook(activeBookId, vault.bookBudgetLocks ?? {}),
+    bookBudgetLocks: vault.bookBudgetLocks ?? {},
     categoryNames: vault.categoryNames,
     hiddenCategoryIds: vault.hiddenCategoryIds,
     customCategories: vault.customCategories,
@@ -589,6 +596,8 @@ export const useLedger = create<LedgerState>()((set, get) => ({
   globalBudget: DEFAULT_GLOBAL_BUDGET,
   bookBudgets: {},
   bookGlobals: {},
+  budgetLocks: {},
+  bookBudgetLocks: {},
   usdRate: DEFAULT_USD_RATE,
   usdtRate: DEFAULT_USDT_RATE,
   usdSource: DEFAULT_USD_SOURCE,
@@ -669,6 +678,8 @@ export const useLedger = create<LedgerState>()((set, get) => ({
               globalBudget: legacy.globalBudget,
               bookBudgets: {},
               bookGlobals: {},
+              budgetLocks: {},
+              bookBudgetLocks: {},
               usdRate: remote.usdRate,
               usdtRate: remote.usdtRate,
               usdSource: remote.usdSource,
@@ -711,6 +722,8 @@ export const useLedger = create<LedgerState>()((set, get) => ({
           globalBudget: remote.globalBudget,
           bookBudgets: remote.bookBudgets ?? {},
           bookGlobals: remote.bookGlobals ?? {},
+          budgetLocks: remote.budgetLocks ?? {},
+          bookBudgetLocks: remote.bookBudgetLocks ?? {},
           usdRate: remote.usdRate,
           usdtRate: remote.usdtRate,
           usdSource: remote.usdSource,
@@ -800,16 +813,21 @@ export const useLedger = create<LedgerState>()((set, get) => ({
     const prevGlobal = get().globalBudget;
     const prevBookBudgets = get().bookBudgets;
     const prevBookGlobals = get().bookGlobals;
+    const prevLocks = get().budgetLocks;
+    const prevLockMaps = get().bookBudgetLocks;
     const bookBudgets = { ...prevBookBudgets, [prevId]: prevBudgets };
     const bookGlobals = { ...prevBookGlobals, [prevId]: prevGlobal };
+    const bookBudgetLocks = { ...prevLockMaps, [prevId]: prevLocks };
     const scoped = moneyForBook(id, bookBudgets, bookGlobals);
     set({
       activeBookId: id,
       selectedDay: null,
       bookBudgets,
       bookGlobals,
+      bookBudgetLocks,
       budgets: scoped.budgets,
       globalBudget: scoped.globalBudget,
+      budgetLocks: locksForBook(id, bookBudgetLocks),
     });
     pushSettings(get, {
       activeBookId: prevId,
@@ -817,6 +835,8 @@ export const useLedger = create<LedgerState>()((set, get) => ({
       globalBudget: prevGlobal,
       bookBudgets: prevBookBudgets,
       bookGlobals: prevBookGlobals,
+      budgetLocks: prevLocks,
+      bookBudgetLocks: prevLockMaps,
     }, set);
   },
   setViewMonth: (ym) => set({ viewMonth: ym, selectedDay: null }),
@@ -892,10 +912,20 @@ export const useLedger = create<LedgerState>()((set, get) => ({
   setBudget: (categoryId, amount) => {
     const prev = get().budgets;
     const prevMaps = get().bookBudgets;
+    const prevLocks = get().budgetLocks;
+    const prevLockMaps = get().bookBudgetLocks;
     const bookId = get().activeBookId;
     const budgets = { ...prev, [categoryId]: amount };
-    set({ budgets, bookBudgets: { ...prevMaps, [bookId]: budgets } });
-    pushSettings(get, { budgets: prev, bookBudgets: prevMaps }, set);
+    const budgetLocks = { ...prevLocks };
+    if (amount > 0) budgetLocks[categoryId] = true;
+    else delete budgetLocks[categoryId];
+    set({
+      budgets,
+      budgetLocks,
+      bookBudgets: { ...prevMaps, [bookId]: budgets },
+      bookBudgetLocks: { ...prevLockMaps, [bookId]: budgetLocks },
+    });
+    pushSettings(get, { budgets: prev, bookBudgets: prevMaps, budgetLocks: prevLocks, bookBudgetLocks: prevLockMaps }, set);
   },
   replaceBudgets: (patch) => {
     const prev = get().budgets;
@@ -1275,6 +1305,8 @@ export const useLedger = create<LedgerState>()((set, get) => ({
       globalBudget: DEFAULT_GLOBAL_BUDGET,
       bookBudgets: {},
       bookGlobals: {},
+      budgetLocks: {},
+      bookBudgetLocks: {},
       chat: [],
       viewMonth: monthISO(),
       onboarded: true,

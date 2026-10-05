@@ -49,6 +49,7 @@ export type LocalVault = {
   pendingRecurringIds: string[];
   bookBudgets?: Record<string, Record<string, number>>;
   bookGlobals?: Record<string, number>;
+  bookBudgetLocks?: Record<string, Record<string, boolean>>;
   /** Credit cards (their two cajas are in `accounts`). */
   cards?: Card[];
   pendingCardIds?: string[];
@@ -90,6 +91,7 @@ export function buildLocalVault(input: {
   pendingRecurringIds?: string[];
   bookBudgets?: Record<string, Record<string, number>>;
   bookGlobals?: Record<string, number>;
+  bookBudgetLocks?: Record<string, Record<string, boolean>>;
   cards?: Card[];
   pendingCardIds?: string[];
   purchases?: CardPurchase[];
@@ -137,6 +139,7 @@ export function buildLocalVault(input: {
     pendingRecurringIds: [...new Set(input.pendingRecurringIds ?? [])],
     bookBudgets: input.bookBudgets ?? {},
     bookGlobals: input.bookGlobals ?? {},
+    bookBudgetLocks: input.bookBudgetLocks ?? {},
     cards: input.cards ?? [],
     pendingCardIds: [...new Set(input.pendingCardIds ?? [])],
     purchases: input.purchases ?? [],
@@ -246,6 +249,8 @@ export function asVault(raw: unknown): LocalVault | null {
       : [],
     bookBudgets: p.bookBudgets && typeof p.bookBudgets === "object" ? p.bookBudgets : {},
     bookGlobals: p.bookGlobals && typeof p.bookGlobals === "object" ? p.bookGlobals : {},
+    bookBudgetLocks:
+      p.bookBudgetLocks && typeof p.bookBudgetLocks === "object" ? p.bookBudgetLocks : {},
     cards: Array.isArray(p.cards)
       ? p.cards.filter((c): c is Card => Boolean(c && typeof c === "object" && c.id && c.accountArsId && c.accountUsdId))
       : [],

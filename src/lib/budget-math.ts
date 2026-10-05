@@ -3,13 +3,11 @@ import type { Category } from "./types";
 export function isUserSetTope(
   id: string,
   stored: number,
-  seedDefaults: Record<string, number> = {},
+  _seedDefaults: Record<string, number> = {},
+  locked = false,
 ) {
-  const n = Number(stored) || 0;
-  if (n <= 0) return false;
-  if (id.startsWith("c_")) return true;
-  if (n === seedDefaults[id]) return false;
-  return true;
+  if (!locked) return false;
+  return (Number(stored) || 0) > 0 && Boolean(id);
 }
 
 export function effectiveCategoryBudget(
@@ -17,8 +15,9 @@ export function effectiveCategoryBudget(
   stored: number,
   spent: number,
   seedDefaults: Record<string, number> = {},
+  locked = false,
 ) {
-  if (isUserSetTope(id, stored, seedDefaults)) return Number(stored) || 0;
+  if (isUserSetTope(id, stored, seedDefaults, locked)) return Number(stored) || 0;
   if (spent > 0) return Math.round(spent);
   return 0;
 }
@@ -33,6 +32,7 @@ export function liveCategoryRows(
   budgets: Record<string, number>,
   cats: Category[],
   seedDefaults: Record<string, number> = {},
+  locks: Record<string, boolean> = {},
 ): LiveCategoryRow[] {
   return cats
     .filter((c) => c.kind === "expense")
@@ -42,7 +42,7 @@ export function liveCategoryRows(
       return {
         ...c,
         spent,
-        budget: effectiveCategoryBudget(c.id, stored, spent, seedDefaults),
+        budget: effectiveCategoryBudget(c.id, stored, spent, seedDefaults, Boolean(locks[c.id])),
       };
     })
     .sort((a, b) => b.spent - a.spent || a.name.localeCompare(b.name, "es"));
@@ -68,12 +68,15 @@ export function unsetBudgetPatch(
   byCat: Record<string, number>,
   budgets: Record<string, number>,
   seedDefaults: Record<string, number> = {},
+  locks: Record<string, boolean> = {},
 ): Record<string, number> | null {
   const patch: Record<string, number> = {};
   for (const [id, spent] of Object.entries(byCat)) {
     if (!(spent > 0)) continue;
-    if (isUserSetTope(id, budgets[id] ?? 0, seedDefaults)) continue;
-    patch[id] = Math.round(spent);
+    if (isUserSetTope(id, budgets[id] ?? 0, seedDefaults, Boolean(locks[id]))) continue;
+    const next = Math.round(spent);
+    if ((budgets[id] ?? 0) === next) continue;
+    patch[id] = next;
   }
   return Object.keys(patch).length ? patch : null;
 }
@@ -121,6 +124,24 @@ export function parseBookBudgets(raw: unknown): Record<string, Record<string, nu
     out[bookId] = inner;
   }
   return out;
+}
+
+export function parseBookLocks(raw: unknown): Record<string, Record<string, boolean>> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: Record<string, Record<string, boolean>> = {};
+  for (const [bookId, val] of Object.entries(raw as Record<string, unknown>)) {
+    if (!bookId || !val || typeof val !== "object" || Array.isArray(val)) continue;
+    const inner: Record<string, boolean> = {};
+    for (const [k, n] of Object.entries(val as Record<string, unknown>)) {
+      if (k && n === true) inner[k] = true;
+    }
+    out[bookId] = inner;
+  }
+  return out;
+}
+
+export function locksForBook(bookId: string, bookLocks: Record<string, Record<string, boolean>>) {
+  return bookLocks[bookId] ?? {};
 }
 
 export function parseBookGlobals(raw: unknown): Record<string, number> {

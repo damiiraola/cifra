@@ -56,12 +56,16 @@ describe("effectiveCategoryBudget", () => {
   });
 
   it("keeps a custom idle tope the user actually set", () => {
-    assert.equal(effectiveCategoryBudget("c_obra", 90_000, 0, SEED), 90_000);
+    assert.equal(effectiveCategoryBudget("c_obra", 90_000, 0, SEED, true), 90_000);
   });
 
-  it("keeps a builtin tope that is not the seed default", () => {
-    assert.equal(effectiveCategoryBudget("vivienda", 1_800_000, 1_550_000, SEED), 1_800_000);
-    assert.equal(effectiveCategoryBudget("alimentos", 300_000, 0, SEED), 300_000);
+  it("keeps a builtin tope that the user locked", () => {
+    assert.equal(effectiveCategoryBudget("vivienda", 1_800_000, 1_550_000, SEED, true), 1_800_000);
+    assert.equal(effectiveCategoryBudget("alimentos", 300_000, 0, SEED, true), 300_000);
+  });
+
+  it("follows new fijos when the old tope was only the previous spend", () => {
+    assert.equal(effectiveCategoryBudget("vivienda", 200_000, 1_000_000, SEED, false), 1_000_000);
   });
 });
 
@@ -95,7 +99,7 @@ describe("budgetsFromSpend", () => {
 });
 
 describe("unsetBudgetPatch", () => {
-  it("persists spend as tope only for categories still on factory defaults", () => {
+  it("persists spend as tope for categories the user did not lock", () => {
     const patch = unsetBudgetPatch(
       { vivienda: 1_550_000, salud: 700_000, alimentos: 0 },
       { vivienda: 480_000, salud: 40_000, alimentos: 220_000 },
@@ -104,8 +108,15 @@ describe("unsetBudgetPatch", () => {
     assert.deepEqual(patch, { vivienda: 1_550_000, salud: 700_000 });
   });
 
-  it("does not overwrite a tope the user already set", () => {
-    const patch = unsetBudgetPatch({ vivienda: 1_550_000 }, { vivienda: 1_800_000 }, SEED);
+  it("raises a stale auto tope when fijos land", () => {
+    const patch = unsetBudgetPatch({ vivienda: 1_000_000 }, { vivienda: 200_000 }, SEED);
+    assert.deepEqual(patch, { vivienda: 1_000_000 });
+  });
+
+  it("does not overwrite a tope the user locked", () => {
+    const patch = unsetBudgetPatch({ vivienda: 1_550_000 }, { vivienda: 1_800_000 }, SEED, {
+      vivienda: true,
+    });
     assert.equal(patch, null);
   });
 });

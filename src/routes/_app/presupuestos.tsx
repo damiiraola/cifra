@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { budgetAllocation, liveCategoryRows } from "@/lib/budget-math";
 import { DEFAULT_BUDGETS } from "@/lib/categories";
@@ -22,6 +23,7 @@ function Presupuestos() {
     usdRate,
     usdtRate,
     budgets,
+    budgetLocks,
     setBudget,
     globalBudget,
     setGlobalBudget,
@@ -31,7 +33,7 @@ function Presupuestos() {
   const transactions = useBookTxs();
   const allCats = useAllCategories();
   const stats = computeMonth(transactions, viewMonth, { usd: usdRate, usdt: usdtRate });
-  const rows = liveCategoryRows(stats.byCat, budgets, allCats, DEFAULT_BUDGETS);
+  const rows = liveCategoryRows(stats.byCat, budgets, allCats, DEFAULT_BUDGETS, budgetLocks);
   const live = rows.filter((c) => c.spent > 0);
   const idle = rows.filter((c) => c.spent <= 0);
   const { assigned, unassigned, overAssigned } = budgetAllocation(rows, globalBudget);
@@ -118,7 +120,7 @@ function Presupuestos() {
           </p>
         </div>
         <p className="mt-3 text-xs text-subtle">
-          Si no escribís un tope, Cifra usa lo que ya cargaste y lo guarda en tu cuenta.
+          Si no escribís un tope, Cifra usa lo que cargaste en el mes, fijos incluidos. Si escribís uno, ese queda fijo.
         </p>
       </section>
 
@@ -130,9 +132,10 @@ function Presupuestos() {
           <div className="grid gap-4">
             {live.map((c) => (
               <EnvelopeRow
-                key={`${c.id}-${c.budget}`}
+                key={c.id}
                 spent={c.spent}
                 budget={c.budget}
+                locked={Boolean(budgetLocks[c.id])}
                 name={c.name}
                 icon={c.icon}
                 token={c.token}
@@ -150,9 +153,10 @@ function Presupuestos() {
           <div className="grid gap-3">
             {idle.map((c) => (
               <EnvelopeRow
-                key={`${c.id}-${c.budget}`}
+                key={c.id}
                 spent={0}
                 budget={c.budget}
+                locked={Boolean(budgetLocks[c.id])}
                 name={c.name}
                 icon={c.icon}
                 token={c.token}
@@ -173,6 +177,7 @@ function EnvelopeRow({
   token,
   spent,
   budget,
+  locked,
   quiet,
   onSave,
 }: {
@@ -181,11 +186,17 @@ function EnvelopeRow({
   token: string;
   spent: number;
   budget: number;
+  locked?: boolean;
   quiet?: boolean;
   onSave: (n: number) => void;
 }) {
   const pct = budget ? (spent / budget) * 100 : 0;
   const over = budget > 0 && spent > budget;
+  const [text, setText] = useState(() => amountInput(budget));
+  const [editing, setEditing] = useState(false);
+  useEffect(() => {
+    if (!editing) setText(amountInput(budget));
+  }, [budget, editing]);
   return (
     <div className={cn("grid gap-2 sm:grid-cols-[1fr_8rem] sm:items-center", quiet && "opacity-80")}>
       <div>
@@ -210,13 +221,19 @@ function EnvelopeRow({
       </div>
       <Input
         inputMode="decimal"
-        defaultValue={amountInput(budget)}
+        value={text}
         placeholder="Sin tope"
         aria-label={`Tope de ${name}`}
-        onBlur={(e) => {
-          const n = parseAmount(e.target.value);
+        onFocus={() => setEditing(true)}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={() => {
+          setEditing(false);
+          const n = parseAmount(text);
           const next = n && n > 0 ? n : 0;
-          if (next === budget) return;
+          if (next === budget && (next > 0) === Boolean(locked)) {
+            setText(amountInput(budget));
+            return;
+          }
           onSave(next);
         }}
       />
