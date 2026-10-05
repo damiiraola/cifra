@@ -252,7 +252,7 @@ export function Asistente() {
         <p className="rounded-2xl bg-elevated px-4 py-3 text-sm text-fg">{AI_UNAVAILABLE}</p>
       ) : null}
 
-      <div className="flex flex-wrap gap-1.5">
+      <div data-tour="ideas" className="flex flex-wrap gap-1.5">
         {SUGGESTIONS.map((s) => (
           <button
             key={s}
@@ -266,7 +266,7 @@ export function Asistente() {
         ))}
       </div>
 
-      <section className="min-h-72 rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_rgba(244,244,240,0.06)] sm:p-5">
+      <section data-tour="charla" className="min-h-72 rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_rgba(244,244,240,0.06)] sm:p-5">
         {chat.length === 0 && !pending ? (
           <div className="flex h-56 flex-col items-center justify-center text-center">
             <p className="font-display text-2xl tracking-tight">Preguntale a tu libro</p>
@@ -300,6 +300,7 @@ export function Asistente() {
       </section>
 
       <form
+        data-tour="pregunta"
         className="grid gap-2"
         onSubmit={(e) => {
           e.preventDefault();

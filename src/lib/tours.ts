@@ -22,8 +22,9 @@ export const TOURS: Tour[] = [
         body: "Nuevo carga un gasto, un ingreso, o un pase de una caja a otra. Pasar USDT al banco no es un gasto: la plata sigue siendo tuya.",
       },
       {
-        title: "Los fijos avisan",
-        body: "Si este mes falta anotar un fijo, Cifra lo dice arriba. Vos decidís si cargarlo.",
+        anchor: "cajas",
+        title: "Tus cajas",
+        body: "Cada pastilla es un lugar donde está la plata. El saldo sale de lo que anotaste, no del banco.",
       },
     ],
   },
@@ -32,17 +33,19 @@ export const TOURS: Tour[] = [
     page: "Analítica",
     steps: [
       {
-        anchor: "titulo",
-        title: "A dónde se fue",
-        body: "Acá está el mes resumido: categorías, no cada ticket.",
+        anchor: "numeros",
+        title: "Gastado, ingresos y neto",
+        body: "Gastado es lo que se fue. Ingresos es lo que entró. Neto es la diferencia. No es el saldo de una caja.",
       },
       {
+        anchor: "fijo",
         title: "Fijo y variable",
-        body: "Fijo es lo que se repite (alquiler, luz). Variable es lo del día a día, como el súper.",
+        body: "Fijo es lo que se repite, como el alquiler. Variable es lo del día a día, como el súper.",
       },
       {
-        title: "El detalle está en el diario",
-        body: "Si un número no cierra, volvé al día y mirá el movimiento. Analítica no cambia la plata, solo la cuenta.",
+        anchor: "categorias",
+        title: "Por categoría",
+        body: "Tocá una barra para ver los movimientos. El detalle de cada día está en el diario.",
       },
     ],
   },
@@ -51,16 +54,18 @@ export const TOURS: Tour[] = [
     page: "Presupuestos",
     steps: [
       {
-        anchor: "titulo",
+        anchor: "tope",
         title: "El tope no es el saldo",
-        body: "Es hasta dónde te dejás gastar en el mes. Lo ponés vos.",
+        body: "Es hasta dónde te dejás gastar en el mes. El número se cambia acá.",
       },
       {
-        title: "El plan usa lo que entra",
-        body: "Suma los ingresos fijos, como el sueldo y un alquiler que cobrás, y les resta lo que se paga sí o sí.",
+        anchor: "plan",
+        title: "El plan del mes",
+        body: "Suma lo que entra, como el sueldo y un alquiler que cobrás, y le resta lo que se paga sí o sí.",
       },
       {
-        title: "Cada categoría tiene un techo",
+        anchor: "categorias",
+        title: "El techo de cada rubro",
         body: "Si no escribís un número, Cifra usa los fijos de esa categoría. Si no hay fijos, usa lo que ya gastaste.",
       },
     ],
@@ -70,17 +75,19 @@ export const TOURS: Tour[] = [
     page: "Tarjetas",
     steps: [
       {
-        anchor: "titulo",
-        title: "Una tarjeta, dos cajas",
+        anchor: "tarjeta",
+        title: "La tarjeta",
         body: "Pesos y dólares van separados. El límite es lo que el banco te presta, no plata tuya.",
       },
       {
-        title: "La cuota no se carga doce veces",
-        body: "Anotás la compra una vez. Cifra reparte las cuotas en los meses que vienen.",
+        anchor: "resumen",
+        title: "Lo que se viene",
+        body: "Cada mes muestra lo que ya está cargado. Pagar el resumen no es un gasto nuevo.",
       },
       {
-        title: "El resumen no es un gasto nuevo",
-        body: "Pagar la tarjeta mueve plata de una caja a otra. El gasto ya fue cuando compraste.",
+        anchor: "compras",
+        title: "Una compra, varias cuotas",
+        body: "La carga una vez. Cifra reparte las cuotas en los meses que vienen.",
       },
     ],
   },
@@ -89,17 +96,19 @@ export const TOURS: Tour[] = [
     page: "Asistente",
     steps: [
       {
-        anchor: "titulo",
+        anchor: "ideas",
         title: "Preguntale a este libro",
-        body: "Lee tus cajas, movimientos y fijos. No busca en internet ni inventa números.",
+        body: "Tocá una pregunta o escribí la tuya. Lee tus números. No busca en internet.",
       },
       {
+        anchor: "pregunta",
         title: "Si no entendés una palabra",
-        body: "Decilo. Explica caja, fijo o tope en la misma frase, como si fuera la primera vez.",
+        body: "Decilo acá. Explica caja, fijo o tope en la misma frase.",
       },
       {
-        title: "Las charlas quedan",
-        body: "Arriba están las conversaciones anteriores. Nueva abre otra sin borrar la de ahora.",
+        anchor: "charla",
+        title: "La respuesta queda",
+        body: "La conversación se guarda. Nueva abre otra sin borrar esta.",
       },
     ],
   },
@@ -108,17 +117,19 @@ export const TOURS: Tour[] = [
     page: "Ajustes",
     steps: [
       {
-        anchor: "titulo",
-        title: "Acá se configura el libro",
-        body: "El dólar, las cajas y el tope. No es la lista de gastos: eso está en el diario.",
+        anchor: "cotizacion",
+        title: "El dólar de hoy",
+        body: "Con esto Cifra pasa dólares y USDT a pesos. No es la lista de gastos.",
       },
       {
+        anchor: "fijos",
         title: "Los fijos viven acá",
-        body: "Alquiler, sueldo, lo que cobrás cada mes. Si no los cargaste al entrar, se cargan en esta página.",
+        body: "Alquiler, sueldo, lo que cobrás cada mes. Si no los cargaste al entrar, se cargan acá.",
       },
       {
-        title: "Personal y negocio van aparte",
-        body: "Cada libro tiene sus cajas y sus números. Cambiar de libro no mezcla la plata.",
+        anchor: "libro",
+        title: "Personal y negocio",
+        body: "Cada libro tiene sus cajas y sus números. Cambiar no mezcla la plata.",
       },
     ],
   },
@@ -145,7 +156,37 @@ export function tourFor(path: string) {
 }
 
 function seenKey(email: string) {
-  return `cifra-seen-tours:${email.trim().toLowerCase()}`;
+  return `cifra-seen-tours:v2:${email.trim().toLowerCase()}`;
+}
+
+export function placeBubble(
+  rect: { top: number; left: number; right: number; bottom: number; width: number },
+  card: { width: number; height: number },
+  view: { width: number; height: number },
+) {
+  const gap = 14;
+  const margin = 16;
+  const below = view.height - rect.bottom;
+  const right = view.width - rect.right;
+  const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
+  let top: number;
+  let left: number;
+  let tip: "up" | "down" | "left";
+  if (rect.left < 280 && right >= card.width + gap + margin) {
+    tip = "left";
+    left = rect.right + gap;
+    top = clamp(rect.top, margin, view.height - card.height - margin);
+  } else if (below >= card.height + gap + margin) {
+    tip = "up";
+    top = rect.bottom + gap;
+    left = clamp(rect.left, margin, view.width - card.width - margin);
+  } else {
+    tip = "down";
+    top = Math.max(margin, rect.top - gap - card.height);
+    left = clamp(rect.left, margin, view.width - card.width - margin);
+  }
+  const arrow = clamp(rect.left + rect.width / 2 - left - 6, 20, card.width - 28);
+  return { top, left, tip, arrow };
 }
 
 export function readSeen(email: string, storage: Pick<Storage, "getItem">) {

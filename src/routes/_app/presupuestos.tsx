@@ -65,7 +65,7 @@ function Presupuestos() {
         <MonthSwitcher value={viewMonth} onChange={setViewMonth} ahead={12} />
       </div>
 
-      <section>
+      <section data-tour="tope">
         <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Tope del mes</p>
         <div className="mt-1 flex flex-wrap items-end justify-between gap-3">
           <p className="font-display text-5xl tabular-nums tracking-tight">{moneyARS(globalBudget)}</p>
@@ -112,7 +112,7 @@ function Presupuestos() {
         }}
       />
 
-      <section>
+      <section data-tour="categorias">
         <div className="mb-2 flex items-baseline justify-between gap-3">
           <h2 className="text-sm font-medium">Contra las categorías de este mes</h2>
           <p className="text-xs text-subtle">
@@ -309,7 +309,7 @@ function PlanCard({
           : "";
 
   return (
-    <section className="rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
+    <section data-tour="plan" className="rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
       <p className="text-[11px] font-medium tracking-wide text-muted uppercase">
         {plan.tone === "over" ? "No cierra" : plan.tone === "tight" ? "Estás justo" : "Hay margen"}
       </p>

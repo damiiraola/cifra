@@ -206,7 +206,7 @@ function Ajustes() {
         </div>
       </Section>
 
-      <Section title="Cotizaciones" hint="Dólar y USDT del día">
+      <Section tour="cotizacion" title="Cotizaciones" hint="Dólar y USDT del día">
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-xs text-subtle">
@@ -271,7 +271,7 @@ function Ajustes() {
         </div>
       </Section>
 
-      <Section id="fijos" title={`Fijos · ${book?.name ?? ""}`} hint="Alquiler, servicios, sueldo">
+      <Section id="fijos" tour="fijos" title={`Fijos · ${book?.name ?? ""}`} hint="Alquiler, servicios, sueldo">
         <FijosPanel />
       </Section>
 
@@ -591,16 +591,18 @@ function Section({
   title,
   hint,
   defaultOpen = false,
+  tour,
   children,
 }: {
   id?: string;
   title: string;
   hint?: string;
   defaultOpen?: boolean;
+  tour?: string;
   children: ReactNode;
 }) {
   return (
-    <details id={id} open={defaultOpen} className="group rounded-3xl bg-surface shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
+    <details id={id} data-tour={tour} open={defaultOpen} className="group rounded-3xl bg-surface shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
       <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 rounded-3xl px-5 py-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
         <span className="min-w-0">
           <span className="block text-[11px] font-medium tracking-wide text-muted uppercase">{title}</span>

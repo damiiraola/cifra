@@ -67,7 +67,7 @@ function Tarjetas() {
       </div>
 
       {cards.length === 0 ? (
-        <div className="rounded-3xl bg-surface p-5">
+        <div data-tour="tarjeta" className="rounded-3xl bg-surface p-5">
           <p className="text-sm">Todavía no cargaste ninguna tarjeta.</p>
           <p className="mt-1 text-sm text-muted">Agregala en Ajustes con su día de cierre y vencimiento.</p>
           <Button asChild className="mt-4">
@@ -77,13 +77,13 @@ function Tarjetas() {
           </Button>
         </div>
       ) : (
-        cards.map((c) => <CardBlock key={c.id} card={c} today={today} />)
+        cards.map((c, i) => <CardBlock key={c.id} card={c} today={today} tour={i === 0} />)
       )}
     </div>
   );
 }
 
-function CardBlock({ card, today }: { card: Card; today: string }) {
+function CardBlock({ card, today, tour = false }: { card: Card; today: string; tour?: boolean }) {
   const txs = useBookTxs();
   const accounts = useBookAccounts();
   const purchases = useBookPurchases().filter((p) => p.cardId === card.id);
@@ -109,7 +109,7 @@ function CardBlock({ card, today }: { card: Card; today: string }) {
   const endings = upcoming.filter((u, i) => i > 0 && u.ending.count > 0).slice(0, 2);
 
   return (
-    <section className="rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
+    <section data-tour={tour ? "tarjeta" : undefined} className="rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
       <div className="flex items-start gap-3">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-elevated text-muted">
           <CreditCard className="size-4" aria-hidden />
@@ -145,7 +145,7 @@ function CardBlock({ card, today }: { card: Card; today: string }) {
         </div>
       </div>
 
-      <div className="mt-5">
+      <div className="mt-5" data-tour={tour ? "resumen" : undefined}>
         <h3 className="text-sm font-medium">Próximos 6 resúmenes</h3>
         <p className="text-xs text-subtle">Lo ya cargado: cuotas, compras y fijos con esta tarjeta.</p>
         <ul className="mt-3 grid gap-2">
@@ -194,7 +194,7 @@ function CardBlock({ card, today }: { card: Card; today: string }) {
         ) : null}
       </dl>
 
-      <div className="mt-6">
+      <div className="mt-6" data-tour={tour ? "compras" : undefined}>
         <h3 className="text-sm font-medium">Compras en cuotas</h3>
         {purchases.length === 0 && !adding ? (
           <p className="mt-1 text-sm text-muted">Ninguna todavía. También podés cargarlas desde Nuevo eligiendo esta tarjeta.</p>
