@@ -23,6 +23,7 @@ import { Route as AppAprenderRouteImport } from './routes/_app/aprender'
 import { Route as AppDiarioRouteImport } from './routes/_app/diario'
 import { Route as AppFijosRouteImport } from './routes/_app/fijos'
 import { Route as AppIaRouteImport } from './routes/_app/ia'
+import { Route as AppMetasRouteImport } from './routes/_app/metas'
 import { Route as AppMovimientosRouteImport } from './routes/_app/movimientos'
 import { Route as AppPresupuestosRouteImport } from './routes/_app/presupuestos'
 import { Route as AppTarjetasRouteImport } from './routes/_app/tarjetas'
@@ -98,6 +99,11 @@ const AppIaRoute = AppIaRouteImport.update({
   path: '/ia',
   getParentRoute: () => AppRoute,
 } as any)
+const AppMetasRoute = AppMetasRouteImport.update({
+  id: '/metas',
+  path: '/metas',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppMovimientosRoute = AppMovimientosRouteImport.update({
   id: '/movimientos',
   path: '/movimientos',
@@ -138,6 +144,7 @@ export interface FileRoutesByFullPath {
   '/diario': typeof AppDiarioRoute
   '/fijos': typeof AppFijosRoute
   '/ia': typeof AppIaRoute
+  '/metas': typeof AppMetasRoute
   '/movimientos': typeof AppMovimientosRoute
   '/presupuestos': typeof AppPresupuestosRoute
   '/tarjetas': typeof AppTarjetasRoute
@@ -157,6 +164,7 @@ export interface FileRoutesByTo {
   '/diario': typeof AppDiarioRoute
   '/fijos': typeof AppFijosRoute
   '/ia': typeof AppIaRoute
+  '/metas': typeof AppMetasRoute
   '/movimientos': typeof AppMovimientosRoute
   '/presupuestos': typeof AppPresupuestosRoute
   '/tarjetas': typeof AppTarjetasRoute
@@ -179,6 +187,7 @@ export interface FileRoutesById {
   '/_app/diario': typeof AppDiarioRoute
   '/_app/fijos': typeof AppFijosRoute
   '/_app/ia': typeof AppIaRoute
+  '/_app/metas': typeof AppMetasRoute
   '/_app/movimientos': typeof AppMovimientosRoute
   '/_app/presupuestos': typeof AppPresupuestosRoute
   '/_app/tarjetas': typeof AppTarjetasRoute
@@ -202,6 +211,7 @@ export interface FileRouteTypes {
     | '/diario'
     | '/fijos'
     | '/ia'
+    | '/metas'
     | '/movimientos'
     | '/presupuestos'
     | '/tarjetas'
@@ -221,6 +231,7 @@ export interface FileRouteTypes {
     | '/diario'
     | '/fijos'
     | '/ia'
+    | '/metas'
     | '/movimientos'
     | '/presupuestos'
     | '/tarjetas'
@@ -242,6 +253,7 @@ export interface FileRouteTypes {
     | '/_app/diario'
     | '/_app/fijos'
     | '/_app/ia'
+    | '/_app/metas'
     | '/_app/movimientos'
     | '/_app/presupuestos'
     | '/_app/tarjetas'
@@ -362,6 +374,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIaRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/metas': {
+      id: '/_app/metas'
+      path: '/metas'
+      fullPath: '/metas'
+      preLoaderRoute: typeof AppMetasRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/movimientos': {
       id: '/_app/movimientos'
       path: '/movimientos'
@@ -407,6 +426,7 @@ interface AppRouteChildren {
   AppDiarioRoute: typeof AppDiarioRoute
   AppFijosRoute: typeof AppFijosRoute
   AppIaRoute: typeof AppIaRoute
+  AppMetasRoute: typeof AppMetasRoute
   AppMovimientosRoute: typeof AppMovimientosRoute
   AppPresupuestosRoute: typeof AppPresupuestosRoute
   AppTarjetasRoute: typeof AppTarjetasRoute
@@ -420,6 +440,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppDiarioRoute: AppDiarioRoute,
   AppFijosRoute: AppFijosRoute,
   AppIaRoute: AppIaRoute,
+  AppMetasRoute: AppMetasRoute,
   AppMovimientosRoute: AppMovimientosRoute,
   AppPresupuestosRoute: AppPresupuestosRoute,
   AppTarjetasRoute: AppTarjetasRoute,

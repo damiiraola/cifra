@@ -4,13 +4,13 @@ import { TOURS, markSeen, placeBubble, readSeen, tourFor } from "./tours.ts";
 
 describe("tours", () => {
   it("has a short tour for every main page", () => {
-    for (const path of ["/", "/analitica", "/presupuestos", "/tarjetas", "/ia", "/ajustes", "/aprender"]) {
+    for (const path of ["/", "/analitica", "/presupuestos", "/tarjetas", "/ia", "/ajustes", "/aprender", "/metas"]) {
       const tour = tourFor(path);
       assert.ok(tour);
       assert.ok(tour.steps.length >= 2);
       assert.ok(tour.steps.every((s) => s.anchor && s.title && s.body.length < 220));
     }
-    assert.equal(TOURS.length, 7);
+    assert.equal(TOURS.length, 8);
   });
 
   it("remembers a page only for that account", () => {

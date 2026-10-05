@@ -68,6 +68,7 @@ function ReplayRow({ tour }: { tour: Tour }) {
           else if (tour.path === "/tarjetas") navigate({ to: "/tarjetas" });
           else if (tour.path === "/ia") navigate({ to: "/ia" });
           else if (tour.path === "/ajustes") navigate({ to: "/ajustes" });
+          else if (tour.path === "/metas") navigate({ to: "/metas" });
         }}
       >
         Ver

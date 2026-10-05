@@ -12,6 +12,7 @@ import { DEFAULT_USD_RATE, DEFAULT_USDT_RATE, DEFAULT_USD_SOURCE, isUsdSource, t
 import type { Account, Book, BookKind, Card, CardNetwork, CardPurchase, Category, Currency, PayMethod, Recurring, Transaction, TxType } from "@/lib/types";
 import { cardAccountNames, clampDay, MAX_INSTALLMENTS, validLast4 } from "@/lib/card-math";
 import { parseChatThreads, type ChatThread } from "@/lib/chat-threads";
+import { parseGoals, type Goal } from "@/lib/goals";
 import { uid } from "@/lib/utils";
 import { MAIL, sendMailQuiet } from "@/lib/mail";
 
@@ -34,6 +35,7 @@ export type LedgerSnapshot = {
   hiddenCategoryIds: string[];
   customCategories: Category[];
   chatThreads: ChatThread[];
+  goals: Goal[];
   recurrings: Recurring[];
   cards: Card[];
   purchases: CardPurchase[];
@@ -173,13 +175,15 @@ async function ensureSettings(sql: Awaited<ReturnType<typeof getSql>>, userId: s
     book_globals: unknown;
     book_budget_locks: unknown;
     chat_threads: unknown;
+    goals: unknown;
   }>`select budgets, global_budget, usd_rate, usdt_rate, usd_source, active_book_id, onboarded, category_names,
              coalesce(hidden_category_ids, '[]'::jsonb) as hidden_category_ids,
              coalesce(custom_categories, '[]'::jsonb) as custom_categories,
              coalesce(book_budgets, '{}'::jsonb) as book_budgets,
              coalesce(book_globals, '{}'::jsonb) as book_globals,
              coalesce(book_budget_locks, '{}'::jsonb) as book_budget_locks,
-             coalesce(chat_threads, '[]'::jsonb) as chat_threads
+             coalesce(chat_threads, '[]'::jsonb) as chat_threads,
+             coalesce(goals, '[]'::jsonb) as goals
       from ledger_settings where user_id = ${userId} limit 1`;
   if (existing[0]) {
     const budgets =
@@ -204,6 +208,7 @@ async function ensureSettings(sql: Awaited<ReturnType<typeof getSql>>, userId: s
       hiddenCategoryIds: parseHiddenIds(existing[0].hidden_category_ids),
       customCategories: parseCustomCategories(existing[0].custom_categories),
       chatThreads: parseChatThreads(existing[0].chat_threads),
+      goals: parseGoals(existing[0].goals),
     };
   }
   await sql`
@@ -226,6 +231,7 @@ async function ensureSettings(sql: Awaited<ReturnType<typeof getSql>>, userId: s
     hiddenCategoryIds: [] as string[],
     customCategories: [] as Category[],
     chatThreads: [] as ChatThread[],
+    goals: [] as Goal[],
   };
 }
 
@@ -531,6 +537,7 @@ export const saveSettings = createServerFn({ method: "POST" })
     bookGlobals?: Record<string, number>;
     bookBudgetLocks?: Record<string, Record<string, boolean>>;
     chatThreads?: ChatThread[];
+    goals?: Goal[];
   }) => {
     const globalBudget = Number(input.globalBudget);
     const usdRate = Number(input.usdRate);
@@ -563,14 +570,15 @@ export const saveSettings = createServerFn({ method: "POST" })
       bookGlobals: parseBookGlobals(input.bookGlobals),
       bookBudgetLocks: parseBookLocks(input.bookBudgetLocks),
       chatThreads: parseChatThreads(input.chatThreads),
+      goals: parseGoals(input.goals),
     };
   })
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
     const sql = await getSql();
     await sql`
-      insert into ledger_settings (user_id, budgets, global_budget, usd_rate, usdt_rate, usd_source, active_book_id, onboarded, category_names, hidden_category_ids, custom_categories, book_budgets, book_globals, book_budget_locks, chat_threads)
-      values (${context.userId}, ${JSON.stringify(data.budgets)}::jsonb, ${data.globalBudget}, ${data.usdRate}, ${data.usdtRate}, ${data.usdSource}, ${data.activeBookId}, ${data.onboarded}, ${JSON.stringify(data.categoryNames)}::jsonb, ${JSON.stringify(data.hiddenCategoryIds)}::jsonb, ${JSON.stringify(data.customCategories)}::jsonb, ${JSON.stringify(data.bookBudgets)}::jsonb, ${JSON.stringify(data.bookGlobals)}::jsonb, ${JSON.stringify(data.bookBudgetLocks)}::jsonb, ${JSON.stringify(data.chatThreads)}::jsonb)
+      insert into ledger_settings (user_id, budgets, global_budget, usd_rate, usdt_rate, usd_source, active_book_id, onboarded, category_names, hidden_category_ids, custom_categories, book_budgets, book_globals, book_budget_locks, chat_threads, goals)
+      values (${context.userId}, ${JSON.stringify(data.budgets)}::jsonb, ${data.globalBudget}, ${data.usdRate}, ${data.usdtRate}, ${data.usdSource}, ${data.activeBookId}, ${data.onboarded}, ${JSON.stringify(data.categoryNames)}::jsonb, ${JSON.stringify(data.hiddenCategoryIds)}::jsonb, ${JSON.stringify(data.customCategories)}::jsonb, ${JSON.stringify(data.bookBudgets)}::jsonb, ${JSON.stringify(data.bookGlobals)}::jsonb, ${JSON.stringify(data.bookBudgetLocks)}::jsonb, ${JSON.stringify(data.chatThreads)}::jsonb, ${JSON.stringify(data.goals)}::jsonb)
       on conflict (user_id) do update set
         budgets = excluded.budgets,
         global_budget = excluded.global_budget,
@@ -586,6 +594,7 @@ export const saveSettings = createServerFn({ method: "POST" })
         book_globals = excluded.book_globals,
         book_budget_locks = excluded.book_budget_locks,
         chat_threads = excluded.chat_threads,
+        goals = excluded.goals,
         updated_at = now()
     `;
     return { ok: true as const };

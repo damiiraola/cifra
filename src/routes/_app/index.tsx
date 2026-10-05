@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FxStrip } from "@/components/fx-strip";
 import { WalletStrip } from "@/components/wallet-strip";
+import { GoalStrip } from "@/components/goal-strip";
 
 export const Route = createFileRoute("/_app/")({
   component: Diario,
@@ -120,6 +121,7 @@ function Diario() {
 
       <FxStrip />
       <WalletStrip />
+      <GoalStrip />
 
       {fijosPendientes > 0 && !searching ? (
         <Link to="/ajustes" hash="fijos" className="text-sm text-muted hover:text-fg">

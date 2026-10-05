@@ -4,6 +4,7 @@ import {
   BarChart3,
   Brain,
   CalendarDays,
+  Flag,
   GraduationCap,
   Menu,
   Plus,
@@ -34,6 +35,7 @@ const NAV = [
 const MORE = [
   { to: "/tarjetas", label: "Tarjetas", icon: CreditCard },
   { to: "/presupuestos", label: "Presupuestos", icon: Target },
+  { to: "/metas", label: "Metas", icon: Flag },
   { to: "/ia", label: "Asistente", icon: Brain },
   { to: "/aprender", label: "Aprender", icon: GraduationCap },
   { to: "/ajustes", label: "Ajustes", icon: Settings },
@@ -44,7 +46,7 @@ const TAB = [
   { to: "/analitica", label: "Analítica", icon: BarChart3 },
 ] as const;
 
-const MORE_PATHS = new Set(["/ia", "/ajustes", "/privacidad", "/presupuestos", "/aprender"]);
+const MORE_PATHS = new Set(["/ia", "/ajustes", "/privacidad", "/presupuestos", "/aprender", "/metas"]);
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });

@@ -1,7 +1,7 @@
 export type TourStep = { title: string; body: string; anchor?: string };
 
 export type Tour = {
-  path: "/" | "/analitica" | "/presupuestos" | "/tarjetas" | "/ia" | "/ajustes" | "/aprender";
+  path: "/" | "/analitica" | "/presupuestos" | "/tarjetas" | "/ia" | "/ajustes" | "/aprender" | "/metas";
   page: string;
   steps: TourStep[];
 };
@@ -146,6 +146,22 @@ export const TOURS: Tour[] = [
         anchor: "recorridos",
         title: "Los recorridos se pueden repetir",
         body: "La primera vez que entrás a una página, Cifra te la muestra. Desde acá los volvés a ver.",
+      },
+    ],
+  },
+  {
+    path: "/metas",
+    page: "Metas",
+    steps: [
+      {
+        anchor: "titulo",
+        title: "A dónde querés llegar",
+        body: "Un viaje, un bien, ahorrar lo que sobra o invertir sin operar. Cada meta elige pesos, dólares o USDT.",
+      },
+      {
+        anchor: "nueva",
+        title: "La armás acá",
+        body: "Poné el monto y, si tiene, la fecha. El diario te dice cuánto por día falta.",
       },
     ],
   },

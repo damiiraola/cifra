@@ -56,6 +56,7 @@ import { dueDate, dueUnposted, isPosted, likelyDuplicate, postedTxId } from "./r
 import { buildSeed } from "./seed";
 import { monthISO, todayISO, uid } from "./utils";
 import { mergeChatThreads, threadFromMessages, upsertThread, type ChatThread } from "./chat-threads";
+import { mergeGoals, roundGoal, type Goal } from "./goals";
 import { applyOutbox, enqueue, OUTBOX_MAX_TRIES, pruneOutbox, resetTries, type OutboxOp } from "./outbox";
 import { mergeRecurrings } from "./recurring-sync";
 import { hydrateBookMoney, locksForBook, moneyForBook } from "./budget-math";
@@ -112,6 +113,7 @@ type LedgerState = {
   chat: ChatMessage[];
   chatThreads: ChatThread[];
   activeChatId: string;
+  goals: Goal[];
   hydrate: (identity?: { id: string; email?: string | null }) => Promise<void>;
   resetClient: () => void;
   refreshQuotes: (quiet?: boolean) => Promise<void>;
@@ -151,6 +153,16 @@ type LedgerState = {
   startChat: () => void;
   openChat: (id: string) => void;
   deleteChat: (id: string) => void;
+  saveGoal: (input: {
+    id?: string;
+    kind: Goal["kind"];
+    name: string;
+    currency: Goal["currency"];
+    target: number;
+    deadline: string;
+  }) => void;
+  addToGoal: (id: string, amount: number) => void;
+  removeGoal: (id: string) => void;
   loadDemo: () => void;
   wipe: () => void;
 };
@@ -203,6 +215,7 @@ function vaultInput(get: () => LedgerState) {
     usdSource: s.usdSource,
     chat: s.chat,
     chatThreads: s.chatThreads,
+    goals: s.goals,
   };
 }
 
@@ -354,6 +367,7 @@ function pushSettings(get: () => LedgerState, revert?: Partial<LedgerState>, set
       bookGlobals,
       bookBudgetLocks,
       chatThreads: s.chatThreads,
+      goals: s.goals,
       usdRate: s.usdRate,
       usdtRate: s.usdtRate,
       usdSource: s.usdSource,
@@ -545,6 +559,10 @@ function chatsFrom(get: () => LedgerState, remote: ChatThread[] | undefined) {
   };
 }
 
+function goalsFrom(get: () => LedgerState, remote: Goal[] | undefined) {
+  return { goals: mergeGoals(get().goals ?? [], remote ?? []) };
+}
+
 function paintVault(set: (p: Partial<LedgerState>) => void, get: () => LedgerState, vault: NonNullable<ReturnType<typeof readLocalVault>>) {
   const books = vault.books.length ? vault.books : get().books;
   const accounts = vault.accounts.length ? vault.accounts : get().accounts;
@@ -593,6 +611,7 @@ function paintVault(set: (p: Partial<LedgerState>) => void, get: () => LedgerSta
         ? [threadFromMessages("legacy", vault.chat)!]
         : get().chatThreads,
     activeChatId: vault.chatThreads?.[0]?.id || (vault.chat.length ? "legacy" : get().activeChatId),
+    goals: vault.goals?.length ? vault.goals : get().goals,
     pendingRecurringIds: vault.pendingRecurringIds.length ? vault.pendingRecurringIds : get().pendingRecurringIds,
   });
   paint(set, get, { confirmed, outbox });
@@ -639,6 +658,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
   chat: [],
   chatThreads: [],
   activeChatId: "",
+  goals: [],
   hydrate: (identity) => {
     const ownerId = identity?.id ?? "";
     const ownerEmail = identity?.email ?? "";
@@ -713,6 +733,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
               usdtRate: remote.usdtRate,
               usdSource: remote.usdSource,
               ...chatsFrom(get, remote.chatThreads),
+              ...goalsFrom(get, remote.goals),
             });
             paint(set, get, { confirmed: stamped, outbox });
             pushSettings(get);
@@ -758,6 +779,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
           usdtRate: remote.usdtRate,
           usdSource: remote.usdSource,
           ...chatsFrom(get, remote.chatThreads),
+          ...goalsFrom(get, remote.goals),
         });
         paint(set, get, { confirmed: remote.transactions, outbox });
         await restoreVault(get, set);
@@ -801,6 +823,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
       chat: [],
       chatThreads: [],
       activeChatId: "",
+      goals: [],
       selectedDay: null,
       quickOpen: false,
       editingId: null,
@@ -1349,6 +1372,43 @@ export const useLedger = create<LedgerState>()((set, get) => ({
       set({ chatThreads, activeChatId: next?.id ?? "", chat: next?.messages ?? [] });
     }
     persistLocal(get);
+    pushSettings(get);
+  },
+  saveGoal: (input) => {
+    const now = new Date().toISOString();
+    const existing = input.id ? get().goals.find((g) => g.id === input.id) : undefined;
+    const currency = input.currency;
+    const goal: Goal = {
+      id: existing?.id ?? uid(),
+      bookId: existing?.bookId || get().activeBookId,
+      kind: input.kind,
+      name: input.name.trim().slice(0, 40) || "Meta",
+      currency,
+      target: roundGoal(input.target, currency),
+      saved: existing?.saved ?? 0,
+      deadline: /^\d{4}-\d{2}-\d{2}$/.test(input.deadline) ? input.deadline : "",
+      active: true,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    };
+    if (!(goal.target > 0)) return;
+    const goals = existing ? get().goals.map((g) => (g.id === goal.id ? goal : g)) : [goal, ...get().goals];
+    set({ goals });
+    pushSettings(get);
+  },
+  addToGoal: (id, amount) => {
+    const prev = get().goals.find((g) => g.id === id);
+    if (!prev || !(amount > 0)) return;
+    const goals = get().goals.map((g) =>
+      g.id === id
+        ? { ...g, saved: roundGoal(g.saved + amount, g.currency), updatedAt: new Date().toISOString() }
+        : g,
+    );
+    set({ goals });
+    pushSettings(get);
+  },
+  removeGoal: (id) => {
+    set({ goals: get().goals.filter((g) => g.id !== id) });
     pushSettings(get);
   },
   loadDemo: () => {

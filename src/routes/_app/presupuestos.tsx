@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
+import { toast } from "sonner";
 import { budgetAllocation, buildMonthPlan, fijoTopes, liveCategoryRows, recurringLines } from "@/lib/budget-math";
 import { DEFAULT_BUDGETS } from "@/lib/categories";
 import { computeMonth } from "@/lib/analytics";
-import { moneyARS, monthLabel, parseAmount, amountInput } from "@/lib/format";
+import { money, moneyARS, monthLabel, parseAmount, amountInput } from "@/lib/format";
+import { toGoalCurrency } from "@/lib/goals";
 import { CatIcon } from "@/lib/icons";
 import { useAllCategories, useBookTxs, useLedger } from "@/lib/store";
 import { committedForMonth } from "@/lib/card-math";
@@ -307,6 +309,12 @@ function PlanCard({
   }));
   const used = rows.reduce((s, r) => s + r.amount, 0);
   const cushion = plan.left - used;
+  const goals = useLedger((s) => s.goals.filter((g) => g.bookId === s.activeBookId && g.active));
+  const addToGoal = useLedger((s) => s.addToGoal);
+  const usdRate = useLedger((s) => s.usdRate);
+  const usdtRate = useLedger((s) => s.usdtRate);
+  const [sendTo, setSendTo] = useState("");
+  const [sent, setSent] = useState("");
   const headline =
     plan.tone === "over"
       ? `Te pasás ${moneyARS(plan.over)}`
@@ -387,8 +395,51 @@ function PlanCard({
               </span>
             </p>
           </div>
-          <Button className="mt-4" onClick={() => onApply(rows)}>
-            Usar este reparto
+          {cushion > 0 ? (
+            goals.length ? (
+              <label className="mt-3 grid gap-1 text-sm">
+                Mandar lo que sobra a
+                <select
+                  value={sendTo}
+                  onChange={(e) => setSendTo(e.target.value)}
+                  className="h-11 rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)]"
+                >
+                  <option value="">No mandar</option>
+                  {goals.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <p className="mt-3 text-sm text-muted">
+                Lo que sobra se puede ir a una meta.{" "}
+                <Link to="/metas" className="underline-offset-4 hover:underline">
+                  Crear una
+                </Link>
+              </p>
+            )
+          ) : null}
+          <Button
+            className="mt-4"
+            onClick={() => {
+              onApply(rows);
+              const stamp = `${sendTo}:${Math.round(cushion)}`;
+              const goal = goals.find((g) => g.id === sendTo);
+              if (goal && cushion > 0 && sent !== stamp) {
+                const amount = toGoalCurrency(cushion, goal.currency, { usd: usdRate, usdt: usdtRate });
+                if (amount > 0) {
+                  addToGoal(goal.id, amount);
+                  setSent(stamp);
+                  toast.success(`Plan guardado. ${money(amount, goal.currency)} fueron a ${goal.name}.`);
+                  return;
+                }
+              }
+              toast.success("Plan guardado");
+            }}
+          >
+            Guardar plan
           </Button>
         </div>
       ) : null}
