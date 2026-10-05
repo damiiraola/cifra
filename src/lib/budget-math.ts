@@ -83,13 +83,33 @@ export function fijoTopes(
   return out;
 }
 
+function recurringToArs(amount: number, currency: string, rates: { usd: number; usdt: number }) {
+  if (!(amount > 0)) return 0;
+  if (currency === "ARS") return amount;
+  if (currency === "USD") return rates.usd > 0 ? amount * rates.usd : 0;
+  if (currency === "USDT") return rates.usdt > 0 ? amount * rates.usdt : 0;
+  return 0;
+}
+
+export function recurringLines(
+  rows: { id: string; name: string; bookId: string; type: string; active: boolean; categoryId: string; amount: number; currency: string }[],
+  bookId: string,
+  rates: { usd: number; usdt: number },
+  type: "expense" | "income",
+) {
+  return rows
+    .filter((r) => r.active && r.type === type && r.bookId === bookId && r.amount > 0 && r.categoryId)
+    .map((r) => ({ id: r.id, name: r.name, amount: Math.round(recurringToArs(r.amount, r.currency, rates)) }))
+    .filter((r) => r.amount > 0);
+}
+
 export function recurringArs(
-  rows: { bookId: string; type: string; active: boolean; categoryId: string; amount: number; currency: string }[],
+  rows: { id: string; name: string; bookId: string; type: string; active: boolean; categoryId: string; amount: number; currency: string }[],
   bookId: string,
   rates: { usd: number; usdt: number },
   type: "expense" | "income",
 ): number {
-  return Object.values(fijoTopes(rows, bookId, rates, type)).reduce((s, n) => s + n, 0);
+  return recurringLines(rows, bookId, rates, type).reduce((s, r) => s + r.amount, 0);
 }
 
 const PLAN_WEIGHT: Record<string, number> = {

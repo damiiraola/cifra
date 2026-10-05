@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   buildMonthPlan,
   budgetAllocation,
+  recurringLines,
   budgetsFromSpend,
   effectiveCategoryBudget,
   fijoTopes,
@@ -76,6 +77,33 @@ describe("effectiveCategoryBudget", () => {
 
   it("a locked tope still wins over the fijo", () => {
     assert.equal(effectiveCategoryBudget("vivienda", 1_200_000, 900_000, SEED, true, 800_000), 1_200_000);
+  });
+});
+
+describe("recurringLines", () => {
+  it("counts rental income as well as salary", () => {
+    const lines = recurringLines(
+      [
+        { id: "s", name: "Sueldo", bookId: "p", type: "income", active: true, categoryId: "sueldo", amount: 3000, currency: "USDT" },
+        { id: "a", name: "Alquiler Auto", bookId: "p", type: "income", active: true, categoryId: "inversiones", amount: 1_000_000, currency: "ARS" },
+        { id: "e", name: "Alquiler", bookId: "p", type: "expense", active: true, categoryId: "vivienda", amount: 1_000_000, currency: "ARS" },
+      ],
+      "p",
+      { usd: 1400, usdt: 1600 },
+      "income",
+    );
+    assert.deepEqual(
+      lines.map((l) => l.amount),
+      [4_800_000, 1_000_000],
+    );
+    const income = lines.reduce((s, l) => s + l.amount, 0);
+    const plan = buildMonthPlan({
+      cap: income,
+      assigned: 4_230_000,
+      daysLeft: 28,
+      openCategories: [{ id: "alimentos", name: "Alimentación" }],
+    });
+    assert.equal(plan.left, 1_570_000);
   });
 });
 

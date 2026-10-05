@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { budgetAllocation, buildMonthPlan, fijoTopes, liveCategoryRows, recurringArs } from "@/lib/budget-math";
+import { budgetAllocation, buildMonthPlan, fijoTopes, liveCategoryRows, recurringLines } from "@/lib/budget-math";
 import { DEFAULT_BUDGETS } from "@/lib/categories";
 import { computeMonth } from "@/lib/analytics";
 import { moneyARS, monthLabel, parseAmount, amountInput } from "@/lib/format";
@@ -39,10 +39,10 @@ function Presupuestos() {
   const idle = rows.filter((c) => c.spent <= 0 && c.budget <= 0);
   const { assigned, unassigned, overAssigned } = budgetAllocation(rows, globalBudget);
   const days = daysLeft(viewMonth);
-  const income = recurringArs(recurrings, activeBookId, { usd: usdRate, usdt: usdtRate }, "income");
-  const ceiling = income > 0 && globalBudget > 0 ? Math.min(globalBudget, income) : globalBudget;
+  const incomeLines = recurringLines(recurrings, activeBookId, { usd: usdRate, usdt: usdtRate }, "income");
+  const income = incomeLines.reduce((s, r) => s + r.amount, 0);
   const plan = buildMonthPlan({
-    cap: ceiling,
+    cap: income > 0 ? income : globalBudget,
     assigned,
     daysLeft: days,
     openCategories: idle.map((c) => ({ id: c.id, name: c.name })),
@@ -102,6 +102,7 @@ function Presupuestos() {
       <PlanCard
         plan={plan}
         income={income}
+        incomeLines={incomeLines}
         assigned={assigned}
         cap={globalBudget}
         days={days}
@@ -275,6 +276,7 @@ function daysLeft(ym: string) {
 function PlanCard({
   plan,
   income,
+  incomeLines,
   assigned,
   cap,
   days,
@@ -283,6 +285,7 @@ function PlanCard({
 }: {
   plan: ReturnType<typeof buildMonthPlan>;
   income: number;
+  incomeLines: { id: string; name: string; amount: number }[];
   assigned: number;
   cap: number;
   days: number;
@@ -312,17 +315,29 @@ function PlanCard({
       </p>
       <p className="mt-1 font-display text-4xl tracking-tight">{headline}</p>
       {detail ? <p className="mt-2 max-w-xl text-sm text-muted">{detail}</p> : null}
-      {income > 0 && cap > income ? (
+      {incomeLines.length > 0 ? (
+        <div className="mt-4 grid gap-1.5">
+          <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Entra</p>
+          {incomeLines.map((line) => (
+            <p key={line.id} className="flex justify-between gap-3 text-sm">
+              <span>{line.name}</span>
+              <span className="tabular-nums text-income">+{moneyARS(line.amount)}</span>
+            </p>
+          ))}
+        </div>
+      ) : null}
+      {income > 0 && cap > 0 && cap !== income ? (
         <p className="mt-2 max-w-xl text-sm text-muted">
-          El tope del mes es {moneyARS(cap)}, más alto que lo que entra. El plan se arma con el ingreso, no con ese tope.
+          {cap > income
+            ? `El tope del mes es ${moneyARS(cap)}, más alto que lo que entra. El plan usa lo que entra.`
+            : `El tope del mes es ${moneyARS(cap)}. Entra más que eso: el plan usa el ingreso, no el tope.`}
         </p>
       ) : null}
       {income > 0 ? (
         <p className="mt-2 max-w-xl text-sm text-muted">
-          De ingresos fijos entran {moneyARS(income)}.{" "}
           {income < assigned
-            ? `No cubren lo comprometido: faltan ${moneyARS(assigned - income)}.`
-            : "Alcanzan para cubrir lo comprometido."}
+            ? `Esos ingresos no cubren los fijos: faltan ${moneyARS(assigned - income)}.`
+            : `Después de los fijos quedan ${moneyARS(income - assigned)}.`}
         </p>
       ) : null}
       {pendingFijos.length > 0 ? (
