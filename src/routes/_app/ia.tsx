@@ -4,7 +4,8 @@ import { toast } from "sonner";
 import { AI_TIMEOUT, AI_UNAVAILABLE, aiStatus, askCifra } from "@/lib/ai";
 import { computeMonth, snapshotText } from "@/lib/analytics";
 import { todayISO, uid } from "@/lib/utils";
-import { useLedger, useBookTxs, useAllCategories } from "@/lib/store";
+import { useLedger, useBookTxs, useBookAccounts, useBookCards, useBookPurchases, useAllCategories } from "@/lib/store";
+import { accountBalance, accountLabel } from "@/lib/books";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
 import type { PayMethod, TxType, Currency } from "@/lib/types";
@@ -43,6 +44,9 @@ export function Asistente() {
     activeBookId,
   } = useLedger();
   const transactions = useBookTxs();
+  const accounts = useBookAccounts();
+  const cards = useBookCards();
+  const purchases = useBookPurchases();
   const allCats = useAllCategories();
   const [text, setText] = useState("");
   const [pending, setPending] = useState(false);
@@ -78,8 +82,35 @@ export function Asistente() {
         currency: r.currency,
         active: r.active,
       }));
-    return snapshotText(cur, prev, budgets, globalBudget, fx, allCats, fijos);
-  }, [transactions, viewMonth, usdRate, usdtRate, budgets, globalBudget, allCats, recurrings, activeBookId]);
+    const catName = new Map(allCats.map((c) => [c.id, c.name]));
+    const moves = transactions
+      .filter((t) => t.date.startsWith(viewMonth))
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(-80)
+      .map((t) => ({
+        date: t.date,
+        type: t.type,
+        name: (t.merchant || t.note || catName.get(t.categoryId) || "Sin detalle").slice(0, 60),
+        category: catName.get(t.categoryId) || t.categoryId,
+        amount: t.amount,
+        currency: t.currency,
+      }));
+    return snapshotText(cur, prev, budgets, globalBudget, fx, allCats, fijos, {
+      accounts: accounts.map((a) => ({
+        label: accountLabel(a),
+        amount: accountBalance(a, transactions),
+        currency: a.currency,
+      })),
+      moves,
+      cards: cards.map((c) => ({ name: c.name, closingDay: c.closingDay, dueDay: c.dueDay })),
+      purchases: purchases.map((p) => ({
+        merchant: p.merchant || "Cuota",
+        cuota: p.installmentAmount,
+        count: p.installments,
+        currency: p.currency,
+      })),
+    });
+  }, [transactions, viewMonth, usdRate, usdtRate, budgets, globalBudget, allCats, recurrings, activeBookId, accounts, cards, purchases]);
 
   function fail(message: string, mode: "chat" | "parse" | "report") {
     toast.error(message);
@@ -182,8 +213,7 @@ export function Asistente() {
       </div>
 
       <p className="max-w-xl text-sm text-muted">
-        Totales, categorías, fijos y presupuestos del mes. No se mandan comercios, notas ni cada
-        movimiento. Las conversaciones quedan en tu cuenta.
+        El asistente lee este libro: cajas, movimientos, fijos y presupuestos, para ayudarte a llegar a fin de mes.
       </p>
 
       {chatThreads.length > 0 ? (
