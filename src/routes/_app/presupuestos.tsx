@@ -40,8 +40,9 @@ function Presupuestos() {
   const { assigned, unassigned, overAssigned } = budgetAllocation(rows, globalBudget);
   const days = daysLeft(viewMonth);
   const income = recurringArs(recurrings, activeBookId, { usd: usdRate, usdt: usdtRate }, "income");
+  const ceiling = income > 0 && globalBudget > 0 ? Math.min(globalBudget, income) : globalBudget;
   const plan = buildMonthPlan({
-    cap: globalBudget,
+    cap: ceiling,
     assigned,
     daysLeft: days,
     openCategories: idle.map((c) => ({ id: c.id, name: c.name })),
@@ -102,6 +103,7 @@ function Presupuestos() {
         plan={plan}
         income={income}
         assigned={assigned}
+        cap={globalBudget}
         days={days}
         pendingFijos={pendingFijos}
         onApply={() => {
@@ -274,6 +276,7 @@ function PlanCard({
   plan,
   income,
   assigned,
+  cap,
   days,
   pendingFijos,
   onApply,
@@ -281,6 +284,7 @@ function PlanCard({
   plan: ReturnType<typeof buildMonthPlan>;
   income: number;
   assigned: number;
+  cap: number;
   days: number;
   pendingFijos: string[];
   onApply: () => void;
@@ -308,6 +312,11 @@ function PlanCard({
       </p>
       <p className="mt-1 font-display text-4xl tracking-tight">{headline}</p>
       {detail ? <p className="mt-2 max-w-xl text-sm text-muted">{detail}</p> : null}
+      {income > 0 && cap > income ? (
+        <p className="mt-2 max-w-xl text-sm text-muted">
+          El tope del mes es {moneyARS(cap)}, más alto que lo que entra. El plan se arma con el ingreso, no con ese tope.
+        </p>
+      ) : null}
       {income > 0 ? (
         <p className="mt-2 max-w-xl text-sm text-muted">
           De ingresos fijos entran {moneyARS(income)}.{" "}
