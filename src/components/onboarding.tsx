@@ -126,7 +126,7 @@ export function Onboarding() {
       <Frame
         kicker="Bienvenida"
         title="Tu libro, vacío."
-        hint="Tope del mes, cajas y cotización. Nada de ejemplo."
+        hint="Tope del mes, cajas y cotización. Si una palabra no se entiende, después está Aprender."
         footer={
           <Button className="w-full" onClick={() => setStep(1)}>
             Siguiente

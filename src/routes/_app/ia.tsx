@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { AI_TIMEOUT, AI_UNAVAILABLE, aiStatus, askCifra } from "@/lib/ai";
 import { computeMonth, snapshotText } from "@/lib/analytics";
@@ -222,7 +222,10 @@ export function Asistente() {
       </div>
 
       <p className="max-w-xl text-sm text-muted">
-        El asistente lee este libro: cajas, movimientos, fijos y presupuestos, para ayudarte a llegar a fin de mes.
+        El asistente lee este libro y lo explica en criollo, para llegar a fin de mes.{" "}
+        <Link to="/aprender" className="underline-offset-4 hover:underline">
+          Si nunca anotaste la plata, empezá por Aprender.
+        </Link>
       </p>
 
       {chatThreads.length > 0 ? (

@@ -19,6 +19,7 @@ import { Route as ResetRouteImport } from './routes/reset'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppAjustesRouteImport } from './routes/_app/ajustes'
 import { Route as AppAnaliticaRouteImport } from './routes/_app/analitica'
+import { Route as AppAprenderRouteImport } from './routes/_app/aprender'
 import { Route as AppDiarioRouteImport } from './routes/_app/diario'
 import { Route as AppFijosRouteImport } from './routes/_app/fijos'
 import { Route as AppIaRouteImport } from './routes/_app/ia'
@@ -77,6 +78,11 @@ const AppAnaliticaRoute = AppAnaliticaRouteImport.update({
   path: '/analitica',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAprenderRoute = AppAprenderRouteImport.update({
+  id: '/aprender',
+  path: '/aprender',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppDiarioRoute = AppDiarioRouteImport.update({
   id: '/diario',
   path: '/diario',
@@ -128,6 +134,7 @@ export interface FileRoutesByFullPath {
   '/reset': typeof ResetRoute
   '/ajustes': typeof AppAjustesRoute
   '/analitica': typeof AppAnaliticaRoute
+  '/aprender': typeof AppAprenderRoute
   '/diario': typeof AppDiarioRoute
   '/fijos': typeof AppFijosRoute
   '/ia': typeof AppIaRoute
@@ -146,6 +153,7 @@ export interface FileRoutesByTo {
   '/reset': typeof ResetRoute
   '/ajustes': typeof AppAjustesRoute
   '/analitica': typeof AppAnaliticaRoute
+  '/aprender': typeof AppAprenderRoute
   '/diario': typeof AppDiarioRoute
   '/fijos': typeof AppFijosRoute
   '/ia': typeof AppIaRoute
@@ -167,6 +175,7 @@ export interface FileRoutesById {
   '/reset': typeof ResetRoute
   '/_app/ajustes': typeof AppAjustesRoute
   '/_app/analitica': typeof AppAnaliticaRoute
+  '/_app/aprender': typeof AppAprenderRoute
   '/_app/diario': typeof AppDiarioRoute
   '/_app/fijos': typeof AppFijosRoute
   '/_app/ia': typeof AppIaRoute
@@ -189,6 +198,7 @@ export interface FileRouteTypes {
     | '/reset'
     | '/ajustes'
     | '/analitica'
+    | '/aprender'
     | '/diario'
     | '/fijos'
     | '/ia'
@@ -207,6 +217,7 @@ export interface FileRouteTypes {
     | '/reset'
     | '/ajustes'
     | '/analitica'
+    | '/aprender'
     | '/diario'
     | '/fijos'
     | '/ia'
@@ -227,6 +238,7 @@ export interface FileRouteTypes {
     | '/reset'
     | '/_app/ajustes'
     | '/_app/analitica'
+    | '/_app/aprender'
     | '/_app/diario'
     | '/_app/fijos'
     | '/_app/ia'
@@ -322,6 +334,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAnaliticaRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/aprender': {
+      id: '/_app/aprender'
+      path: '/aprender'
+      fullPath: '/aprender'
+      preLoaderRoute: typeof AppAprenderRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/diario': {
       id: '/_app/diario'
       path: '/diario'
@@ -384,6 +403,7 @@ declare module '@tanstack/react-router' {
 interface AppRouteChildren {
   AppAjustesRoute: typeof AppAjustesRoute
   AppAnaliticaRoute: typeof AppAnaliticaRoute
+  AppAprenderRoute: typeof AppAprenderRoute
   AppDiarioRoute: typeof AppDiarioRoute
   AppFijosRoute: typeof AppFijosRoute
   AppIaRoute: typeof AppIaRoute
@@ -396,6 +416,7 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppAjustesRoute: AppAjustesRoute,
   AppAnaliticaRoute: AppAnaliticaRoute,
+  AppAprenderRoute: AppAprenderRoute,
   AppDiarioRoute: AppDiarioRoute,
   AppFijosRoute: AppFijosRoute,
   AppIaRoute: AppIaRoute,
