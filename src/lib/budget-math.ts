@@ -63,10 +63,11 @@ export function fijoTopes(
   rows: { bookId: string; type: string; active: boolean; categoryId: string; amount: number; currency: string }[],
   bookId: string,
   rates: { usd: number; usdt: number },
+  type: "expense" | "income" = "expense",
 ): Record<string, number> {
   const out: Record<string, number> = {};
   for (const r of rows) {
-    if (!r.active || r.type !== "expense" || r.bookId !== bookId || !(r.amount > 0) || !r.categoryId) continue;
+    if (!r.active || r.type !== type || r.bookId !== bookId || !(r.amount > 0) || !r.categoryId) continue;
     const ars =
       r.currency === "ARS"
         ? r.amount
@@ -80,6 +81,55 @@ export function fijoTopes(
   }
   for (const id of Object.keys(out)) out[id] = Math.round(out[id]!);
   return out;
+}
+
+export function recurringArs(
+  rows: { bookId: string; type: string; active: boolean; categoryId: string; amount: number; currency: string }[],
+  bookId: string,
+  rates: { usd: number; usdt: number },
+  type: "expense" | "income",
+): number {
+  return Object.values(fijoTopes(rows, bookId, rates, type)).reduce((s, n) => s + n, 0);
+}
+
+const PLAN_WEIGHT: Record<string, number> = {
+  alimentos: 0.4,
+  transporte: 0.12,
+  compras: 0.12,
+  ocio: 0.1,
+  educacion: 0.06,
+  suscripciones: 0.05,
+  impuestos: 0.05,
+};
+
+export type PlanSuggestion = { id: string; name: string; amount: number };
+
+export function buildMonthPlan(input: {
+  cap: number;
+  assigned: number;
+  daysLeft: number;
+  openCategories: { id: string; name: string }[];
+}) {
+  const over = Math.max(0, Math.round(input.assigned - input.cap));
+  const left = Math.max(0, Math.round(input.cap - input.assigned));
+  const perDay = input.daysLeft > 0 ? Math.round(left / input.daysLeft) : 0;
+  const share = input.cap > 0 ? input.assigned / input.cap : 0;
+  const tone: "over" | "tight" | "ok" = over > 0 ? "over" : share >= 0.65 ? "tight" : "ok";
+  const open = input.openCategories.filter((c) => PLAN_WEIGHT[c.id]);
+  const weight = open.reduce((s, c) => s + (PLAN_WEIGHT[c.id] ?? 0), 0);
+  const pool = Math.round(left * 0.85);
+  const suggestions: PlanSuggestion[] =
+    left > 0 && weight > 0
+      ? open
+          .map((c) => ({
+            id: c.id,
+            name: c.name,
+            amount: Math.round((pool * (PLAN_WEIGHT[c.id] ?? 0)) / weight / 1000) * 1000,
+          }))
+          .filter((s) => s.amount > 0)
+      : [];
+  const cushion = Math.max(0, left - suggestions.reduce((s, x) => s + x.amount, 0));
+  return { over, left, perDay, share, tone, suggestions, cushion };
 }
 
 export function budgetsFromSpend(byCat: Record<string, number>): Record<string, number> {

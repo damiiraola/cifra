@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildMonthPlan,
   budgetAllocation,
   budgetsFromSpend,
   effectiveCategoryBudget,
@@ -75,6 +76,27 @@ describe("effectiveCategoryBudget", () => {
 
   it("a locked tope still wins over the fijo", () => {
     assert.equal(effectiveCategoryBudget("vivienda", 1_200_000, 900_000, SEED, true, 800_000), 1_200_000);
+  });
+});
+
+describe("buildMonthPlan", () => {
+  it("says the month is tight when fijos already take most of the cap", () => {
+    const plan = buildMonthPlan({
+      cap: 5_830_000,
+      assigned: 4_230_000,
+      daysLeft: 28,
+      openCategories: [
+        { id: "alimentos", name: "Alimentación" },
+        { id: "compras", name: "Compras" },
+        { id: "ocio", name: "Ocio" },
+      ],
+    });
+    assert.equal(plan.tone, "tight");
+    assert.equal(plan.left, 1_600_000);
+    assert.equal(plan.perDay, 57_143);
+    assert.ok(plan.suggestions.find((s) => s.id === "alimentos")!.amount > 0);
+    assert.ok(plan.cushion > 0);
+    assert.ok(plan.suggestions.reduce((s, x) => s + x.amount, 0) + plan.cushion <= 1_600_000);
   });
 });
 

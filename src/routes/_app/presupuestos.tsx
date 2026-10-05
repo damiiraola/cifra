@@ -1,16 +1,16 @@
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { budgetAllocation, fijoTopes, liveCategoryRows } from "@/lib/budget-math";
+import { budgetAllocation, buildMonthPlan, fijoTopes, liveCategoryRows, recurringArs } from "@/lib/budget-math";
 import { DEFAULT_BUDGETS } from "@/lib/categories";
 import { computeMonth } from "@/lib/analytics";
 import { moneyARS, monthLabel, parseAmount, amountInput } from "@/lib/format";
 import { CatIcon } from "@/lib/icons";
 import { useAllCategories, useBookTxs, useLedger } from "@/lib/store";
 import { committedForMonth } from "@/lib/card-math";
-import { monthISO } from "@/lib/utils";
+import { cn, daysInMonth, monthISO, todayISO } from "@/lib/utils";
 import { MonthSwitcher } from "@/components/month-switcher";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/presupuestos")({
   component: Presupuestos,
@@ -38,6 +38,15 @@ function Presupuestos() {
   const live = rows.filter((c) => c.spent > 0 || c.budget > 0);
   const idle = rows.filter((c) => c.spent <= 0 && c.budget <= 0);
   const { assigned, unassigned, overAssigned } = budgetAllocation(rows, globalBudget);
+  const days = daysLeft(viewMonth);
+  const income = recurringArs(recurrings, activeBookId, { usd: usdRate, usdt: usdtRate }, "income");
+  const plan = buildMonthPlan({
+    cap: globalBudget,
+    assigned,
+    daysLeft: days,
+    openCategories: idle.map((c) => ({ id: c.id, name: c.name })),
+  });
+  const pendingFijos = live.filter((c) => (planned[c.id] ?? 0) > 0 && c.spent <= 0).map((c) => c.name);
   const used = globalBudget ? (stats.spent / globalBudget) * 100 : 0;
   const assignedPct = globalBudget ? Math.min(100, (assigned / globalBudget) * 100) : 0;
   const future = viewMonth > monthISO();
@@ -49,7 +58,7 @@ function Presupuestos() {
     <div className="grid gap-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Límites</p>
+          <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Plan del mes</p>
           <h1 className="font-display text-4xl tracking-tight">Presupuestos</h1>
         </div>
         <MonthSwitcher value={viewMonth} onChange={setViewMonth} ahead={12} />
@@ -88,6 +97,17 @@ function Presupuestos() {
           </p>
         ) : null}
       </section>
+
+      <PlanCard
+        plan={plan}
+        income={income}
+        assigned={assigned}
+        days={days}
+        pendingFijos={pendingFijos}
+        onApply={() => {
+          for (const s of plan.suggestions) setBudget(s.id, s.amount);
+        }}
+      />
 
       <section>
         <div className="mb-2 flex items-baseline justify-between gap-3">
@@ -239,5 +259,88 @@ function EnvelopeRow({
         }}
       />
     </div>
+  );
+}
+
+function daysLeft(ym: string) {
+  const today = todayISO();
+  const last = daysInMonth(ym);
+  if (ym < today.slice(0, 7)) return 0;
+  if (ym > today.slice(0, 7)) return last;
+  return Math.max(1, last - Number(today.slice(8)) + 1);
+}
+
+function PlanCard({
+  plan,
+  income,
+  assigned,
+  days,
+  pendingFijos,
+  onApply,
+}: {
+  plan: ReturnType<typeof buildMonthPlan>;
+  income: number;
+  assigned: number;
+  days: number;
+  pendingFijos: string[];
+  onApply: () => void;
+}) {
+  const pct = Math.round(plan.share * 100);
+  const headline =
+    plan.tone === "over"
+      ? `Te pasás ${moneyARS(plan.over)}`
+      : days > 0
+        ? `Te quedan ${moneyARS(plan.left)}`
+        : "Este mes ya cerró";
+  const detail =
+    plan.tone === "over"
+      ? "Los fijos y lo ya asignado superan el tope. Bajá un tope o subí el del mes."
+      : plan.tone === "tight"
+        ? `El ${pct}% del mes ya está comprometido. ${days ? `Para ${days} días son ${moneyARS(plan.perDay)} por día. No lo sueltes en la primera semana.` : ""}`
+        : days
+          ? `Unos ${moneyARS(plan.perDay)} por día hasta fin de mes.`
+          : "";
+
+  return (
+    <section className="rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
+      <p className="text-[11px] font-medium tracking-wide text-muted uppercase">
+        {plan.tone === "over" ? "No cierra" : plan.tone === "tight" ? "Estás justo" : "Hay margen"}
+      </p>
+      <p className="mt-1 font-display text-4xl tracking-tight">{headline}</p>
+      {detail ? <p className="mt-2 max-w-xl text-sm text-muted">{detail}</p> : null}
+      {income > 0 ? (
+        <p className="mt-2 max-w-xl text-sm text-muted">
+          De ingresos fijos entran {moneyARS(income)}.{" "}
+          {income < assigned
+            ? `No cubren lo comprometido: faltan ${moneyARS(assigned - income)}.`
+            : "Alcanzan para cubrir lo comprometido."}
+        </p>
+      ) : null}
+      {pendingFijos.length > 0 ? (
+        <p className="mt-2 max-w-xl text-sm text-subtle">
+          Todavía no anotaste {pendingFijos.join(", ")}. Cuando los cargues, el gastado sube. El plan ya los descontó.
+        </p>
+      ) : null}
+      {plan.suggestions.length > 0 ? (
+        <div className="mt-5">
+          <p className="text-sm font-medium">Así repartiría lo que queda</p>
+          <div className="mt-3 grid gap-2">
+            {plan.suggestions.map((s) => (
+              <p key={s.id} className="flex justify-between gap-3 text-sm">
+                <span>{s.name}</span>
+                <span className="tabular-nums text-muted">{moneyARS(s.amount)}</span>
+              </p>
+            ))}
+            <p className="flex justify-between gap-3 text-sm">
+              <span>Sin tocar, por si aparece algo</span>
+              <span className="tabular-nums text-muted">{moneyARS(plan.cushion)}</span>
+            </p>
+          </div>
+          <Button className="mt-4" onClick={onApply}>
+            Usar este reparto
+          </Button>
+        </div>
+      ) : null}
+    </section>
   );
 }
