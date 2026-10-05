@@ -59,6 +59,7 @@ export function snapshotText(
     moves?: SnapshotMove[];
     cards?: SnapshotCard[];
     purchases?: SnapshotPurchase[];
+    plan?: string;
   },
 ) {
   const catLines = categoryRows(current.byCat, budgets, cats)
@@ -115,5 +116,6 @@ ${moves || "-"}
 TARJETAS:
 ${cards || "-"}
 CUOTAS:
-${purchases || "-"}`;
+${purchases || "-"}
+${book?.plan?.trim() || "PLAN:\n-"}`;
 }

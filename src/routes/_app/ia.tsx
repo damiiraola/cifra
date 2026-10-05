@@ -6,6 +6,8 @@ import { computeMonth, snapshotText } from "@/lib/analytics";
 import { todayISO, uid } from "@/lib/utils";
 import { useLedger, useBookTxs, useBookAccounts, useBookCards, useBookPurchases, useAllCategories } from "@/lib/store";
 import { accountBalance, accountLabel } from "@/lib/books";
+import { recurringLines } from "@/lib/budget-math";
+import { wealthPlanText } from "@/lib/wealth-plan";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
 import type { PayMethod, TxType, Currency } from "@/lib/types";
@@ -19,6 +21,7 @@ const SUGGESTIONS = [
   "¿Dónde más estoy gastando este mes?",
   "Armame un plan para recortar 20%",
   "¿Me voy a pasar el presupuesto?",
+  "Armame el plan: ordenar el mes y, si sobra, el largo plazo",
   "Compará alimentación vs el mes pasado",
   "Gasté 15 mil en Coto con Mercado Pago",
 ];
@@ -109,6 +112,12 @@ export function Asistente() {
         count: p.installments,
         currency: p.currency,
       })),
+      plan: wealthPlanText({
+        incomeArs: recurringLines(recurrings, activeBookId, fx, "income").reduce((s, r) => s + r.amount, 0),
+        expenseArs: recurringLines(recurrings, activeBookId, fx, "expense").reduce((s, r) => s + r.amount, 0),
+        capArs: globalBudget,
+        usdtRate: usdtRate,
+      }),
     });
   }, [transactions, viewMonth, usdRate, usdtRate, budgets, globalBudget, allCats, recurrings, activeBookId, accounts, cards, purchases]);
 
