@@ -56,7 +56,7 @@ function Tarjetas() {
     <div className="grid gap-6">
       <div>
         <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Crédito · {book?.name ?? ""}</p>
-        <h1 className="font-display text-4xl tracking-tight">Tarjetas</h1>
+        <h1 data-tour="titulo" className="font-display text-4xl tracking-tight">Tarjetas</h1>
         {cards.length ? (
           <p className="mt-1 text-sm text-muted">
             {toPay.length

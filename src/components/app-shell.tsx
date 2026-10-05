@@ -21,6 +21,7 @@ import { QuotesTicker } from "@/components/quotes-ticker";
 import { OutboxFlusher } from "@/components/outbox-flusher";
 import { BudgetSeeder } from "@/components/budget-seeder";
 import { Onboarding } from "@/components/onboarding";
+import { PageTour } from "@/components/page-tour";
 import { BookEntryButton, BookMark, BookTheme, BookTransit, useActiveBook } from "@/components/book-mode";
 import { MoreSheet } from "@/components/more-sheet";
 import { Toaster } from "sonner";
@@ -83,7 +84,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </p>
           </Link>
           <nav className="mt-8 flex flex-1 flex-col gap-1">
-            <Button className="mb-3 w-full" onClick={addOnDay}>
+            <Button className="mb-3 w-full" data-tour="nuevo" onClick={addOnDay}>
               <Plus className="size-4" />
               Nuevo
             </Button>
@@ -201,6 +202,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               aria-label="Cargar movimiento"
               onClick={addOnDay}
               className="flex min-h-12 flex-col items-center justify-center"
+              data-tour="nuevo"
             >
               <span className="grid size-10 place-items-center rounded-full bg-accent text-accent-fg">
                 <Plus className="size-4" />
@@ -229,6 +231,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {chrome ? <BookTheme /> : null}
         {chrome ? <BookTransit /> : null}
         <Toaster theme="dark" position="top-center" />
+        <PageTour />
       </div>
     </TooltipProvider>
   );

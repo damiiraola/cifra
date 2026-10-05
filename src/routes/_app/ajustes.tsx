@@ -119,7 +119,7 @@ function Ajustes() {
     <div className="grid gap-5">
       <div>
         <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Configuración</p>
-        <h1 className="font-display text-4xl tracking-tight">Ajustes</h1>
+        <h1 data-tour="titulo" className="font-display text-4xl tracking-tight">Ajustes</h1>
         <p className="mt-1 text-sm text-muted">
           Cotizaciones, cajas, tarjetas y categorías del libro {book?.name ?? "activo"}.
         </p>

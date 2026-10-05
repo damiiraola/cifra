@@ -60,7 +60,7 @@ function Presupuestos() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Plan del mes</p>
-          <h1 className="font-display text-4xl tracking-tight">Presupuestos</h1>
+          <h1 data-tour="titulo" className="font-display text-4xl tracking-tight">Presupuestos</h1>
         </div>
         <MonthSwitcher value={viewMonth} onChange={setViewMonth} ahead={12} />
       </div>

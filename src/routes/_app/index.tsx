@@ -96,7 +96,7 @@ function Diario() {
   return (
     <div className="grid gap-4">
       <div className="flex items-center justify-between gap-3">
-        <MonthSwitcher value={viewMonth} onChange={setViewMonth} />
+        <MonthSwitcher tour="mes" value={viewMonth} onChange={setViewMonth} />
         <div className="flex items-center gap-2">
           <div className="text-right">
             <p className="font-display text-2xl tabular-nums tracking-tight">{moneyARS(stats.spent, true)}</p>

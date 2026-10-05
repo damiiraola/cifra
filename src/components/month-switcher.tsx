@@ -7,15 +7,17 @@ export function MonthSwitcher({
   value,
   onChange,
   ahead = 0,
+  tour,
 }: {
   value: string;
   onChange: (ym: string) => void;
   /** Months after the current one you can go to (budgets look ahead at cuotas). */
   ahead?: number;
+  tour?: string;
 }) {
   const current = shiftMonth(monthISO(), ahead);
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center gap-1" data-tour={tour}>
       <Button
         variant="ghost"
         size="icon-sm"
