@@ -6,7 +6,6 @@ import {
   CalendarDays,
   Menu,
   Plus,
-  Repeat,
   Settings,
   Target, CreditCard } from "lucide-react";
 import { UserButton } from "@/lib/auth/gates";
@@ -28,7 +27,6 @@ import { Toaster } from "sonner";
 const NAV = [
   { to: "/", label: "Diario", icon: CalendarDays },
   { to: "/analitica", label: "Analítica", icon: BarChart3 },
-  { to: "/fijos", label: "Fijos", icon: Repeat },
 ] as const;
 
 const MORE = [
@@ -178,7 +176,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
 
         {chrome ? <nav className="cifra-tabbar fixed inset-x-0 bottom-0 z-40 border-t border-border bg-bg/95 px-1 pt-1 backdrop-blur-sm md:hidden">
-          <div className="grid grid-cols-5">
+          <div className="grid grid-cols-4">
             {TAB.map((item) => {
               const active = pathname === item.to;
               const Icon = item.icon;
@@ -206,16 +204,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <Plus className="size-4" />
               </span>
             </button>
-            <Link
-              to="/fijos"
-              className={cn(
-                "flex min-h-12 flex-col items-center justify-center gap-0.5 text-[10px] font-medium leading-tight",
-                pathname === "/fijos" ? "text-fg" : "text-muted",
-              )}
-            >
-              <Repeat className="size-4" />
-              Fijos
-            </Link>
             <button
               type="button"
               onClick={() => setMoreOpen(true)}

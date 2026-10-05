@@ -122,7 +122,7 @@ function Diario() {
       <WalletStrip />
 
       {fijosPendientes > 0 && !searching ? (
-        <Link to="/fijos" className="text-sm text-muted hover:text-fg">
+        <Link to="/ajustes" hash="fijos" className="text-sm text-muted hover:text-fg">
           {fijosPendientes} fijo{fijosPendientes === 1 ? "" : "s"} sin anotar este mes.
         </Link>
       ) : null}

@@ -1,7 +1,9 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { money, amountInput } from "@/lib/format";
 import { parseAmount } from "@/lib/format";
+import { FIJO_TEMPLATES } from "@/lib/recurring";
 import { useLedger } from "@/lib/store";
+import { uid } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -64,10 +66,11 @@ function OpeningList({
 export function Onboarding() {
   const books = useLedger((s) => s.books);
   const accounts = useLedger((s) => s.accounts);
-  const { globalBudget, completeOnboarding, usdSource, setUsdSource } = useLedger();
+  const { globalBudget, completeOnboarding, usdSource, setUsdSource, upsertRecurring } = useLedger();
   const [step, setStep] = useState(0);
   const [budget, setBudget] = useState(amountInput(globalBudget || 1_150_000));
   const [openings, setOpenings] = useState<Record<string, string>>({});
+  const [fijoAmounts, setFijoAmounts] = useState<Record<string, string>>({});
   const [wantBusiness, setWantBusiness] = useState(false);
 
   const personal = books.find((b) => b.kind === "personal");
@@ -95,6 +98,27 @@ export function Onboarding() {
         opening: parseAmount(openings[a.id] ?? "") ?? 0,
       })),
     });
+    const bookId = personal?.id;
+    const acc = personalAccounts.find((a) => a.currency === "ARS") ?? personalAccounts[0];
+    if (!bookId || !acc) return;
+    for (const t of FIJO_TEMPLATES) {
+      const amount = parseAmount(fijoAmounts[t.name] ?? "");
+      if (!amount) continue;
+      upsertRecurring({
+        id: uid(),
+        bookId,
+        type: t.type === "income" ? "income" : "expense",
+        name: t.name,
+        amount,
+        currency: acc.currency,
+        categoryId: t.categoryId,
+        accountId: acc.id,
+        method: t.method,
+        day: t.day,
+        note: "",
+        active: true,
+      });
+    }
   }
 
   if (step === 0) {
@@ -204,6 +228,45 @@ export function Onboarding() {
     );
   }
 
+  if (step === 4) {
+    return (
+      <Frame
+        kicker="Fijos"
+        title="¿Qué se repite cada mes?"
+        hint="Poné el monto de los que tengas. Si no, los cargás después en Ajustes."
+        footer={
+          <div className="flex gap-2">
+            <Button variant="secondary" className="flex-1" onClick={() => setStep(wantBusiness ? 3 : 2)}>
+              Atrás
+            </Button>
+            <Button className="flex-1" onClick={() => setStep(5)}>
+              Siguiente
+            </Button>
+          </div>
+        }
+      >
+        <div className="grid gap-3">
+          {FIJO_TEMPLATES.map((t) => (
+            <div key={t.name}>
+              <Label htmlFor={`fijo-${t.name}`}>
+                {t.name}
+                {t.type === "income" ? " · ingreso" : ""}
+              </Label>
+              <Input
+                id={`fijo-${t.name}`}
+                className="mt-1.5"
+                inputMode="decimal"
+                placeholder="0"
+                value={fijoAmounts[t.name] ?? ""}
+                onChange={(e) => setFijoAmounts((s) => ({ ...s, [t.name]: e.target.value }))}
+              />
+            </div>
+          ))}
+        </div>
+      </Frame>
+    );
+  }
+
   return (
     <Frame
       kicker="Dólar"
@@ -237,7 +300,7 @@ export function Onboarding() {
           </button>
         ))}
       </div>
-      <button type="button" className="mt-4 text-xs text-subtle underline-offset-4 hover:underline" onClick={() => setStep(wantBusiness ? 3 : 2)}>
+      <button type="button" className="mt-4 text-xs text-subtle underline-offset-4 hover:underline" onClick={() => setStep(4)}>
         Atrás
       </button>
     </Frame>

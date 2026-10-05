@@ -18,6 +18,7 @@ import { signOutAndForget } from "@/lib/sign-out";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { Button } from "@/components/ui/button";
 import { CardSettings } from "@/components/card-settings";
+import { FijosPanel } from "@/components/fijos-panel";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -100,8 +101,9 @@ function Ajustes() {
 
   // "Ajustes → Tarjetas" links land here with #tarjetas: open that block.
   useEffect(() => {
-    if (window.location.hash !== "#tarjetas") return;
-    const el = document.getElementById("tarjetas");
+    const id = window.location.hash.replace("#", "");
+    if (!id) return;
+    const el = document.getElementById(id);
     if (el instanceof HTMLDetailsElement) {
       el.open = true;
       el.scrollIntoView({ block: "start" });
@@ -267,6 +269,10 @@ function Ajustes() {
             </div>
           ))}
         </div>
+      </Section>
+
+      <Section id="fijos" title={`Fijos · ${book?.name ?? ""}`} hint="Alquiler, servicios, sueldo">
+        <FijosPanel />
       </Section>
 
       <Section id="tarjetas" title={`Tarjetas · ${book?.name ?? ""}`} hint="Crédito: cierre, vencimiento y resumen">

@@ -304,7 +304,7 @@ function offerDueRecurrings(get: () => LedgerState) {
   const clean = due.filter((r) => !twins.includes(r));
   const parts: string[] = [];
   if (clean.length) parts.push(fijoNames(clean));
-  if (twins.length) parts.push(`Parece que ya cargaste a mano: ${fijoNames(twins)}. Esos no los anoto; revisalos en Fijos.`);
+  if (twins.length) parts.push(`Parece que ya cargaste a mano: ${fijoNames(twins)}. Esos no los anoto; revisalos en Ajustes.`);
   toast(clean.length === 1 ? "Tenés 1 fijo para anotar este mes" : clean.length > 1 ? `Tenés ${clean.length} fijos para anotar este mes` : "Revisá tus fijos de este mes", {
     id: "fijos-due",
     duration: 20000,
