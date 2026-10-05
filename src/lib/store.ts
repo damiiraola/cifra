@@ -54,7 +54,7 @@ import {
 } from "./card-math";
 import { dueDate, dueUnposted, isPosted, likelyDuplicate, postedTxId } from "./recurring";
 import { buildSeed } from "./seed";
-import { monthISO, uid } from "./utils";
+import { monthISO, todayISO, uid } from "./utils";
 import { applyOutbox, enqueue, OUTBOX_MAX_TRIES, pruneOutbox, resetTries, type OutboxOp } from "./outbox";
 import { mergeRecurrings } from "./recurring-sync";
 import { hydrateBookMoney, locksForBook, moneyForBook } from "./budget-math";
@@ -119,8 +119,8 @@ type LedgerState = {
   openQuick: (draft?: Draft) => void;
   closeQuick: () => void;
   addTx: (tx: TxInput) => void;
-  updateTx: (id: string, patch: Partial<Transaction>) => void;
-  deleteTx: (id: string) => void;
+  updateTx: (id: string, patch: Partial<Transaction>, opts?: { force?: boolean }) => void;
+  deleteTx: (id: string, opts?: { force?: boolean }) => void;
   flushOutbox: (opts?: { force?: boolean }) => Promise<void>;
   setBudget: (categoryId: string, amount: number) => void;
   replaceBudgets: (patch: Record<string, number>) => void;
@@ -854,15 +854,18 @@ export const useLedger = create<LedgerState>()((set, get) => ({
     persistLocal(get);
     void get().flushOutbox();
   },
-  updateTx: (id, patch) => {
+  updateTx: (id, patch, opts) => {
     const current = get().transactions.find((t) => t.id === id);
     if (!current) return;
+    if (!opts?.force && current.date < todayISO()) return;
     const next = fillTx(get, { ...current, ...patch, id }, current);
     paint(set, get, { outbox: enqueue(get().outbox, { id, action: "update", row: next, at: Date.now(), tries: 0 }) });
     persistLocal(get);
     void get().flushOutbox();
   },
-  deleteTx: (id) => {
+  deleteTx: (id, opts) => {
+    const current = get().transactions.find((t) => t.id === id);
+    if (current && !opts?.force && current.date < todayISO()) return;
     paint(set, get, { outbox: enqueue(get().outbox, { id, action: "delete", at: Date.now(), tries: 0 }) });
     persistLocal(get);
     void get().flushOutbox();
@@ -1234,9 +1237,9 @@ export const useLedger = create<LedgerState>()((set, get) => ({
     void get()
       .flushPurchases()
       .finally(() => {
-        for (const id of stale) get().deleteTx(id);
+        for (const id of stale) get().deleteTx(id, { force: true });
         for (const row of cuotas) {
-          if (get().transactions.some((t) => t.id === row.id)) get().updateTx(row.id, row);
+          if (get().transactions.some((t) => t.id === row.id)) get().updateTx(row.id, row, { force: true });
           else get().addTx(row);
         }
       });
@@ -1249,7 +1252,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
       purchases: s.purchases.filter((p) => p.id !== id),
       pendingPurchaseIds: [...new Set([...s.pendingPurchaseIds, id])],
     });
-    for (const txId of ids) get().deleteTx(txId);
+    for (const txId of ids) get().deleteTx(txId, { force: true });
     persistLocal(get);
     void get().flushPurchases();
   },

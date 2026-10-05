@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { money, parseAmount, amountInput } from "@/lib/format";
+import { money, parseAmount, amountInput, shortDay } from "@/lib/format";
 import { toARS } from "@/lib/analytics";
 import { Link } from "@tanstack/react-router";
 import { accountLabel, inferAccount, legsMatch, otherLeg, rateFarFromMarket, stampRate } from "@/lib/books";
@@ -174,6 +174,10 @@ export function QuickAdd() {
   }
 
   function submit() {
+    if (editing && editing.date < todayISO()) {
+      toast.error("Un día que ya pasó no se puede modificar.");
+      return;
+    }
     const src = accounts.find((a) => a.id === accountId);
     const dest = accounts.find((a) => a.id === counterpartyId);
     const typedRate = parseAmount(rate);
@@ -293,6 +297,35 @@ export function QuickAdd() {
       toast.success(type === "expense" ? "Gasto registrado" : type === "income" ? "Ingreso registrado" : "Cambio registrado");
     }
     closeQuick();
+  }
+
+  if (editing && editing.date < todayISO()) {
+    const from = accounts.find((a) => a.id === editing.accountId);
+    const to = accounts.find((a) => a.id === editing.counterpartyId);
+    return (
+      <Drawer open={quickOpen} onOpenChange={(o) => (!o ? closeQuick() : null)} shouldScaleBackground={false}>
+        <DrawerContent>
+          <div className="px-5 pt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+            <DrawerTitle>Movimiento cerrado</DrawerTitle>
+            <DrawerDescription className="mt-1">
+              Es del {shortDay(editing.date)}. Un día que ya pasó queda como se cargó.
+            </DrawerDescription>
+            <p className="mt-4 font-display text-3xl tabular-nums">{money(editing.amount, editing.currency)}</p>
+            <p className="mt-2 text-sm text-muted">
+              {editing.type === "transfer"
+                ? `${from?.name ?? "Caja"} → ${to?.name ?? "Caja"}`
+                : editing.merchant || editing.note || "Movimiento"}
+              {editing.type === "transfer" && editing.amountTo > 0
+                ? ` · llegan ${money(editing.amountTo, to?.currency ?? "ARS")}`
+                : ""}
+            </p>
+            <Button className="mt-6 w-full" onClick={() => closeQuick()}>
+              Cerrar
+            </Button>
+          </div>
+        </DrawerContent>
+      </Drawer>
+    );
   }
 
   if (editing && editingCuota) {
