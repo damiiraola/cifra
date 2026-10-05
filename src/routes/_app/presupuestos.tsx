@@ -107,8 +107,8 @@ function Presupuestos() {
         cap={globalBudget}
         days={days}
         pendingFijos={pendingFijos}
-        onApply={() => {
-          for (const s of plan.suggestions) setBudget(s.id, s.amount);
+        onApply={(rows) => {
+          for (const s of rows) setBudget(s.id, s.amount);
         }}
       />
 
@@ -290,9 +290,23 @@ function PlanCard({
   cap: number;
   days: number;
   pendingFijos: string[];
-  onApply: () => void;
+  onApply: (rows: { id: string; amount: number }[]) => void;
 }) {
   const pct = Math.round(plan.share * 100);
+  const sig = plan.suggestions.map((s) => `${s.id}:${s.amount}`).join("|");
+  const [drafts, setDrafts] = useState<Record<string, string>>(() =>
+    Object.fromEntries(plan.suggestions.map((s) => [s.id, amountInput(s.amount)])),
+  );
+  useEffect(() => {
+    setDrafts(Object.fromEntries(plan.suggestions.map((s) => [s.id, amountInput(s.amount)])));
+  }, [sig]);
+  const rows = plan.suggestions.map((s) => ({
+    id: s.id,
+    name: s.name,
+    amount: Math.max(0, Math.round(parseAmount(drafts[s.id] ?? "") ?? 0)),
+  }));
+  const used = rows.reduce((s, r) => s + r.amount, 0);
+  const cushion = plan.left - used;
   const headline =
     plan.tone === "over"
       ? `Te pasás ${moneyARS(plan.over)}`
@@ -348,19 +362,32 @@ function PlanCard({
       {plan.suggestions.length > 0 ? (
         <div className="mt-5">
           <p className="text-sm font-medium">Así repartiría lo que queda</p>
+          <p className="mt-1 text-xs text-muted">Cambialos si querés. Lo que no asignás queda sin tocar.</p>
           <div className="mt-3 grid gap-2">
             {plan.suggestions.map((s) => (
-              <p key={s.id} className="flex justify-between gap-3 text-sm">
+              <label key={s.id} className="flex items-center justify-between gap-3 text-sm">
                 <span>{s.name}</span>
-                <span className="tabular-nums text-muted">{moneyARS(s.amount)}</span>
-              </p>
+                <Input
+                  inputMode="decimal"
+                  value={drafts[s.id] ?? ""}
+                  aria-label={`Reparto de ${s.name}`}
+                  className="w-36 text-right tabular-nums"
+                  onChange={(e) => setDrafts((prev) => ({ ...prev, [s.id]: e.target.value }))}
+                  onBlur={() => {
+                    const n = parseAmount(drafts[s.id] ?? "");
+                    setDrafts((prev) => ({ ...prev, [s.id]: n && n > 0 ? amountInput(n) : "" }));
+                  }}
+                />
+              </label>
             ))}
             <p className="flex justify-between gap-3 text-sm">
               <span>Sin tocar, por si aparece algo</span>
-              <span className="tabular-nums text-muted">{moneyARS(plan.cushion)}</span>
+              <span className={cn("tabular-nums", cushion < 0 ? "text-expense" : "text-muted")}>
+                {cushion < 0 ? `Te pasás ${moneyARS(-cushion)}` : moneyARS(cushion)}
+              </span>
             </p>
           </div>
-          <Button className="mt-4" onClick={onApply}>
+          <Button className="mt-4" onClick={() => onApply(rows)}>
             Usar este reparto
           </Button>
         </div>
