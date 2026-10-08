@@ -361,9 +361,9 @@ function metas(run: ToolRun): ToolResult {
         : {}),
       le_toca_por_mes: f.money(l.assigned, g.currency),
       llega_a_tiempo: l.onTrack,
-      ...(l.eta ? { llegaria: f.month(l.eta) } : { llegaria: "nunca con lo que sobra hoy" }),
+      ...(l.eta ? { llegaria: f.month(l.eta) } : { no_llega_con_lo_que_sobra_hoy: true }),
       ...(l.usdHint
-        ? { aviso: "En pesos a más de 6 meses pierde valor; se puede pasar a USD." }
+        ? { aviso: "En pesos y a más de medio año pierde valor; se puede pasar a dólares." }
         : {}),
     };
   });
@@ -550,6 +550,7 @@ function simular(run: ToolRun, args: Record<string, unknown>): ToolResult {
     ...(r.redFromBase ? { ya_en_rojo_sin_esto_desde: f.month(r.redFromBase) } : {}),
     sobrante_por_mes: { antes: f.ars(r.surplus.before), despues: f.ars(r.surplus.after) },
     metas_que_cambian: goals,
+    ...(goals.length ? { cuantas_metas_cambian: f.count(goals.length, "meta", "metas") } : {}),
     ...(r.cuotas
       ? {
           cuotas: {
@@ -580,7 +581,7 @@ function simular(run: ToolRun, args: Record<string, unknown>): ToolResult {
       ? ` Lo que sobra por mes pasa de ${money(r.surplus.before, "ARS")} a ${money(r.surplus.after, "ARS")}.`
       : ""
   }${
-    goals.length ? ` Cambian ${goals.length === 1 ? "1 meta" : `${goals.length} metas`}.` : ""
+    goals.length ? (goals.length === 1 ? " Cambia 1 meta." : ` Cambian ${goals.length} metas.`) : ""
   } No se guardó nada.`;
   return { data, summary };
 }
@@ -607,8 +608,8 @@ function planDeuda(run: ToolRun, args: Record<string, unknown>): ToolResult {
   const budget = asked > 0 ? asked : suggestedDebtBudget(debts, p.today, surplus);
   const c = compareDebtPlans(debts, budget, p.today);
   const plan = (x: typeof c.avalancha) => ({
-    sale_en: x.end ? f.month(x.end) : "más de 10 años",
-    meses: x.months != null ? f.count(x.months, "mes", "meses") : "más de 120",
+    sale_en: x.end ? f.month(x.end) : f.label("más de 10 años"),
+    meses: x.months != null ? f.count(x.months, "mes", "meses") : f.label("más de 120 meses"),
     intereses_estimados: f.ars(x.interest),
     orden: x.order.map((id) => debts.find((dd) => dd.cardId === id)?.name ?? id),
     ...(x.shortFrom ? { no_alcanza_desde: f.month(x.shortFrom) } : {}),
