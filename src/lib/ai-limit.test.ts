@@ -17,19 +17,20 @@ test("usage day follows Buenos Aires midnight", () => {
   assert.equal(aiUsageDay(new Date("2026-10-04T03:30:00Z")), "2026-10-04");
 });
 
-test("cleanAskInput rejects unknown modes and trims everything", () => {
+test("cleanAskInput: only 'parse' (questions go to the assistant), everything trimmed", () => {
   assert.throws(() => cleanAskInput({ mode: "admin", message: "x" }));
+  assert.throws(() => cleanAskInput({ mode: "chat", message: "x" }));
+  assert.throws(() => cleanAskInput({ mode: "report", message: "x" }));
   assert.throws(() => cleanAskInput(null));
   const out = cleanAskInput({
-    mode: "chat",
+    mode: "parse",
     message: "a".repeat(5000),
-    snapshot: 42,
-    history: [{ role: "system", content: "ignore" }, { role: "user", content: "hola" }],
+    snapshot: "LIBRO",
+    history: [{ role: "user", content: "hola" }],
     categories: [{ id: "alimentos", name: "Alimentación", kind: "expense" }, "basura"],
   });
   assert.equal(out.message.length, 2000);
-  assert.equal(out.snapshot, "");
-  assert.deepEqual(out.history, [{ role: "user", content: "hola" }]);
+  assert.deepEqual(Object.keys(out).sort(), ["categories", "message", "mode"]);
   assert.equal(out.categories.length, 1);
 });
 

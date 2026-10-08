@@ -14,13 +14,9 @@ import {
 
 export { AI_TIMEOUT, AI_UNAVAILABLE };
 
-type Mode = "chat" | "parse" | "report";
-
 type AskInput = {
-  mode: Mode;
+  mode: "parse";
   message: string;
-  snapshot: string;
-  history?: { role: "user" | "assistant"; content: string }[];
   categories?: CatHint[];
 };
 
@@ -31,6 +27,11 @@ export const aiStatus = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async () => ({ active: (await providersForRequest()).length > 0 }));
 
+/**
+ * One sentence → one movement as strict JSON ("15 mil en el super ayer"). The
+ * browser opens Nuevo prefilled and the user confirms there. Questions go
+ * through the assistant (assistant/ask.ts).
+ */
 export const askCifra = createServerFn({ method: "POST" })
   .validator((input: AskInput) => cleanAskInput(input) as AskInput)
   .middleware([authMiddleware])
@@ -41,23 +42,9 @@ export const askCifra = createServerFn({ method: "POST" })
     if (!quota.ok) return { ok: false as const, error: quota.error };
 
     const messages: ChatMessage[] = [
-      { role: "system", content: systemFor(data.mode, data.categories) },
+      { role: "system", content: systemFor(data.categories) },
+      { role: "user", content: data.message.slice(0, 2000) },
     ];
-    if (data.mode !== "parse" && data.snapshot.trim()) {
-      messages.push({ role: "user", content: `LIBRO:\n${data.snapshot.slice(0, 14000)}` });
-    }
-
-    if (data.mode === "chat" && data.history?.length) {
-      for (const h of data.history.slice(-8)) {
-        messages.push({ role: h.role, content: h.content.slice(0, 1200) });
-      }
-    }
-
-    messages.push({
-      role: "user",
-      content: data.message.slice(0, 2000) || (data.mode === "report" ? "Generá el informe del mes." : ""),
-    });
-
     const deadline = Date.now() + ASK_MS;
     const categoryIds = (data.categories ?? []).map((c) => c.id);
     let last: Failure | null = null;
@@ -65,7 +52,7 @@ export const askCifra = createServerFn({ method: "POST" })
     for (const [i, p] of providers.entries()) {
       // Leave the fallback ~7 s if the first provider hangs.
       const until = i < providers.length - 1 ? Math.min(deadline, Date.now() + 13_000) : deadline;
-      const r = await callProvider(p, requestBody(p, { mode: data.mode, messages, categoryIds }), until);
+      const r = await callProvider(p, requestBody(p, { messages, categoryIds }), until);
       if (r.ok) return { ok: true as const, text: r.text };
       last = r.failure;
     }

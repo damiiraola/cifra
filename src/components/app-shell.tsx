@@ -23,7 +23,8 @@ import { OutboxFlusher } from "@/components/outbox-flusher";
 import { BudgetSeeder } from "@/components/budget-seeder";
 import { Onboarding } from "@/components/onboarding";
 import { PageTour } from "@/components/page-tour";
-import { BookEntryButton, BookMark, BookTheme, BookTransit, useActiveBook } from "@/components/book-mode";
+import { BookEntryButton, BookMark, BookTheme, BookTransit } from "@/components/book-mode";
+import { useActiveBook } from "@/components/book-hooks";
 import { MoreSheet } from "@/components/more-sheet";
 import { Toaster } from "sonner";
 

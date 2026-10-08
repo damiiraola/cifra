@@ -5,11 +5,11 @@ import { AI_TIMEOUT, AI_UNAVAILABLE, aiStatus, askCifra } from "@/lib/ai";
 import { askAssistant } from "@/lib/assistant/ask";
 import { CHIPS } from "@/lib/assistant/run";
 import { todayISO, uid } from "@/lib/utils";
-import { useLedger, useAllCategories } from "@/lib/store";
+import { useLedger, useAllCategories, useBookCards } from "@/lib/store";
+import { cuotasFromText, draftFromModel } from "@/lib/movement-parse";
 import { AssistantProposals } from "@/components/assistant-proposals";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
-import type { PayMethod, TxType, Currency } from "@/lib/types";
 import { CATEGORY_MAP } from "@/lib/categories";
 
 export const Route = createFileRoute("/_app/ia")({
@@ -34,6 +34,7 @@ export function Asistente() {
     outbox,
   } = useLedger();
   const allCats = useAllCategories();
+  const cards = useBookCards();
   const [text, setText] = useState("");
   const [pending, setPending] = useState(false);
   const [parseMode, setParseMode] = useState(false);
@@ -71,21 +72,25 @@ export function Asistente() {
     });
   }
 
-  /** "15 mil en el super ayer con débito" → Nuevo prefilled (unchanged). */
+  /** "15 mil en el super ayer con débito" → Nuevo prefilled; cuotas and card too. */
   async function parse(message: string) {
     const res = await Promise.race([
       askCifra({
         data: {
           mode: "parse",
           message,
-          snapshot: "",
           categories: allCats.map((c) => ({ id: c.id, name: c.name, kind: c.kind })),
         },
       }),
       timeout(),
     ]);
     if (!res.ok) return fail(res.error, "parse");
-    const parsed = parseTx(res.text, new Set(allCats.map((c) => c.id)));
+    const parsed = draftFromModel(res.text, {
+      allowedCategories: new Set(allCats.map((c) => c.id)),
+      knownCategory: (id) => Boolean(CATEGORY_MAP[id]),
+      cards,
+      today: todayISO(),
+    });
     if (!parsed) {
       toast.error("No pude armar el movimiento. Probá ser más específico.");
       return;
@@ -123,6 +128,14 @@ export function Asistente() {
   async function send(message: string, opts: { chip?: string; parse?: boolean } = {}) {
     const trimmed = message.trim();
     if (!trimmed || pending) return;
+    // "tele 600 mil en 12 con la Visa": Cifra reads it, no model call.
+    const cuotas = opts.parse ? cuotasFromText(trimmed, cards, todayISO()) : null;
+    if (cuotas) {
+      setText("");
+      openQuick(cuotas);
+      toast.success("Revisá y confirmá la compra en cuotas");
+      return;
+    }
     if (aiActive === false && !opts.chip) {
       toast.error(AI_UNAVAILABLE);
       return;
@@ -295,41 +308,4 @@ export function Asistente() {
       </form>
     </div>
   );
-}
-
-function parseTx(raw: string, allowed: Set<string>) {
-  const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) return null;
-  try {
-    const j = JSON.parse(match[0]) as {
-      type?: string;
-      amount?: number;
-      currency?: string;
-      categoryId?: string;
-      merchant?: string;
-      note?: string;
-      date?: string | null;
-      method?: string;
-    };
-    if (!j.amount || j.amount <= 0) return null;
-    const type: TxType = j.type === "income" ? "income" : "expense";
-    const categoryId =
-      j.categoryId && (allowed.has(j.categoryId) || CATEGORY_MAP[j.categoryId])
-        ? j.categoryId
-        : type === "income"
-          ? "otros-ing"
-          : "otros";
-    return {
-      type,
-      amount: j.amount,
-      currency: (j.currency === "USDT" ? "USDT" : j.currency === "USD" ? "USD" : "ARS") as Currency,
-      categoryId,
-      merchant: j.merchant ?? "",
-      note: j.note ?? "",
-      date: j.date && /^\d{4}-\d{2}-\d{2}$/.test(j.date) ? j.date : todayISO(),
-      method: (j.method as PayMethod) || "otro",
-    };
-  } catch {
-    return null;
-  }
 }

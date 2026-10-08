@@ -34,40 +34,21 @@ export function aiUsageDay(now = new Date()): string {
   }).format(now);
 }
 
-const MODES = new Set(["chat", "parse", "report"]);
-
-type Hist = { role: "user" | "assistant"; content: string };
 type Cat = { id: string; name: string; kind: string };
 
-/** Validate/trim what the browser sends before it reaches the AI provider. */
-export function cleanAskInput(input: unknown): {
-  mode: "chat" | "parse" | "report";
-  message: string;
-  snapshot: string;
-  history: Hist[];
-  categories: Cat[];
-} {
+/**
+ * Validate/trim what the browser sends to read one movement ("parse"). The
+ * assistant's questions go through assistant/ask.ts.
+ */
+export function cleanAskInput(input: unknown): { mode: "parse"; message: string; categories: Cat[] } {
   const i = (input ?? {}) as Record<string, unknown>;
-  const mode = typeof i.mode === "string" && MODES.has(i.mode) ? (i.mode as "chat" | "parse" | "report") : null;
-  if (!mode) throw new Error("Pedido inválido");
+  if (i.mode !== "parse") throw new Error("Pedido inválido");
   const str = (v: unknown, max: number) => (typeof v === "string" ? v.slice(0, max) : "");
-  const history = Array.isArray(i.history)
-    ? i.history
-        .filter(
-          (h): h is Hist =>
-            !!h &&
-            typeof h === "object" &&
-            ((h as Hist).role === "user" || (h as Hist).role === "assistant") &&
-            typeof (h as Hist).content === "string",
-        )
-        .slice(-8)
-        .map((h) => ({ role: h.role, content: h.content.slice(0, 1200) }))
-    : [];
   const categories = Array.isArray(i.categories)
     ? i.categories
         .filter((c): c is Cat => !!c && typeof c === "object" && typeof (c as Cat).id === "string")
         .slice(0, 80)
         .map((c) => ({ id: str(c.id, 60), name: str(c.name, 60), kind: str(c.kind, 20) }))
     : [];
-  return { mode, message: str(i.message, 2000), snapshot: str(i.snapshot, 14000), history, categories };
+  return { mode: "parse", message: str(i.message, 2000), categories };
 }

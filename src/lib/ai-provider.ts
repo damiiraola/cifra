@@ -20,7 +20,6 @@ export const AI_TIMEOUT = "El asistente no respondió a tiempo. Probá de nuevo.
 export const AI_OUT_OF_CREDIT = "El asistente llegó al límite gratis de este mes. Se renueva el mes que viene.";
 export const AI_BUSY = "El asistente está con mucha demanda. Esperá un minuto y probá de nuevo.";
 
-export type AiMode = "chat" | "parse" | "report";
 export type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
 export type AiProvider = {
@@ -71,7 +70,7 @@ export function parseSchema(categoryIds: string[]) {
   return {
     type: "object",
     additionalProperties: false,
-    required: ["type", "amount", "currency", "categoryId", "merchant", "note", "date", "method"],
+    required: ["type", "amount", "currency", "categoryId", "merchant", "note", "date", "method", "installments", "card"],
     properties: {
       type: { type: "string", enum: ["expense", "income"] },
       amount: { type: "number" },
@@ -81,28 +80,24 @@ export function parseSchema(categoryIds: string[]) {
       note: { type: "string" },
       date: { type: ["string", "null"], description: "YYYY-MM-DD, o null si no dice fecha" },
       method: { type: "string", enum: METHODS },
+      installments: { type: ["integer", "null"], description: "Cantidad de cuotas, o null" },
+      card: { type: ["string", "null"], description: "Tarjeta nombrada, o null" },
     },
   };
 }
 
-/** OpenAI-compatible request body for one provider. */
-export function requestBody(
-  provider: AiProvider,
-  opts: { mode: AiMode; messages: ChatMessage[]; categoryIds?: string[] },
-) {
-  const parse = opts.mode === "parse";
+/** OpenAI-compatible request body to read one movement ("parse"), strict JSON. */
+export function requestBody(provider: AiProvider, opts: { messages: ChatMessage[]; categoryIds?: string[] }) {
   const body: Record<string, unknown> = {
     model: provider.model,
     messages: opts.messages,
-    max_tokens: parse ? 400 : 900,
-    temperature: parse ? 0.1 : 0.5,
-  };
-  if (parse) {
-    body.response_format = {
+    max_tokens: 400,
+    temperature: 0.1,
+    response_format: {
       type: "json_schema",
       json_schema: { name: "movimiento", strict: true, schema: parseSchema(opts.categoryIds ?? []) },
-    };
-  }
+    },
+  };
   if (provider.id === "gateway") {
     // Only providers that do not use prompts for training (free, every plan).
     body.providerOptions = { gateway: { disallowPromptTraining: true } };
@@ -110,7 +105,7 @@ export function requestBody(
   if (provider.id === "groq" && /gpt-oss/.test(provider.model)) {
     // gpt-oss thinks before answering; keep it short so it fits max_tokens.
     body.reasoning_effort = "low";
-    body.max_tokens = parse ? 1200 : 2000;
+    body.max_tokens = 1200;
   }
   return body;
 }

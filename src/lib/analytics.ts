@@ -1,11 +1,8 @@
 import { monthBounds, prevMonth, todayISO } from "./utils";
 import type { FxRates } from "./fx";
 import type { Currency, Transaction } from "./types";
-import { categoryRows, snapshotText } from "./snapshot-text";
 import { isFixedExpense } from "./diary-math";
 
-export { categoryRows, snapshotText };
-export type { SnapshotFijo } from "./snapshot-text";
 export {
   FIXED_CATEGORY_IDS,
   heatmapIntensity,

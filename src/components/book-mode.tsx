@@ -3,20 +3,7 @@ import { Briefcase, UserRound } from "lucide-react";
 import { useLedger } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import type { Book } from "@/lib/types";
-
-export function useActiveBook() {
-  const books = useLedger((s) => s.books);
-  const activeBookId = useLedger((s) => s.activeBookId);
-  return books.find((b) => b.id === activeBookId) ?? books[0] ?? null;
-}
-
-export function useBusinessBook() {
-  return useLedger((s) => s.books.find((b) => b.kind === "business") ?? null);
-}
-
-export function usePersonalBook() {
-  return useLedger((s) => s.books.find((b) => b.kind === "personal") ?? null);
-}
+import { useActiveBook, useBusinessBook, usePersonalBook } from "@/components/book-hooks";
 
 export function BookTheme() {
   const book = useActiveBook();

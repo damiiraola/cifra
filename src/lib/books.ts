@@ -1,4 +1,4 @@
-import type { Account, AccountKind, Book, BookKind, Currency, PayMethod, Transaction } from "./types";
+import type { Account, AccountKind, BookKind, Currency, PayMethod, Transaction } from "./types";
 
 export const BOOK_SPECS: { kind: BookKind; name: string }[] = [
   { kind: "personal", name: "Personal" },
