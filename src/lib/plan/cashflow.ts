@@ -295,6 +295,8 @@ export type MonthFlow = {
   income: { fijos: number; variable: number };
   out: { fijos: number; cards: number; variable: number };
   cards: StatementDue[];
+  /** Card statements already known (cuotas, fijos on the card, what is loaded), ARS. */
+  cardsKnown: number;
   /** Whole month (so far + to come). */
   totalIn: number;
   totalOut: number;
@@ -401,6 +403,7 @@ export function projectCashflow(data: PlanData, months = 6): Cashflow {
       income,
       out,
       cards: due,
+      cardsKnown: cardsOut,
       totalIn,
       totalOut,
       net: totalIn - totalOut,

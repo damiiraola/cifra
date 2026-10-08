@@ -12,6 +12,7 @@ function goal(patch: Partial<Goal> = {}): Goal {
     target: 1000,
     saved: 200,
     deadline: "2026-12-31",
+    priority: 2,
     active: true,
     createdAt: "2026-10-01",
     updatedAt: "2026-10-01",
