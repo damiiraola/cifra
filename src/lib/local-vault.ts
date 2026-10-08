@@ -271,7 +271,9 @@ export function asVault(raw: unknown): LocalVault | null {
     bookBudgetLocks:
       p.bookBudgetLocks && typeof p.bookBudgetLocks === "object" ? p.bookBudgetLocks : {},
     cards: Array.isArray(p.cards)
-      ? p.cards.filter((c): c is Card => Boolean(c && typeof c === "object" && c.id && c.accountArsId && c.accountUsdId))
+      ? p.cards
+          .filter((c): c is Card => Boolean(c && typeof c === "object" && c.id && c.accountArsId && c.accountUsdId))
+          .map((c) => ({ ...c, tna: Number(c.tna) > 0 ? Number(c.tna) : 0 }))
       : [],
     pendingCardIds: Array.isArray(p.pendingCardIds) ? p.pendingCardIds.map(String).filter(Boolean) : [],
     purchases: Array.isArray(p.purchases)
