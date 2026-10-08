@@ -34,6 +34,8 @@ function Login() {
   useEffect(() => {
     if (isPending || !user) return;
     window.location.replace("/");
+    // Only when the signed-in user changes, not on every new user object.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPending, user?.id]);
 
   if (isPending && timedOut) {

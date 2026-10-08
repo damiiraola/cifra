@@ -104,7 +104,9 @@ export function QuickAdd() {
     setCounterpartyId(src.counterpartyId ?? "");
     setRate(src.rateLocked && src.rateArs ? amountInput(src.rateArs) : "");
     setFxDriver(src.amountTo ? "llega" : "sale");
-    setCuotas("1");
+    // A cuotas purchase from the assistant ("tele 600 mil en 12"): only for a new movement.
+    const askedCuotas = !editing && (src.installmentCount ?? 0) > 1 ? src.installmentCount! : 1;
+    setCuotas(String(Math.min(72, askedCuotas)));
     setInterestFree(true);
     setCashPrice("");
     setRunning(false);

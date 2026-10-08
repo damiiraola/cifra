@@ -148,18 +148,6 @@ function rowToTx(row: TxRow): Transaction {
   };
 }
 
-const TX_SELECT = `id, type, amount, currency, category_id, note, merchant,
-             date::text as date, method, created_at::text as created_at,
-             coalesce(book_id, '') as book_id, coalesce(account_id, '') as account_id,
-             coalesce(counterparty_id, '') as counterparty_id,
-             coalesce(amount_to, 0) as amount_to, coalesce(rate_ars, 0) as rate_ars,
-             coalesce(rate_locked, false) as rate_locked,
-             coalesce(recurring_id, '') as recurring_id,
-             coalesce(card_period, '') as card_period,
-             coalesce(purchase_id, '') as purchase_id,
-             coalesce(installment_no, 0) as installment_no,
-             coalesce(installment_count, 0) as installment_count`;
-
 async function ensureSettings(sql: Awaited<ReturnType<typeof getSql>>, userId: string) {
   const existing = await sql<{
     budgets: Record<string, number> | string;

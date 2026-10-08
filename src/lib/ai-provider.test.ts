@@ -63,17 +63,15 @@ const msgs = [{ role: "user" as const, content: "hola" }];
 
 test("every Gateway request disallows prompt training", () => {
   const gw = aiProviders({}, "t")[0];
-  for (const mode of ["chat", "parse", "report"] as const) {
-    const b = requestBody(gw, { mode, messages: msgs }) as { providerOptions?: unknown };
-    assert.deepEqual(b.providerOptions, { gateway: { disallowPromptTraining: true } });
-  }
+  const b = requestBody(gw, { messages: msgs }) as { providerOptions?: unknown };
+  assert.deepEqual(b.providerOptions, { gateway: { disallowPromptTraining: true } });
   const groq = aiProviders({ GROQ_API_KEY: "g" })[0];
-  assert.equal((requestBody(groq, { mode: "chat", messages: msgs }) as Record<string, unknown>).providerOptions, undefined);
+  assert.equal((requestBody(groq, { messages: msgs }) as Record<string, unknown>).providerOptions, undefined);
 });
 
 test("parse asks for a strict JSON schema with the user's categories", () => {
   const gw = aiProviders({}, "t")[0];
-  const b = requestBody(gw, { mode: "parse", messages: msgs, categoryIds: ["alimentos", "sueldo", "alimentos"] }) as {
+  const b = requestBody(gw, { messages: msgs, categoryIds: ["alimentos", "sueldo", "alimentos"] }) as {
     response_format: { type: string; json_schema: { strict: boolean; schema: ReturnType<typeof parseSchema> } };
     max_tokens: number;
     temperature: number;
@@ -86,8 +84,9 @@ test("parse asks for a strict JSON schema with the user's categories", () => {
   assert.deepEqual(s.properties.categoryId, { type: "string", enum: ["alimentos", "sueldo"] });
   assert.deepEqual(s.properties.date.type, ["string", "null"]);
   assert.equal(b.temperature, 0.1);
-  // Chat/report: free text, no schema.
-  assert.equal((requestBody(gw, { mode: "chat", messages: msgs }) as Record<string, unknown>).response_format, undefined);
+  // Cuotas and the card named, or null.
+  assert.deepEqual(s.properties.installments.type, ["integer", "null"]);
+  assert.deepEqual(s.properties.card.type, ["string", "null"]);
 });
 
 test("parse without categories still has a schema (free categoryId)", () => {
@@ -96,7 +95,7 @@ test("parse without categories still has a schema (free categoryId)", () => {
 
 test("gpt-oss on Groq thinks briefly and gets room to answer", () => {
   const groq = aiProviders({ GROQ_API_KEY: "g" })[0];
-  const b = requestBody(groq, { mode: "parse", messages: msgs }) as Record<string, unknown>;
+  const b = requestBody(groq, { messages: msgs }) as Record<string, unknown>;
   assert.equal(b.reasoning_effort, "low");
   assert.ok((b.max_tokens as number) >= 1000);
 });
@@ -141,9 +140,9 @@ test("privacy page names who gets the questions", async () => {
 test("parse prompt carries today's Buenos Aires date (for 'ayer')", async () => {
   const { systemFor } = await import("./ai-prompts.ts");
   const { aiUsageDay } = await import("./ai-limit.ts");
-  assert.match(systemFor("parse"), new RegExp(`Hoy es ${aiUsageDay()}`));
-  assert.doesNotMatch(systemFor("chat"), /Hoy es/);
-  assert.match(systemFor("chat", [{ id: "x1", name: "Kiosco", kind: "expense" }]), /x1 \(Kiosco, gasto\)/);
+  assert.match(systemFor(), new RegExp(`Hoy es ${aiUsageDay()}`));
+  assert.match(systemFor([{ id: "x1", name: "Kiosco", kind: "expense" }]), /x1 \(Kiosco, gasto\)/);
+  assert.match(systemFor(), /installments/);
 });
 
 test("statement body: strict schema, temperature 0, no training on the Gateway", () => {

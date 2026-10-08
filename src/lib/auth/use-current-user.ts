@@ -57,7 +57,6 @@ export type CurrentUserState = {
  */
 export function useCurrentUserState(): CurrentUserState {
   if (!authEnabled) return { user: DEV_USER, isPending: false };
-  // eslint-disable-next-line react-hooks/rules-of-hooks -- authEnabled is constant for the app's lifetime
   const { data, isPending } = authClient.useSession();
   const raw = data?.user;
   // eslint-disable-next-line react-hooks/rules-of-hooks -- authEnabled is constant for the app's lifetime
@@ -70,6 +69,8 @@ export function useCurrentUserState(): CurrentUserState {
       profileImageUrl: raw.image ?? null,
       isDevFallback: false,
     };
+    // Keyed on the fields, not the object: the session hands a new object on every poll.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [raw?.id, raw?.name, raw?.email, raw?.image]);
   return { user, isPending };
 }

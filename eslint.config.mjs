@@ -45,6 +45,13 @@ export default tseslint.config(
       "@typescript-eslint/no-explicit-any": "off",
     },
   },
+  {
+    // TanStack file routes export `Route` next to the page's components by
+    // design (the router plugin splits and hot-reloads them), so this rule
+    // only adds noise there.
+    files: ["src/routes/**/*.tsx"],
+    rules: { "react-refresh/only-export-components": "off" },
+  },
   // Disable rules that conflict with Prettier formatting.
   prettier,
 );

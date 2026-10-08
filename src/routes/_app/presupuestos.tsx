@@ -301,6 +301,8 @@ function PlanCard({
   );
   useEffect(() => {
     setDrafts(Object.fromEntries(plan.suggestions.map((s) => [s.id, amountInput(s.amount)])));
+    // Reset the drafts only when the suggested amounts change (sig), not on every new array.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sig]);
   const rows = plan.suggestions.map((s) => ({
     id: s.id,
