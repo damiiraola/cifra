@@ -40,6 +40,7 @@ const card: Card = {
   accountUsdId: "visa-usd",
   payAccountId: "bank",
   usdPerceptionPct: 30,
+  tna: 0,
   archived: false,
 };
 
@@ -380,5 +381,12 @@ describe("limit and commitments", () => {
     );
     assert.equal(f.count, 2);
     assert.equal(f.total, 600_000 + 100_000);
+  });
+});
+
+describe("imported movements", () => {
+  it("a new movement that already knows its statement keeps it", () => {
+    assert.equal(cardPeriodFor([card], { type: "expense", accountId: "visa-ars", date: "2026-08-20", cardPeriod: "2026-09" }), "2026-09");
+    assert.equal(cardPeriodFor([card], { type: "expense", accountId: "visa-ars", date: "2026-08-20", cardPeriod: "" }), "2026-08");
   });
 });

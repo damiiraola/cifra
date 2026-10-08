@@ -1,15 +1,17 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { CreditCard } from "lucide-react";
 import { accountBalance, accountLabel } from "@/lib/books";
 import { cardDebt, lastClosedStatement, openStatement, validLast4 } from "@/lib/card-math";
 import { amountInput, money, parseAmount } from "@/lib/format";
 import { argentinaDay } from "@/lib/market-hours";
-import { useBookAccounts, useBookCards, useBookTxs, useLedger, type CardInput } from "@/lib/store";
+import { useBookAccounts, useBookCards, useBookStatements, useBookTxs, useLedger, type CardInput } from "@/lib/store";
 import { CARD_NETWORKS, type Card, type CardNetwork } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { CreditMove } from "@/components/credit-move";
+import { planCreditMove } from "@/lib/card-pay";
 
 const SELECT =
   "mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)] outline-none";
@@ -32,6 +34,7 @@ const EMPTY: CardInput = {
   limitArs: 0,
   payAccountId: "",
   usdPerceptionPct: 30,
+  tna: 0,
 };
 
 /** Ajustes → Tarjetas: list, create, edit and remove credit cards of the active book. */
@@ -94,6 +97,17 @@ export function CardSettings() {
   );
 }
 
+/** How many old "Crédito" expenses could move to this card (0 = hide the option). */
+function useCreditMoveCount(card: Card) {
+  const txs = useLedger((s) => s.transactions);
+  const accounts = useLedger((s) => s.accounts);
+  const statements = useBookStatements();
+  return useMemo(
+    () => planCreditMove(card, txs, accounts, "0000-01-01", argentinaDay(), statements).count,
+    [card, txs, accounts, statements],
+  );
+}
+
 function CardRow({
   card,
   confirming,
@@ -108,13 +122,16 @@ function CardRow({
   const txs = useBookTxs();
   const accounts = useBookAccounts();
   const today = argentinaDay();
-  const open = openStatement(card, txs, today);
-  const closed = lastClosedStatement(card, txs, today);
+  const statements = useLedger((s) => s.statements);
+  const open = openStatement(card, txs, today, statements);
+  const closed = lastClosedStatement(card, txs, today, statements);
   const ars = accounts.find((a) => a.id === card.accountArsId);
   const usd = accounts.find((a) => a.id === card.accountUsdId);
   const owesArs = ars ? cardDebt(ars, accountBalance(ars, txs)) : 0;
   const owesUsd = usd ? cardDebt(usd, accountBalance(usd, txs)) : 0;
   const network = CARD_NETWORKS.find((n) => n.id === card.network)?.label ?? "";
+  const movable = useCreditMoveCount(card);
+  const [moving, setMoving] = useState(false);
   return (
     <div className="rounded-xl bg-elevated p-3">
       <div className="flex items-start gap-2">
@@ -164,6 +181,13 @@ function CardRow({
           {confirming ? "¿Seguro? Quitar" : "Quitar"}
         </Button>
       </div>
+      {moving ? (
+        <CreditMove card={card} onDone={() => setMoving(false)} />
+      ) : movable > 0 ? (
+        <Button variant="ghost" size="sm" className="mt-2 h-11 w-full" onClick={() => setMoving(true)}>
+          Pasar {movable} {movable === 1 ? "gasto" : "gastos"} con Crédito a esta tarjeta
+        </Button>
+      ) : null}
     </div>
   );
 }
@@ -183,6 +207,7 @@ function CardForm({ initial, onDone }: { initial: CardInput; onDone: () => void 
     initial.payAccountId || payFrom.find((a) => a.kind === "bank")?.id || "",
   );
   const [pct, setPct] = useState(String(initial.usdPerceptionPct));
+  const [tna, setTna] = useState(initial.tna > 0 ? String(initial.tna).replace(".", ",") : "");
   const idp = initial.id ?? "new";
 
   function save() {
@@ -198,6 +223,8 @@ function CardForm({ initial, onDone }: { initial: CardInput; onDone: () => void 
     if (!Number.isFinite(perception) || perception < 0 || perception > 100) {
       return toast.error("La percepción va de 0 a 100 %");
     }
+    const rate = tna.trim() ? Number(tna.replace(",", ".")) : 0;
+    if (!Number.isFinite(rate) || rate < 0 || rate > 1000) return toast.error("La TNA va de 0 a 1000 %, o dejala vacía");
     const saved = upsertCard({
       id: initial.id,
       name,
@@ -209,6 +236,7 @@ function CardForm({ initial, onDone }: { initial: CardInput; onDone: () => void 
       limitArs: parseAmount(limit) ?? 0,
       payAccountId,
       usdPerceptionPct: perception,
+      tna: rate,
     });
     if (!saved) return;
     toast.success(initial.id ? "Tarjeta actualizada" : "Tarjeta lista. Elegila con Crédito en Nuevo.");
@@ -278,9 +306,15 @@ function CardForm({ initial, onDone }: { initial: CardInput; onDone: () => void 
         <Label htmlFor={`cu-${idp}`}>Percepción en dólares pagando en pesos (%)</Label>
         <Input id={`cu-${idp}`} className="mt-1.5" inputMode="decimal" value={pct} onChange={(e) => setPct(e.target.value)} />
         <p className="mt-1 text-xs text-subtle">
-          Para cuando pagues el resumen desde Cifra (llega en una próxima versión): si pagás en pesos un consumo en
-          dólares, Cifra calcula este porcentaje y lo anota como gasto en Impuestos. Con tus dólares no hay percepción.
-          Hoy suele ser 30 %.
+          Si pagás en pesos un consumo en dólares, Cifra calcula este porcentaje y lo anota como gasto en Impuestos.
+          Con tus dólares no hay percepción. Hoy suele ser 30 %.
+        </p>
+      </div>
+      <div>
+        <Label htmlFor={`ct-${idp}`}>TNA de financiación (%, opcional)</Label>
+        <Input id={`ct-${idp}`} className="mt-1.5" inputMode="decimal" value={tna} onChange={(e) => setTna(e.target.value)} placeholder="Por ejemplo 75" />
+        <p className="mt-1 text-xs text-subtle">
+          Está en tu resumen. Sirve para estimar cuánto te cobran de intereses si pagás menos que el total.
         </p>
       </div>
       <div className="flex gap-2">

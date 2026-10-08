@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { GOAL_KINDS, goalPace, type GoalKind } from "@/lib/goals";
 import { money, parseAmount } from "@/lib/format";
-import { useLedger } from "@/lib/store";
+import { useBookGoals, useLedger } from "@/lib/store";
 import { todayISO } from "@/lib/utils";
 import type { Currency } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ export const Route = createFileRoute("/_app/metas")({
 });
 
 function Metas() {
-  const goals = useLedger((s) => s.goals.filter((g) => g.bookId === s.activeBookId && g.active));
+  const goals = useBookGoals();
   const saveGoal = useLedger((s) => s.saveGoal);
   const addToGoal = useLedger((s) => s.addToGoal);
   const removeGoal = useLedger((s) => s.removeGoal);

@@ -39,6 +39,12 @@ const clean = (v: string | undefined) => (v ?? "").trim();
 /** Providers to try, in order. Empty = assistant off. */
 export function aiProviders(env: Env, oidcToken?: string | null): AiProvider[] {
   const out: AiProvider[] = [];
+  // Local tests only: a fake OpenAI-compatible server. Ignored on Vercel and in production.
+  const mock = clean(env.AI_DEV_MOCK_URL);
+  if (mock && env.NODE_ENV !== "production" && !clean(env.VERCEL)) {
+    out.push({ id: "gateway", url: mock, token: "dev-mock", model: "dev/mock", auth: "api-key" });
+    return out;
+  }
   const key = clean(env.AI_GATEWAY_API_KEY);
   const oidc = clean(oidcToken ?? undefined) || clean(env.VERCEL_OIDC_TOKEN);
   if (key || oidc) {
@@ -105,6 +111,26 @@ export function requestBody(
     // gpt-oss thinks before answering; keep it short so it fits max_tokens.
     body.reasoning_effort = "low";
     body.max_tokens = parse ? 1200 : 2000;
+  }
+  return body;
+}
+
+/**
+ * Request body to read a card statement: strict JSON schema, low temperature,
+ * room for ~150 lines. Same no-training rule on the Gateway.
+ */
+export function statementBody(provider: AiProvider, messages: ChatMessage[], schema: Record<string, unknown>) {
+  const body: Record<string, unknown> = {
+    model: provider.model,
+    messages,
+    max_tokens: 7000,
+    temperature: 0,
+    response_format: { type: "json_schema", json_schema: { name: "resumen_tarjeta", strict: true, schema } },
+  };
+  if (provider.id === "gateway") body.providerOptions = { gateway: { disallowPromptTraining: true } };
+  if (provider.id === "groq" && /gpt-oss/.test(provider.model)) {
+    body.reasoning_effort = "low";
+    body.max_tokens = 9000;
   }
   return body;
 }
