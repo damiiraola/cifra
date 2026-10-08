@@ -15,6 +15,7 @@ import { parseChatThreads, type ChatThread } from "@/lib/chat-threads";
 import { parseGoals, type Goal } from "@/lib/goals";
 import { uid } from "@/lib/utils";
 import { MAIL, sendMailQuiet } from "@/lib/mail";
+import { forgetUser } from "@/lib/ai-cost-db";
 
 export type LedgerSnapshot = {
   transactions: Transaction[];
@@ -1183,6 +1184,9 @@ export const deleteAccount = createServerFn({ method: "POST" })
       await tx`delete from ledger_backups where user_id = ${context.userId}`;
       await tx`delete from alert_mail_prefs where user_id = ${context.userId}`;
       await tx`delete from alert_mail_sent where user_id = ${context.userId}`;
+      await tx`delete from ai_usage where user_id = ${context.userId}`;
+      // The cost log keeps counting for the global cap, but is no one's anymore.
+      await forgetUser(tx, context.userId);
       await tx`delete from "session" where "userId" = ${context.userId}`;
       await tx`delete from "account" where "userId" = ${context.userId}`;
       await tx`delete from "verification" where "identifier" = ${actual}`;

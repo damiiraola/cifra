@@ -10,6 +10,7 @@ const handle = async ({ request }: { request: Request }) =>
     secret: process.env.CRON_SECRET,
     mailConfigured,
     run: async () => (await import("@/lib/alert-mail.server")).runAlertMails(),
+    purge: async () => (await import("@/lib/ai-call")).purgeAiCallLog(),
   });
 
 export const Route = createFileRoute("/api/cron/alertas")({

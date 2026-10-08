@@ -1,6 +1,14 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
-import { callProviderJson, providersForRequest, takeAiQuota } from "@/lib/ai-call";
+import {
+  callProviderJson,
+  globalAiCapReached,
+  providersForRequest,
+  recordAiCalls,
+  takeAiQuota,
+  type AiTrack,
+} from "@/lib/ai-call";
+import { AI_GLOBAL_CAP, AI_GLOBAL_CAP_NOTE, capLog } from "@/lib/ai-cost";
 import { AI_UNAVAILABLE, failureMessage, type Failure } from "@/lib/ai-provider";
 import { getSql } from "@/lib/db";
 import { readLedger } from "@/lib/ledger-api";
@@ -25,8 +33,9 @@ export type AssistantResponse =
 /**
  * The assistant with tools (§2.7). The server reads the user's ledger (session
  * user id), merges the outbox the phone sent, runs Cifra's tools and lets the
- * model explain them. Counts against AI_DAILY_LIMIT. Never logs prompts,
- * answers or amounts.
+ * model explain them. Counts against AI_DAILY_LIMIT and the global daily
+ * cap (AI_GLOBAL_DAILY_USD); each model call is saved in ai_call_log
+ * (metadata only). Never logs prompts, answers or amounts.
  */
 export const askAssistant = createServerFn({ method: "POST" })
   .validator((input: unknown) => cleanAssistantInput(input))
@@ -34,11 +43,16 @@ export const askAssistant = createServerFn({ method: "POST" })
   .handler(async ({ data, context }): Promise<AssistantResponse> => {
     const chip = chipById(data.chip);
     const providers = await providersForRequest();
+    const track: AiTrack = { kind: chip?.id === "informe" ? "informe" : "asistente", logs: [] };
     let note = "";
     let call: ModelCall | null = null;
     if (!providers.length) {
       if (!chip) return { ok: false, error: AI_UNAVAILABLE };
       note = "El asistente no está disponible ahora. Estos son los números de Cifra:";
+    } else if (await globalAiCapReached()) {
+      await recordAiCalls(context.userId, [capLog(track.kind)]);
+      if (!chip) return { ok: false, error: AI_GLOBAL_CAP };
+      note = AI_GLOBAL_CAP_NOTE;
     } else {
       const quota = await takeAiQuota(context.userId, chip?.units ?? 1);
       if (!quota.ok) {
@@ -51,7 +65,7 @@ export const askAssistant = createServerFn({ method: "POST" })
           for (const [i, p] of providers.entries()) {
             const until =
               i < providers.length - 1 ? Math.min(deadline, Date.now() + 9_000) : deadline;
-            const r = await retryWhenBusy(() => callProviderJson(p, build(p), until), {
+            const r = await retryWhenBusy(() => callProviderJson(p, build(p), until, track), {
               deadline: until,
             });
             if (r.ok) return r;
@@ -74,6 +88,10 @@ export const askAssistant = createServerFn({ method: "POST" })
       call,
       note,
     });
+    // The model answered but Cifra showed its template: the last call says so.
+    const lastCall = track.logs[track.logs.length - 1];
+    if (reply.source === "plantilla" && lastCall?.result === "ok") lastCall.result = "plantilla";
+    await recordAiCalls(context.userId, track.logs);
     if (reply.source === "plantilla" && reply.reason) {
       // Only the reason class, never the text or the numbers.
       console.warn(

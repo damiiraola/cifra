@@ -119,13 +119,15 @@ export type AlertCronDeps = {
   secret: string | undefined;
   mailConfigured: () => boolean;
   run: () => Promise<CronSummary>;
+  /** Daily housekeeping on the same cron: AI call log older than 90 days. */
+  purge?: () => Promise<number>;
 };
 
 /**
  * `/api/cron/alertas`, called once a day by Vercel Cron.
  * - feature off or no CRON_SECRET → 404, as if the route did not exist
  * - missing or wrong bearer → 401
- * - no RESEND_API_KEY → 500
+ * - no RESEND_API_KEY → 500 (the AI log purge still runs)
  */
 export async function handleAlertCron(request: Request, deps: AlertCronDeps): Promise<Response> {
   const secret = deps.secret?.trim();
@@ -135,9 +137,17 @@ export async function handleAlertCron(request: Request, deps: AlertCronDeps): Pr
   if (!m || !(await tokensMatch(m[1]!.trim(), secret))) {
     return json({ ok: false, error: "No autorizado." }, 401, { "WWW-Authenticate": "Bearer" });
   }
-  if (!deps.mailConfigured()) return json({ ok: false, error: "Falta RESEND_API_KEY." }, 500);
+  let purged: { aiLogPurged: number } | Record<string, never> = {};
+  if (deps.purge) {
+    try {
+      purged = { aiLogPurged: await deps.purge() };
+    } catch {
+      purged = { aiLogPurged: -1 };
+    }
+  }
+  if (!deps.mailConfigured()) return json({ ok: false, error: "Falta RESEND_API_KEY.", ...purged }, 500);
   const summary = await deps.run();
-  return json({ ok: true, ...summary }, 200);
+  return json({ ok: true, ...summary, ...purged }, 200);
 }
 
 function page(title: string, text: string, form = "") {

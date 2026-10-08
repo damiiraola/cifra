@@ -114,6 +114,26 @@ describe("cron handler", () => {
     assert.deepEqual(await ok.json(), { ok: true, users: 1, sent: 1, skipped: 0, failed: 0 });
     assert.equal((await handleAlertCron(req("Bearer s3cret"), { ...deps, mailConfigured: () => false })).status, 500);
   });
+
+  it("also purges the old AI call log, only with the secret, and a failed purge does not stop the mails", async () => {
+    let purges = 0;
+    const deps = { enabled: true, secret: "s3cret", mailConfigured: () => true, run, purge: async () => (purges++, 7) };
+    assert.equal((await handleAlertCron(req("Bearer nope"), deps)).status, 401);
+    assert.equal(purges, 0);
+    const ok = await handleAlertCron(req("Bearer s3cret"), deps);
+    assert.deepEqual(await ok.json(), { ok: true, users: 1, sent: 1, skipped: 0, failed: 0, aiLogPurged: 7 });
+    const noMail = await handleAlertCron(req("Bearer s3cret"), { ...deps, mailConfigured: () => false });
+    assert.equal(noMail.status, 500);
+    assert.equal(purges, 2, "the purge runs even without RESEND_API_KEY");
+    const broken = await handleAlertCron(req("Bearer s3cret"), {
+      ...deps,
+      purge: async () => {
+        throw new Error("db");
+      },
+    });
+    assert.equal(broken.status, 200);
+    assert.equal((await broken.json()).aiLogPurged, -1);
+  });
 });
 
 describe("unsubscribe handler", () => {
