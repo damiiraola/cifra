@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { GOAL_KINDS, goalPace, type GoalKind } from "@/lib/goals";
+import { GOAL_KINDS, GOAL_PRIORITIES, goalPace, type Goal, type GoalKind, type GoalPriority } from "@/lib/goals";
 import { money, parseAmount } from "@/lib/format";
 import { useBookGoals, useLedger } from "@/lib/store";
 import { todayISO } from "@/lib/utils";
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PlanAlerts } from "@/components/plan-alerts";
 import { PlanMonths } from "@/components/plan-months";
+import { MonthPlanCard } from "@/components/month-plan-card";
 import { periodName } from "@/lib/card-pay";
 import type { GoalLine } from "@/lib/plan/goal-plan";
 import { usePlan } from "@/lib/plan/use-plan";
@@ -30,6 +31,7 @@ function Metas() {
   const [currency, setCurrency] = useState<Currency>("ARS");
   const [target, setTarget] = useState("");
   const [deadline, setDeadline] = useState("");
+  const [priority, setPriority] = useState<GoalPriority>(2);
 
   function create() {
     const n = parseAmount(target);
@@ -37,10 +39,11 @@ function Metas() {
       toast.error("Poné cuánto hace falta");
       return;
     }
-    saveGoal({ kind, name, currency, target: n, deadline });
+    saveGoal({ kind, name, currency, target: n, deadline, priority });
     setName("");
     setTarget("");
     setDeadline("");
+    setPriority(2);
     toast.success("Meta guardada");
   }
 
@@ -96,6 +99,27 @@ function Metas() {
           Fecha, si tiene
           <Input type="date" aria-label="Fecha de la meta" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
         </label>
+        <div className="grid gap-1 text-xs text-muted">
+          Prioridad
+          <div className="flex flex-wrap gap-1.5">
+            {GOAL_PRIORITIES.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                aria-pressed={priority === p.id}
+                onClick={() => setPriority(p.id)}
+                className={
+                  priority === p.id
+                    ? "h-11 rounded-full bg-accent px-3.5 text-sm text-accent-fg"
+                    : "h-11 rounded-full bg-elevated px-3.5 text-sm text-muted"
+                }
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <span className="text-subtle">Lo que sobra va primero a las de prioridad alta.</span>
+        </div>
         {kind === "inversion" ? (
           <p className="text-xs text-subtle">
             Esto es para apartar y dejar quieto: la parte grande en un índice S&P 500 y una manga chica en cripto. No es para comprar y vender.
@@ -109,19 +133,19 @@ function Metas() {
         {goals.map((g) => (
           <GoalCard
             key={g.id}
-            name={g.name}
-            kind={g.kind}
-            currency={g.currency}
-            saved={g.saved}
-            target={g.target}
-            deadline={g.deadline}
+            goal={g}
             today={today}
             plan={plan.goals.find((l) => l.goal.id === g.id)}
             onAdd={(n) => addToGoal(g.id, n)}
+            onPriority={(p) =>
+              saveGoal({ id: g.id, kind: g.kind, name: g.name, currency: g.currency, target: g.target, deadline: g.deadline, priority: p })
+            }
             onRemove={() => removeGoal(g.id)}
           />
         ))}
       </div>
+
+      <MonthPlanCard />
 
       <PlanMonths flow={plan.flow} surplus={plan.surplus} />
 
@@ -146,36 +170,31 @@ function planText(line: GoalLine) {
 }
 
 function GoalCard({
-  name,
-  kind,
-  currency,
-  saved,
-  target,
-  deadline,
+  goal,
   today,
   plan,
   onAdd,
+  onPriority,
   onRemove,
 }: {
-  name: string;
-  kind: GoalKind;
-  currency: Currency;
-  saved: number;
-  target: number;
-  deadline: string;
+  goal: Goal;
   today: string;
   plan?: GoalLine;
   onAdd: (n: number) => void;
+  onPriority: (p: GoalPriority) => void;
   onRemove: () => void;
 }) {
-  const pace = goalPace({ id: "", bookId: "", kind, name, currency, saved, target, deadline, active: true, createdAt: "", updatedAt: "" }, today);
+  const { name, kind, currency, saved, target } = goal;
+  const pace = goalPace(goal, today);
   const [text, setText] = useState("");
   const label = GOAL_KINDS.find((k) => k.id === kind)?.label;
   return (
     <article className="rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
       <div className="flex items-baseline justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[11px] font-medium tracking-wide text-muted uppercase">{label}</p>
+          <p className="text-[11px] font-medium tracking-wide text-muted uppercase">
+            {label} · prioridad {GOAL_PRIORITIES.find((p) => p.id === goal.priority)?.label.toLowerCase()}
+          </p>
           <h2 className="truncate font-display text-2xl tracking-tight">{name}</h2>
         </div>
         <p className="shrink-0 text-sm tabular-nums text-muted">
@@ -198,7 +217,7 @@ function GoalCard({
           Son más de 6 meses en pesos y la inflación se come el ahorro. Pensá en guardarlo en dólares.
         </p>
       ) : null}
-      <div className="mt-4 flex gap-2">
+      <div className="mt-4 flex flex-wrap gap-2">
         <Input
           inputMode="decimal"
           aria-label={`Apartar para ${name}`}
@@ -219,6 +238,18 @@ function GoalCard({
         >
           Sumar
         </Button>
+        <select
+          aria-label={`Prioridad de ${name}`}
+          value={goal.priority}
+          onChange={(e) => onPriority(Number(e.target.value) as GoalPriority)}
+          className="h-11 rounded-lg bg-elevated px-2 text-sm text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)]"
+        >
+          {GOAL_PRIORITIES.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.label}
+            </option>
+          ))}
+        </select>
         <Button variant="ghost" onClick={onRemove}>
           Borrar
         </Button>

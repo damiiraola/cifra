@@ -57,7 +57,7 @@ import { dueDate, dueUnposted, isPosted, likelyDuplicate, postedTxId } from "./r
 import { buildSeed } from "./seed";
 import { monthISO, todayISO, uid } from "./utils";
 import { mergeChatThreads, threadFromMessages, upsertThread, type ChatThread } from "./chat-threads";
-import { mergeGoals, roundGoal, type Goal } from "./goals";
+import { mergeGoals, parsePriority, roundGoal, type Goal } from "./goals";
 import { applyOutbox, enqueue, OUTBOX_MAX_TRIES, pruneOutbox, resetTries, type OutboxOp } from "./outbox";
 import { mergeRecurrings } from "./recurring-sync";
 import { hydrateBookMoney, locksForBook, moneyForBook } from "./budget-math";
@@ -165,6 +165,7 @@ type LedgerState = {
     currency: Goal["currency"];
     target: number;
     deadline: string;
+    priority?: Goal["priority"];
   }) => void;
   addToGoal: (id: string, amount: number) => void;
   removeGoal: (id: string) => void;
@@ -1414,6 +1415,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
       target: roundGoal(input.target, currency),
       saved: existing?.saved ?? 0,
       deadline: /^\d{4}-\d{2}-\d{2}$/.test(input.deadline) ? input.deadline : "",
+      priority: parsePriority(input.priority ?? existing?.priority),
       active: true,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,

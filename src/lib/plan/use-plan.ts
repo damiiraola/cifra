@@ -22,6 +22,8 @@ import {
 } from "./cashflow";
 import { goalPlan } from "./goal-plan";
 import { planAlerts } from "./alerts";
+import { committedByCategory, suggestBudgets } from "./budgets";
+import { monthPlan, planLevers } from "./month-plan";
 
 /** Everything the planner needs, from the store, for the active book. */
 export function usePlanData(): PlanData {
@@ -93,4 +95,31 @@ export function useCashOut(ym: string) {
     const fijos = pendingFijos(data, ym, "expense").reduce((s, f) => s + f.amount, 0);
     return { done, txs, pending: { cards: Math.round(cards), fijos: Math.round(fijos) } };
   }, [data, ym]);
+}
+
+/** Plan de un mes normal, topes sugeridos and the levers when it does not close. */
+export function useMonthPlan() {
+  const { data, flow, surplus, goals: lines } = usePlan(6);
+  const goals = useBookGoals();
+  const cats = useAllCategories();
+  return useMemo(() => {
+    const plan = monthPlan(flow, lines);
+    const names = Object.fromEntries(cats.map((c) => [c.id, c.name]));
+    const suggestion = suggestBudgets({
+      usual: flow.history.byCategory,
+      committed: committedByCategory(data, data.today.slice(0, 7)),
+      cut: Math.max(0, -plan.gap),
+      names,
+    });
+    const levers = planLevers({
+      plan,
+      lines,
+      goals,
+      surplus,
+      suggestion,
+      today: data.today,
+      rates: data.rates,
+    });
+    return { plan, suggestion, levers, hasHistory: flow.history.months.length > 0 };
+  }, [data, flow, surplus, lines, goals, cats]);
 }
