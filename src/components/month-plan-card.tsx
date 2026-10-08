@@ -69,7 +69,8 @@ export function MonthPlanCard() {
       deadline: g.deadline,
       priority: g.priority,
     };
-    if (l.kind === "fecha") saveGoal({ ...base, deadline: l.deadline });
+    if (l.kind === "fecha")
+      saveGoal({ ...base, deadline: l.deadline, target: l.target ?? base.target });
     if (l.kind === "monto") saveGoal({ ...base, target: l.target });
     if (l.kind === "prioridad") saveGoal({ ...base, priority: l.priority });
     toast.success(`${g.name} actualizada`);
@@ -170,7 +171,7 @@ export function MonthPlanCard() {
                 className="shrink-0"
                 onClick={() => applyLever(l)}
               >
-                {LEVER_BUTTON[l.kind]}
+                {l.kind === "fecha" && l.target ? "Mover fecha y monto" : LEVER_BUTTON[l.kind]}
               </Button>
             </div>
           ))}

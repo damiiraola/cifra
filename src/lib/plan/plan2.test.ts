@@ -4,7 +4,13 @@ import { parseGoals, type Goal } from "../goals.ts";
 import type { Cashflow, MonthFlow, PlanData } from "./cashflow.ts";
 import { goalPlan } from "./goal-plan.ts";
 import { committedByCategory, suggestBudgets } from "./budgets.ts";
-import { monthPlan, moveDeadline, planLevers } from "./month-plan.ts";
+import {
+  latestMove,
+  MAX_MOVE_MONTHS_FROM_TODAY,
+  monthPlan,
+  moveDeadline,
+  planLevers,
+} from "./month-plan.ts";
 import type { Recurring, Transaction } from "../types.ts";
 
 const rates = { usd: 1000, usdt: 1000 };
@@ -273,6 +279,79 @@ describe("month plan and levers", () => {
     assert.equal(byId["fecha:auto"], undefined);
     const stretch = byId["fecha:auto:por:brasil"]!;
     assert.equal(stretch.kind === "fecha" && stretch.deadline, "2028-01-08");
-    assert.match(stretch.text, /Mover Auto a enero 2028: libera \$\s?200\.000 por mes y Brasil llega a tiempo\./);
+    assert.match(
+      stretch.text,
+      /Mover Auto a enero 2028: libera \$\s?200\.000 por mes y Brasil llega a tiempo\./,
+    );
+  });
+});
+
+describe("Mover fecha: never an absurd date", () => {
+  it("latest sensible month: one more year or double the time, at most 5 years from today", () => {
+    assert.equal(latestMove(today, "2026-12-20"), "2027-12");
+    assert.equal(latestMove(today, "2029-10-08"), "2031-10");
+    assert.equal(latestMove(today, "2034-01-01"), "2031-10");
+    assert.equal(latestMove(today, "2026-01-10"), "2027-10");
+    assert.equal(latestMove(today, ""), "2027-10");
+    assert.equal(MAX_MOVE_MONTHS_FROM_TODAY, 60);
+  });
+
+  it("a short goal that would arrive in 2029 gets date + amount instead", () => {
+    // 5M for December with ~130k a month: the full amount arrives in Nov 2029.
+    const goals = [
+      goal({ id: "brasil", name: "Brasil", target: 5_000_000, deadline: "2026-12-20" }),
+    ];
+    const surplus = 135_000;
+    const lines = goalPlan(goals, surplus, today, rates);
+    assert.equal(lines[0]!.eta > "2029-01", true);
+    const plan = monthPlan(flowOf({}), lines);
+    const suggestion = suggestBudgets({ usual: {}, committed: {}, cut: 0, names: {} });
+    const levers = planLevers({ plan, lines, goals, surplus, suggestion, today, rates });
+    const fecha = levers.find((l) => l.id === "fecha:brasil")!;
+    assert.equal(fecha.kind, "fecha");
+    if (fecha.kind !== "fecha") return;
+    assert.equal(fecha.deadline, "2027-12-20");
+    assert.ok(fecha.deadline <= "2027-12-31");
+    // 15 months × 135k = 2.025M, rounded down to 10k
+    assert.equal(fecha.target, 2_020_000);
+    assert.match(
+      fecha.text,
+      /Mover Brasil a diciembre 2027 y bajarla a \$\s?2\.020\.000: es lo que llegás a juntar para entonces\. El total recién llegaría en/,
+    );
+    for (const l of levers) if (l.kind === "fecha") assert.ok(l.deadline < "2028-01-01", l.id);
+  });
+
+  it("no date lever when even the latest date reaches nothing new", () => {
+    const goals = [goal({ id: "x", name: "X", target: 5_000_000, deadline: "2026-12-20" })];
+    const lines = goalPlan(goals, 0, today, rates);
+    const plan = monthPlan(flowOf({}), lines);
+    const suggestion = suggestBudgets({ usual: {}, committed: {}, cut: 0, names: {} });
+    const levers = planLevers({ plan, lines, goals, surplus: 0, suggestion, today, rates });
+    assert.equal(levers.filter((l) => l.kind === "fecha").length, 0);
+  });
+
+  it("does not stretch another goal past its sensible limit", () => {
+    const goals = [
+      goal({ id: "auto", name: "Auto", priority: 2, target: 1_000_000, deadline: "2026-12-08" }),
+      goal({
+        id: "brasil",
+        name: "Brasil",
+        priority: 3,
+        target: 3_000_000,
+        deadline: "2027-02-08",
+      }),
+    ];
+    const surplus = 520_000;
+    const lines = goalPlan(goals, surplus, today, rates);
+    const plan = monthPlan(flowOf({}), lines);
+    const suggestion = suggestBudgets({ usual: {}, committed: {}, cut: 0, names: {} });
+    const levers = planLevers({ plan, lines, goals, surplus, suggestion, today, rates });
+    for (const l of levers)
+      if (l.kind === "fecha")
+        assert.ok(
+          l.deadline.slice(0, 7) <=
+            latestMove(today, goals.find((g) => g.id === l.goalId)!.deadline),
+          l.id,
+        );
   });
 });
