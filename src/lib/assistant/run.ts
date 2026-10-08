@@ -81,6 +81,31 @@ export type AssistantReply = Answer & {
 
 export const MAX_TOOLS_PER_TURN = 3;
 
+type CallResult = { ok: true; body: unknown } | { ok: false; failure: Failure };
+
+/**
+ * A 429 "busy" (rate limit, not credit) gets one more try after a short wait,
+ * if there is time left: a rejected request costs no tokens. Anything else
+ * fails right away.
+ */
+export async function retryWhenBusy(
+  attempt: () => Promise<CallResult>,
+  opts: {
+    deadline: number;
+    waitMs?: number;
+    now?: () => number;
+    sleep?: (ms: number) => Promise<void>;
+  },
+): Promise<CallResult> {
+  const waitMs = opts.waitMs ?? 1_500;
+  const now = opts.now ?? Date.now;
+  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const first = await attempt();
+  if (first.ok || first.failure !== "busy" || opts.deadline - now() < waitMs + 5_000) return first;
+  await sleep(waitMs);
+  return attempt();
+}
+
 export async function runAssistant(input: {
   data: AssistantData;
   message: string;

@@ -6,7 +6,7 @@ import { getSql } from "@/lib/db";
 import { readLedger } from "@/lib/ledger-api";
 import { argentinaDay } from "@/lib/market-hours";
 import { assistantData, cleanPending } from "./context";
-import { chipById, cleanAssistantInput, runAssistant, type ModelCall } from "./run";
+import { chipById, cleanAssistantInput, retryWhenBusy, runAssistant, type ModelCall } from "./run";
 import type { Proposal } from "./tools";
 
 /** Whole question, both model calls included (the browser gives up at 22 s). */
@@ -51,7 +51,9 @@ export const askAssistant = createServerFn({ method: "POST" })
           for (const [i, p] of providers.entries()) {
             const until =
               i < providers.length - 1 ? Math.min(deadline, Date.now() + 9_000) : deadline;
-            const r = await callProviderJson(p, build(p), until);
+            const r = await retryWhenBusy(() => callProviderJson(p, build(p), until), {
+              deadline: until,
+            });
             if (r.ok) return r;
             last = r.failure;
           }
