@@ -7,7 +7,7 @@
 import type { Goal, GoalPriority } from "../goals.ts";
 import { roundGoal } from "../goals.ts";
 import { addMonths, round0, type Cashflow, type Rates } from "./cashflow.ts";
-import { goalPlan, type GoalLine } from "./goal-plan.ts";
+import { goalPlan, monthsUntil, type GoalLine } from "./goal-plan.ts";
 import type { BudgetSuggestion } from "./budgets.ts";
 import { money } from "../format.ts";
 
@@ -68,7 +68,15 @@ export function monthPlan(flow: Cashflow, lines: GoalLine[]): MonthPlan {
 
 export type Lever =
   | { kind: "recorte"; id: string; text: string; freed: number }
-  | { kind: "fecha"; id: string; text: string; goalId: string; deadline: string }
+  | {
+      kind: "fecha";
+      id: string;
+      text: string;
+      goalId: string;
+      deadline: string;
+      /** Set when the date alone would be too far: also lower the amount. */
+      target?: number;
+    }
   | { kind: "monto"; id: string; text: string; goalId: string; target: number }
   | { kind: "prioridad"; id: string; text: string; goalId: string; priority: GoalPriority };
 
@@ -103,6 +111,23 @@ export function moveDeadline(deadline: string, ym: string) {
   return `${ym}-${String(day).padStart(2, "0")}`;
 }
 
+/** Never propose a date further than this from today, whatever the goal. */
+export const MAX_MOVE_MONTHS_FROM_TODAY = 60;
+
+/**
+ * Latest month a goal's date may be moved to (YYYY-MM): one more year, or
+ * double the time it had, whichever is longer, and never more than
+ * MAX_MOVE_MONTHS_FROM_TODAY from today. Past that the new date is not a plan.
+ */
+export function latestMove(today: string, deadline: string) {
+  const current = today.slice(0, 7);
+  const from = deadline && deadline.slice(0, 7) > current ? deadline.slice(0, 7) : current;
+  const extra = Math.max(12, deadline ? monthsUntil(today, deadline) : 0);
+  const byGoal = addMonths(from, extra);
+  const ceiling = addMonths(current, MAX_MOVE_MONTHS_FROM_TODAY);
+  return byGoal < ceiling ? byGoal : ceiling;
+}
+
 function niceDown(n: number, currency: Goal["currency"]) {
   const step = currency === "ARS" ? (n >= 100_000 ? 10_000 : 1000) : n >= 1000 ? 50 : 10;
   return roundGoal(Math.floor(n / step) * step, currency);
@@ -111,8 +136,10 @@ function niceDown(n: number, currency: Goal["currency"]) {
 /**
  * Ways to make the plan close, each computed: trim categories (the suggested
  * topes), and for every goal that does not arrive on time: move its date to
- * when it does arrive, lower its amount to what it reaches by the date, or
- * raise its priority when that alone makes it arrive.
+ * when it does arrive (if that is too far, see latestMove, move it to the
+ * latest sensible month and lower the amount to what it reaches by then),
+ * lower its amount to what it reaches by the date, or raise its priority when
+ * that alone makes it arrive.
  */
 export function planLevers(input: {
   plan: MonthPlan;
@@ -146,7 +173,8 @@ export function planLevers(input: {
   for (const line of lines) {
     if (line.onTrack !== false) continue;
     const g = line.goal;
-    if (line.eta) {
+    const latest = latestMove(input.today, g.deadline);
+    if (line.eta && line.eta <= latest) {
       out.push({
         kind: "fecha",
         id: `fecha:${g.id}`,
@@ -154,6 +182,22 @@ export function planLevers(input: {
         deadline: moveDeadline(g.deadline, line.eta),
         text: `Mover ${g.name} a ${monthName(line.eta)}: con lo que sobra hoy llega para esa fecha.`,
       });
+    } else if (line.eta) {
+      // The full amount arrives too late to be a plan: offer the latest
+      // sensible date with what you do reach by then.
+      const deadline = moveDeadline(g.deadline, latest);
+      const months = monthsUntil(input.today, deadline);
+      const reachLate = niceDown(g.saved + line.assigned * months, g.currency);
+      if (reachLate > g.saved && reachLate < g.target) {
+        out.push({
+          kind: "fecha",
+          id: `fecha:${g.id}`,
+          goalId: g.id,
+          deadline,
+          target: reachLate,
+          text: `Mover ${g.name} a ${monthName(latest)} y bajarla a ${money(reachLate, g.currency)}: es lo que llegás a juntar para entonces. El total recién llegaría en ${monthName(line.eta)}.`,
+        });
+      }
     }
     const reach = niceDown(g.saved + line.assigned * line.months, g.currency);
     if (reach > g.saved && reach < g.target) {
@@ -175,6 +219,7 @@ export function planLevers(input: {
       const months = Math.ceil(other.leftArs / rest - 1e-9);
       const ym = addMonths(input.today.slice(0, 7), months);
       if (ym <= other.goal.deadline.slice(0, 7)) continue;
+      if (ym > latestMove(input.today, other.goal.deadline)) continue;
       out.push({
         kind: "fecha",
         id: `fecha:${other.goal.id}:por:${g.id}`,
