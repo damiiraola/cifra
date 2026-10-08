@@ -11,6 +11,7 @@ import { accountBalance, accountLabel } from "../books.ts";
 import { closingOf, dueOf, limitUse, periodForCard } from "../card-math.ts";
 import { lastClosedBalance } from "../card-pay.ts";
 import { money } from "../format.ts";
+import { isFixedExpense } from "../diary-math.ts";
 import {
   addMonths,
   cardBills,
@@ -125,19 +126,37 @@ function catName(d: AssistantData, id: string) {
   return d.categories.find((c) => c.id === id)?.name ?? id;
 }
 
+/**
+ * A money value that can go below zero, under a key that says which way: the
+ * model never gets "−$ 42.222" to explain, it gets "faltan: $ 42.222".
+ */
+function signed(f: Facts, v: number, positive: string, negative: string) {
+  return v >= 0 ? { [positive]: f.ars(v) } : { [negative]: f.ars(-v) };
+}
+
+/** "- Etiqueta: valor" lines for Cifra's own text (the chat shows them as a list). */
+function textLines(rows: (string | false | null | undefined)[]) {
+  return rows.filter(Boolean).join("\n");
+}
+
+const ars = (v: number) => money(round0(v), "ARS");
+
 function monthSpend(d: AssistantData, ym: string) {
   const byCat: Record<string, number> = {};
   let spent = 0;
+  let fixed = 0;
   let earned = 0;
   for (const t of d.plan.txs) {
     if (!t.date.startsWith(ym)) continue;
     if (t.type === "expense") {
       const v = txArs(t, d.plan.rates);
       spent += v;
+      // Fijos and cuotas land once a month: they do not grow with the days.
+      if (isFixedExpense(t) || t.purchaseId || t.installmentCount > 0) fixed += v;
       byCat[t.categoryId] = (byCat[t.categoryId] ?? 0) + v;
     } else if (t.type === "income") earned += txArs(t, d.plan.rates);
   }
-  return { spent: round0(spent), earned: round0(earned), byCat };
+  return { spent: round0(spent), fixed: round0(fixed), earned: round0(earned), byCat };
 }
 
 function daysInMonth(ym: string) {
@@ -166,8 +185,16 @@ function resumenMes(run: ToolRun, args: Record<string, unknown>): ToolResult {
   const prev = monthSpend(d, addMonths(ym, -1));
   const isCurrent = ym === current;
   const elapsed = isCurrent ? Number(d.plan.today.slice(8, 10)) : daysInMonth(ym);
+  // Only the day-to-day spending grows with the days; fijos and cuotas are
+  // counted once (and the fijos still to come this month are added).
+  const pending = isCurrent
+    ? pendingFijos(d.plan, ym, "expense").reduce((sum, x) => sum + x.amount, 0)
+    : 0;
+  const variable = cur.spent - cur.fixed;
   const projected =
-    isCurrent && elapsed > 0 ? round0((cur.spent / elapsed) * daysInMonth(ym)) : cur.spent;
+    isCurrent && elapsed > 0
+      ? round0(cur.fixed + pending + (variable / elapsed) * daysInMonth(ym))
+      : cur.spent;
   const top = Object.entries(cur.byCat)
     .filter(([, v]) => v >= 1)
     .sort((a, b) => b[1] - a[1])
@@ -186,20 +213,28 @@ function resumenMes(run: ToolRun, args: Record<string, unknown>): ToolResult {
     mes: f.month(ym),
     entro: f.ars(cur.earned),
     gastado: f.ars(cur.spent),
-    neto: f.ars(cur.earned - cur.spent),
+    ...signed(f, cur.earned - cur.spent, "te_quedo", "gastaste_mas_de_lo_que_entro_por"),
     ...(isCurrent
-      ? { proyeccion_gasto_mes: f.ars(projected), dias_pasados: f.count(elapsed, "día", "días") }
+      ? {
+          si_seguis_asi_gastas_en_el_mes: f.ars(projected),
+          dias_pasados: f.count(elapsed, "día", "días"),
+        }
       : {}),
     gastado_mes_anterior: f.ars(prev.spent),
     categorias,
   };
-  const topText = top
-    .slice(0, 3)
-    .map(([id, v]) => `${catName(d, id)} ${money(round0(v), "ARS")}`)
-    .join(", ");
-  const summary = `En ${monthLabel(ym)} entraron ${money(cur.earned, "ARS")} y gastaste ${money(cur.spent, "ARS")}${
-    topText ? ` (lo que más: ${topText})` : ""
-  }. El mes anterior gastaste ${money(prev.spent, "ARS")}.`;
+  const net = cur.earned - cur.spent;
+  const summary = textLines([
+    net >= 0
+      ? `En ${monthLabel(ym)} te quedan ${ars(net)} de lo que entró${isCurrent ? ", por ahora" : ""}.`
+      : `En ${monthLabel(ym)} gastaste ${ars(-net)} más de lo que entró.`,
+    `- Entró: ${ars(cur.earned)}`,
+    `- Gastaste: ${ars(cur.spent)}`,
+    isCurrent && `- Si seguís así, el mes cierra en: ${ars(projected)}`,
+    `- Mes anterior: ${ars(prev.spent)}`,
+    top.length > 0 && "Lo que más:",
+    ...top.slice(0, 3).map(([id, v]) => `- ${catName(d, id)}: ${ars(v)}`),
+  ]);
   return { data, summary };
 }
 
@@ -252,13 +287,17 @@ function tarjetas(run: ToolRun): ToolResult {
     const leftArs = round0(st.leftArs + st.leftUsd * (p.rates.usd > 0 ? p.rates.usd : 0));
     const open = periodForCard(p.today, card, p.statements);
     const next = bills.find((b) => b.cardId === card.id && !b.closed);
-    const debtNow = bills.filter((b) => b.cardId === card.id).reduce((s, b) => s + b.totalArs, 0);
-    const lim = limitUse(card, debtNow, 0, p.rates.usd);
+    // Same as /tarjetas and the alerts: what the card's cajas owe, cuotas to come included.
+    const owed = (id: string) => {
+      const acc = p.accounts.find((a) => a.id === id);
+      return acc ? Math.max(0, -accountBalance(acc, p.txs)) : 0;
+    };
+    const lim = limitUse(card, owed(card.accountArsId), owed(card.accountUsdId), p.rates.usd);
     const minimo = minimumFor(leftArs, 0, st.minimumArs > 0 ? st.minimumArs : 0, true);
     out.push({
       nombre: card.name,
       resumen_cerrado: {
-        a_pagar: f.ars(leftArs),
+        ...signed(f, leftArs, "a_pagar", "saldo_a_favor"),
         ...(st.leftUsd > 0 ? { incluye_usd: f.money(st.leftUsd, "USD") } : {}),
         vence: f.day(st.due),
         vencido: leftArs >= 1 && st.due < p.today,
@@ -272,12 +311,17 @@ function tarjetas(run: ToolRun): ToolResult {
       ...(lim ? { limite: f.ars(lim.limit), limite_usado: f.pct(lim.pct) } : {}),
     });
     parts.push(
-      leftArs >= 1
-        ? `${card.name}: ${st.due < p.today ? "venció" : "vence"} el ${dayLabel(st.due)} con ${money(leftArs, "ARS")} a pagar`
-        : `${card.name}: nada a pagar del último resumen; el próximo lleva ${money(next?.totalArs ?? 0, "ARS")}`,
+      textLines([
+        leftArs >= 1
+          ? `${card.name}: pagá ${ars(leftArs)}; ${st.due < p.today ? "venció" : "vence"} el ${dayLabel(st.due)}.`
+          : `${card.name}: no hay nada para pagar del último resumen.`,
+        leftArs >= 1 && `- Mínimo: ${ars(minimo)}`,
+        `- Próximo resumen, hasta hoy: ${ars(next?.totalArs ?? 0)}`,
+        lim && `- Límite usado: ${Math.round(lim.pct * 100)}%`,
+      ]),
     );
   }
-  return { data: { tarjetas: out }, summary: `${parts.join(". ")}.` };
+  return { data: { tarjetas: out }, summary: parts.join("\n\n") };
 }
 
 function proximos(run: ToolRun, args: Record<string, unknown>): ToolResult {
@@ -337,7 +381,11 @@ function metas(run: ToolRun): ToolResult {
   const lines = goalPlan(goals, surplus, d.plan.today, d.plan.rates);
   if (!lines.length) {
     return {
-      data: { metas: [], sobrante_por_mes: f.ars(surplus), nota: "No hay metas abiertas." },
+      data: {
+        metas: [],
+        ...signed(f, surplus, "sobrante_por_mes", "falta_por_mes"),
+        nota: "No hay metas abiertas.",
+      },
       summary: "No tenés metas abiertas.",
     };
   }
@@ -345,11 +393,15 @@ function metas(run: ToolRun): ToolResult {
   const out = lines.map((l) => {
     const g = l.goal;
     parts.push(
-      l.onTrack === true
-        ? `${g.name} llega a tiempo`
-        : l.onTrack === false
-          ? `${g.name} no llega para ${monthLabel(g.deadline.slice(0, 7))}${l.eta ? ` (llegaría en ${monthLabel(l.eta)})` : ""}`
-          : `${g.name} no tiene fecha`,
+      `- ${g.name}: ${
+        l.onTrack === true
+          ? "llega a tiempo"
+          : l.onTrack === false
+            ? `no llega para ${monthLabel(g.deadline.slice(0, 7))}; ${l.eta ? `con lo que sobra, llegaría en ${monthLabel(l.eta)}` : "con lo que sobra hoy no llega"}`
+            : l.eta
+              ? `sin fecha; llegaría en ${monthLabel(l.eta)}`
+              : "sin fecha; con lo que sobra hoy no llega"
+      }`,
     );
     return {
       nombre: g.name,
@@ -357,9 +409,14 @@ function metas(run: ToolRun): ToolResult {
       objetivo: f.money(g.target, g.currency),
       juntado: f.money(g.saved, g.currency),
       ...(g.deadline
-        ? { fecha: f.day(g.deadline), hace_falta_por_mes: f.money(l.needed, g.currency) }
+        ? {
+            fecha: f.day(g.deadline),
+            necesita_por_mes_para_llegar_a_tiempo: f.money(l.needed, g.currency),
+          }
         : {}),
-      le_toca_por_mes: f.money(l.assigned, g.currency),
+      ...(l.assigned > 0
+        ? { recibe_por_mes_de_lo_que_sobra: f.money(l.assigned, g.currency) }
+        : { no_recibe_nada_de_lo_que_sobra: true }),
       llega_a_tiempo: l.onTrack,
       ...(l.eta ? { llegaria: f.month(l.eta) } : { no_llega_con_lo_que_sobra_hoy: true }),
       ...(l.usdHint
@@ -368,8 +425,15 @@ function metas(run: ToolRun): ToolResult {
     };
   });
   return {
-    data: { sobrante_por_mes: f.ars(surplus), metas: out },
-    summary: `Te sobran unos ${money(surplus, "ARS")} por mes para metas. ${parts.join(". ")}.`,
+    data: { ...signed(f, surplus, "sobrante_por_mes", "falta_por_mes"), metas: out },
+    summary: textLines([
+      surplus > 0
+        ? `Te sobran unos ${ars(surplus)} por mes para metas.`
+        : surplus < 0
+          ? `Hoy no te sobra nada para metas: faltan ${ars(-surplus)} por mes.`
+          : "Hoy no te sobra nada para metas.",
+      ...parts,
+    ]),
   };
 }
 
@@ -441,19 +505,39 @@ function planMes(run: ToolRun): ToolResult {
       prioridad: PRIORITY[g.priority],
       por_mes: f.ars(g.needArs),
     })),
-    queda_para_el_dia_a_dia: f.ars(plan.dayToDay),
+    ...signed(
+      f,
+      plan.dayToDay,
+      "queda_para_el_dia_a_dia",
+      "para_el_dia_a_dia_no_queda_nada_faltan",
+    ),
     gasto_normal_dia_a_dia: f.ars(plan.usual),
     cierra: plan.closes,
     ...(plan.closes ? { sobra: f.ars(plan.gap) } : { falta: f.ars(-plan.gap) }),
-    topes_sugeridos: topes
-      .slice(0, 6)
-      .map((r) => ({ categoria: r.name, normal: f.ars(r.usual), tope: f.ars(r.tope) })),
+    ...(topes.length ? { cuantos_topes: f.count(topes.length, "tope", "topes") } : {}),
+    topes_sugeridos: topes.map((r) => ({
+      categoria: r.name,
+      normal: f.ars(r.usual),
+      tope: f.ars(r.tope),
+    })),
     ...(suggestion.freed > 0 ? { los_topes_liberan: f.ars(suggestion.freed) } : {}),
     propuestas,
   };
-  const summary = plan.closes
-    ? `El mes cierra: entran ${money(plan.income, "ARS")}, ya está comprometido ${money(plan.committed, "ARS")}, las metas piden ${money(plan.goalsTotal, "ARS")} y para el día a día quedan ${money(plan.dayToDay, "ARS")}.`
-    : `El mes no cierra: faltan ${money(-plan.gap, "ARS")} por mes. Entran ${money(plan.income, "ARS")}, ya está comprometido ${money(plan.committed, "ARS")} y las metas piden ${money(plan.goalsTotal, "ARS")}.`;
+  const summary = textLines([
+    plan.closes
+      ? `El mes cierra: te sobran ${ars(plan.gap)} por mes.`
+      : `El mes no cierra: te faltan ${ars(-plan.gap)} por mes.`,
+    `- Entra: ${ars(plan.income)}`,
+    `- Fijos: ${ars(plan.fijos)}`,
+    `- Tarjetas: ${ars(plan.cards)}`,
+    plan.goalsTotal > 0 && `- Metas: ${ars(plan.goalsTotal)}`,
+    plan.dayToDay >= 0
+      ? `- Para el día a día: ${ars(plan.dayToDay)} (lo normal es ${ars(plan.usual)})`
+      : `- Para el día a día: no queda nada, faltan ${ars(-plan.dayToDay)} (lo normal es ${ars(plan.usual)})`,
+    topes.length > 0 && "Topes sugeridos:",
+    ...topes.map((r) => `- ${r.name}: ${ars(r.tope)}`),
+    suggestion.freed > 0 && `Con estos topes liberás ${ars(suggestion.freed)} por mes.`,
+  ]);
   return { data, summary };
 }
 
@@ -545,10 +629,16 @@ function simular(run: ToolRun, args: Record<string, unknown>): ToolResult {
     }));
   const data: Record<string, unknown> = {
     tipo,
-    mes_mas_justo: { mes: f.month(r.lowest.ym), saldo: f.ars(r.lowest.balance) },
+    mes_mas_justo: {
+      mes: f.month(r.lowest.ym),
+      ...signed(f, r.lowest.balance, "te_queda_en_las_cajas", "en_rojo_por"),
+    },
     ...(r.redFrom ? { en_rojo_desde: f.month(r.redFrom) } : { en_rojo: false }),
     ...(r.redFromBase ? { ya_en_rojo_sin_esto_desde: f.month(r.redFromBase) } : {}),
-    sobrante_por_mes: { antes: f.ars(r.surplus.before), despues: f.ars(r.surplus.after) },
+    sobrante_por_mes: {
+      ...signed(f, r.surplus.before, "antes", "antes_faltaban"),
+      ...signed(f, r.surplus.after, "despues", "despues_faltan"),
+    },
     metas_que_cambian: goals,
     ...(goals.length ? { cuantas_metas_cambian: f.count(goals.length, "meta", "metas") } : {}),
     ...(r.cuotas
@@ -566,7 +656,7 @@ function simular(run: ToolRun, args: Record<string, unknown>): ToolResult {
       ? {
           limite_tarjeta: {
             tarjeta: r.limit.name,
-            libre_despues: f.ars(r.limit.free),
+            ...signed(f, r.limit.free, "libre_despues", "se_pasa_del_limite_por"),
             pasa_el_limite: r.limit.free < 0,
           },
         }
@@ -574,15 +664,26 @@ function simular(run: ToolRun, args: Record<string, unknown>): ToolResult {
     guardado: false,
   };
   if (proposal) data.propuesta = run.propose(proposal);
-  const summary = `Con esto, el mes más justo es ${monthLabel(r.lowest.ym)} con ${money(r.lowest.balance, "ARS")} en tus cajas${
-    r.redFrom ? ` y quedás en rojo desde ${monthLabel(r.redFrom)}` : ""
-  }.${
-    r.surplus.before !== r.surplus.after
-      ? ` Lo que sobra por mes pasa de ${money(r.surplus.before, "ARS")} a ${money(r.surplus.after, "ARS")}.`
-      : ""
-  }${
-    goals.length ? (goals.length === 1 ? " Cambia 1 meta." : ` Cambian ${goals.length} metas.`) : ""
-  } No se guardó nada.`;
+  const left = (v: number) => (v >= 0 ? ars(v) : `faltan ${ars(-v)}`);
+  const eta = (ym: string | null | undefined) => (ym ? monthLabel(ym) : "no llega");
+  const summary = textLines([
+    r.redFrom
+      ? `Con esto quedás en rojo desde ${monthLabel(r.redFrom)}.`
+      : `Con esto no quedás en rojo: el mes más justo es ${monthLabel(r.lowest.ym)}, con ${ars(r.lowest.balance)} en tus cajas.`,
+    r.cuotas &&
+      `- Cuotas: ${r.cuotas.count} de ${ars(r.cuotas.each)}, de ${monthLabel(r.cuotas.first)} a ${monthLabel(r.cuotas.last)}`,
+    r.surplus.before !== r.surplus.after &&
+      `- Sobra por mes: ${left(r.surplus.before)} antes, ${left(r.surplus.after)} después`,
+    ...r.goals
+      .filter((g) => g.change !== "same")
+      .map((g) => `- ${g.name}: ${eta(g.before.eta)} antes, ${eta(g.after.eta)} después`),
+    r.limit &&
+      r.limit.limit > 0 &&
+      (r.limit.free >= 0
+        ? `- ${r.limit.name}: quedan ${ars(r.limit.free)} libres del límite`
+        : `- ${r.limit.name}: te pasás del límite por ${ars(-r.limit.free)}`),
+    "No se guardó nada.",
+  ]);
   return { data, summary };
 }
 
@@ -632,7 +733,13 @@ function planDeuda(run: ToolRun, args: Record<string, unknown>): ToolResult {
     ...(c.avalanchaSaves > 0 ? { avalancha_ahorra: f.ars(c.avalanchaSaves) } : {}),
     ...(c.missingTna.length ? { tarjetas_sin_tna: c.missingTna } : {}),
   };
-  const summary = `Pagando ${money(c.budget, "ARS")} por mes: con avalancha salís en ${c.avalancha.end ? monthLabel(c.avalancha.end) : "más de 10 años"} y pagás unos ${money(c.avalancha.interest, "ARS")} de intereses; con bola de nieve, en ${c.bola.end ? monthLabel(c.bola.end) : "más de 10 años"} con ${money(c.bola.interest, "ARS")}. Son estimados con la TNA de cada tarjeta.`;
+  const out = (end: string | null | undefined) => (end ? monthLabel(end) : "en más de 10 años");
+  const summary = textLines([
+    `Pagando ${ars(c.budget)} por mes:`,
+    `- Avalancha: salís en ${out(c.avalancha.end)}, con unos ${ars(c.avalancha.interest)} de intereses`,
+    `- Bola de nieve: salís en ${out(c.bola.end)}, con unos ${ars(c.bola.interest)} de intereses`,
+    "Son estimados con la TNA de cada tarjeta.",
+  ]);
   return { data, summary };
 }
 

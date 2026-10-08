@@ -162,7 +162,34 @@ export function checkText(
     if (!words.has(w.toLowerCase())) return { ok: false, reason: `número en palabras ${w}` };
   }
   if (bare.split(/\s+/).length > 220) return { ok: false, reason: "muy largo" };
-  return { ok: true, text: text.replace(MARKER, (_, id: string) => run.facts.get(id) ?? "") };
+  return { ok: true, text: fill(text, run.facts) };
+}
+
+const MONTH =
+  /^(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)$/i;
+
+const fold = (w: string) =>
+  w
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+/**
+ * Put the values in. The values carry their unit, so a word the model repeats
+ * around the marker goes: "{f1} meta" with "1 meta" → "1 meta" (not "1 meta
+ * meta"), "enero {f2}" with "15 de enero de 2027" → "15 de enero de 2027".
+ */
+function fill(text: string, facts: Facts) {
+  return text
+    .replace(/\{(f\d+)\}\s+(\p{L}+)/gu, (all, id: string, word: string) => {
+      const last = (facts.get(id) ?? "").split(/\s+/).pop() ?? "";
+      return fold(last) === fold(word) ? `{${id}}` : all;
+    })
+    .replace(/(\p{L}+)\s+\{(f\d+)\}/gu, (all, word: string, id: string) => {
+      const value = fold(facts.get(id) ?? "");
+      return MONTH.test(word) && value.split(/\s+/).includes(fold(word)) ? `{${id}}` : all;
+    })
+    .replace(MARKER, (_, id: string) => facts.get(id) ?? "");
 }
 
 const DEFAULT_FOLLOW_UPS = [
