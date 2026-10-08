@@ -88,6 +88,8 @@ export default defineConfig(({ command, isPreview }) => ({
             // raw Vercel route with `continue: true` (Nitro's routeRules
             // headers omit it, which would stop routing before the app).
             vercel: {
+              // Reading a statement PDF waits for the model (up to ~55 s).
+              functions: { maxDuration: 60 },
               config: {
                 routes: [{ src: "/(.*)", headers: securityHeaders(), continue: true }],
               },

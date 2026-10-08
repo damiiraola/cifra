@@ -15,6 +15,7 @@ import {
   parseSchema,
   requestBody,
   responseText,
+  statementBody,
 } from "./ai-provider.ts";
 
 test("no keys and no OIDC token → assistant off", () => {
@@ -143,4 +144,26 @@ test("parse prompt carries today's Buenos Aires date (for 'ayer')", async () => 
   assert.match(systemFor("parse"), new RegExp(`Hoy es ${aiUsageDay()}`));
   assert.doesNotMatch(systemFor("chat"), /Hoy es/);
   assert.match(systemFor("chat", [{ id: "x1", name: "Kiosco", kind: "expense" }]), /x1 \(Kiosco, gasto\)/);
+});
+
+test("statement body: strict schema, temperature 0, no training on the Gateway", () => {
+  const [gw] = aiProviders({}, "oidc");
+  const body = statementBody(gw!, [{ role: "user", content: "x" }], { type: "object" }) as Record<string, any>;
+  assert.equal(body.temperature, 0);
+  assert.equal(body.response_format.type, "json_schema");
+  assert.equal(body.response_format.json_schema.strict, true);
+  assert.deepEqual(body.providerOptions, { gateway: { disallowPromptTraining: true } });
+  assert.ok(body.max_tokens >= 6000);
+  const groq = aiProviders({ GROQ_API_KEY: "g" })[0]!;
+  const gb = statementBody(groq, [], {}) as Record<string, any>;
+  assert.equal(gb.providerOptions, undefined);
+  assert.equal(gb.reasoning_effort, "low");
+});
+
+test("the local fake model is ignored in production and on Vercel", () => {
+  const url = "http://127.0.0.1:8099/v1/chat/completions";
+  assert.equal(aiProviders({ AI_DEV_MOCK_URL: url })[0]?.url, url);
+  assert.equal(aiProviders({ AI_DEV_MOCK_URL: url, NODE_ENV: "production" }).length, 0);
+  assert.equal(aiProviders({ AI_DEV_MOCK_URL: url, VERCEL: "1" }).length, 0);
+  assert.equal(aiProviders({ AI_DEV_MOCK_URL: url, VERCEL: "1" }, "oidc")[0]?.url, GATEWAY_URL);
 });

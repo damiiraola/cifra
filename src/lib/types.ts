@@ -71,6 +71,26 @@ export type Transaction = {
  * A purchase in cuotas as it reads on the ticket. Its installments are
  * derived movements (`cuo_<id>_<k>`), so editing or deleting it redoes them.
  */
+/** What the bank printed on a statement (imported from its PDF). Bank numbers, kept apart from Cifra's. */
+export type BankStatement = {
+  id: string;
+  bookId: string;
+  cardId: string;
+  /** Month of the closing, YYYY-MM. */
+  period: string;
+  closingDate: string;
+  dueDate: string;
+  /** "" when the PDF does not say. */
+  nextClosingDate: string;
+  nextDueDate: string;
+  totalArs: number;
+  totalUsd: number;
+  minimumArs: number;
+  /** Bank charges in ARS (taxes, fees, interest), as listed. */
+  chargesArs: number;
+  importedAt: string;
+};
+
 export type CardPurchase = {
   id: string;
   bookId: string;
@@ -113,6 +133,8 @@ export type Card = {
   payAccountId: string;
   /** Perception on USD charges paid in pesos (RG 5617). Editable; default 30. */
   usdPerceptionPct: number;
+  /** Nominal yearly rate from the statement (TNA %), only to estimate interest. 0 = unknown. */
+  tna: number;
   archived: boolean;
 };
 
