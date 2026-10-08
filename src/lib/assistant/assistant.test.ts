@@ -745,6 +745,11 @@ describe("easy to read on the phone", () => {
     const blocks = answerBlocks(r.summary);
     assert.equal(blocks[0]!.kind, "p");
     assert.equal(blocks[1]!.kind, "list");
+    assert.equal(
+      r.valores[String(r.data.cuantas_metas)],
+      "1 meta",
+      "counts are facts, not digits to invent",
+    );
     const topes = r.data.topes_sugeridos as unknown[];
     if (topes.length) {
       assert.ok(blocks.some((b) => b.kind === "lead" && b.text === "Topes sugeridos:"));

@@ -515,6 +515,7 @@ function planMes(run: ToolRun): ToolResult {
     cierra: plan.closes,
     ...(plan.closes ? { sobra: f.ars(plan.gap) } : { falta: f.ars(-plan.gap) }),
     ...(topes.length ? { cuantos_topes: f.count(topes.length, "tope", "topes") } : {}),
+    ...(plan.goals.length ? { cuantas_metas: f.count(plan.goals.length, "meta", "metas") } : {}),
     topes_sugeridos: topes.map((r) => ({
       categoria: r.name,
       normal: f.ars(r.usual),
