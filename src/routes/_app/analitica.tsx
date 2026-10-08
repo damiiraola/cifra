@@ -7,6 +7,7 @@ import { moneyARS, monthLabel } from "@/lib/format";
 import { CatIcon } from "@/lib/icons";
 import { useAllCategories, useBookPurchases, useBookTxs, useLedger } from "@/lib/store";
 import { financedInMonth } from "@/lib/card-math";
+import { useCashOut } from "@/lib/plan/use-plan";
 import { RhythmChart } from "@/components/charts";
 import { DrillSheet } from "@/components/drill-sheet";
 import { MonthSwitcher } from "@/components/month-switcher";
@@ -41,6 +42,8 @@ function Analitica() {
   const financed = financedInMonth(purchases, viewMonth, usdRate);
   const spentDelta = prevMtdSpent ? ((stats.spent - prevMtdSpent) / prevMtdSpent) * 100 : 0;
   const [drill, setDrill] = useState<Drill>(null);
+  const out = useCashOut(viewMonth);
+  const pendingOut = out.pending ? out.pending.cards + out.pending.fijos : 0;
 
   const over = globalBudget > 0 && stats.spent > globalBudget;
   const remain = globalBudget - stats.spent;
@@ -136,6 +139,44 @@ function Analitica() {
             {financed.count > 1 ? ` (${financed.count} compras)` : ""}. Acá cuenta solo la cuota de cada mes.{" "}
             <Link to="/tarjetas" className="underline">
               Ver tarjetas
+            </Link>
+          </p>
+        ) : null}
+      </section>
+
+      <section aria-label="Sale de tus cajas">
+        <button
+          type="button"
+          className="text-left"
+          onClick={() =>
+            setDrill({
+              title: "Sale de tus cajas",
+              txs: [...out.txs].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt)),
+            })
+          }
+        >
+          <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Sale de tus cajas</p>
+          <p className="mt-1 font-display text-3xl tabular-nums tracking-tight">{moneyARS(out.done.total)}</p>
+        </button>
+        <p className="mt-1 text-sm text-subtle">
+          {out.done.total > 0
+            ? `${moneyARS(out.done.expenses)} en gastos con tus cajas${
+                out.done.cardPayments > 0 ? ` y ${moneyARS(out.done.cardPayments)} en pagos de tarjeta` : ""
+              }. Lo que compraste con crédito sale cuando pagás el resumen.`
+            : "Todavía no salió plata de tus cajas este mes. Lo que comprás con crédito sale cuando pagás el resumen."}
+        </p>
+        {pendingOut > 0 && out.pending ? (
+          <p className="mt-1 text-sm text-subtle">
+            Falta que salgan {moneyARS(pendingOut)}:{" "}
+            {[
+              out.pending.cards > 0 ? `${moneyARS(out.pending.cards)} de resúmenes de tarjeta` : "",
+              out.pending.fijos > 0 ? `${moneyARS(out.pending.fijos)} de fijos sin cargar` : "",
+            ]
+              .filter(Boolean)
+              .join(" y ")}
+            .{" "}
+            <Link to="/metas" hash="plan" className="underline">
+              Ver los próximos meses
             </Link>
           </p>
         ) : null}

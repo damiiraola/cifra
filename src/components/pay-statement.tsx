@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { accountBalance, accountLabel } from "@/lib/books";
 import { closingOf, shiftPeriod } from "@/lib/card-math";
@@ -88,6 +88,11 @@ export function PayStatement({ card, balance, onDone }: { card: Card; balance: S
   const [usdFrom, setUsdFrom] = useState(bestDollars?.id ?? "");
   const [usdPesosFrom, setUsdPesosFrom] = useState(defaultPesos);
   const [rate, setRate] = useState(amountInput(Math.round(official)));
+  const [rateTouched, setRateTouched] = useState(false);
+  // Quotes may arrive after the form opens: follow them until the user types a rate.
+  useEffect(() => {
+    if (!rateTouched) setRate(amountInput(Math.round(official)));
+  }, [official, rateTouched]);
   const [date, setDate] = useState(todayISO());
 
   const hasArs = balance.leftArs > 0;
@@ -262,7 +267,16 @@ export function PayStatement({ card, balance, onDone }: { card: Card; balance: S
                 </div>
                 <div>
                   <Label htmlFor={`pay-rate-${card.id}`}>Dólar oficial</Label>
-                  <Input id={`pay-rate-${card.id}`} className="mt-1.5" inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value)} />
+                  <Input
+                    id={`pay-rate-${card.id}`}
+                    className="mt-1.5"
+                    inputMode="decimal"
+                    value={rate}
+                    onChange={(e) => {
+                      setRateTouched(true);
+                      setRate(e.target.value);
+                    }}
+                  />
                 </div>
               </div>
               {usdAmount > 0 && r > 0 ? (
