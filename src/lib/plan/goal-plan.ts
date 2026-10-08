@@ -37,11 +37,15 @@ export function monthsUntil(today: string, deadline: string) {
   return Math.max(1, Math.ceil(daysUntil(today, deadline) / 30.4375));
 }
 
+/** Share of what is left for goals without a date, by priority. */
+const UNDATED_WEIGHT = { 1: 3, 2: 2, 3: 1 } as const;
+
 /**
- * Splits the monthly surplus (ARS) between goals that are not done yet. Goals
- * with a date get what they need first, in order of date; if it does not
- * reach, each gets its share of the surplus and a realistic date. What is left
- * after that goes in equal parts to goals without a date.
+ * Splits the monthly surplus (ARS) between goals that are not done yet, by
+ * priority (1 alta → 3 baja). Within a priority, goals with a date get what
+ * they need; if it does not reach, each gets its share and a realistic date,
+ * and lower priorities get nothing. What is left after every dated goal goes
+ * to goals without a date, weighted 3/2/1 by priority.
  */
 export function goalPlan(
   goals: Goal[],
@@ -50,7 +54,6 @@ export function goalPlan(
   rates: Rates,
 ): GoalLine[] {
   const current = today.slice(0, 7);
-  const surplus = Math.max(0, surplusArs);
   const open = goals
     .filter((g) => g.active && g.target > g.saved)
     .map((goal) => {
@@ -61,23 +64,32 @@ export function goalPlan(
       const neededArs = months > 0 ? round0(leftArs / months) : 0;
       return { goal, rate, leftArs, months, neededArs };
     });
-  const dated = open.filter((g) => g.months > 0);
+  let remaining = Math.max(0, surplusArs);
+  const share = new Map<string, number>();
+  for (const tier of [1, 2, 3] as const) {
+    const group = open.filter((g) => g.months > 0 && g.goal.priority === tier);
+    if (!group.length) continue;
+    const need = group.reduce((s, g) => s + g.neededArs, 0);
+    if (remaining >= need) {
+      for (const g of group) share.set(g.goal.id, g.neededArs);
+      remaining -= need;
+    } else {
+      for (const g of group)
+        share.set(g.goal.id, need > 0 ? round0((remaining * g.neededArs) / need) : 0);
+      remaining = 0;
+    }
+  }
   const undated = open.filter((g) => g.months === 0);
-  const totalNeeded = dated.reduce((s, g) => s + g.neededArs, 0);
-  const enough = surplus >= totalNeeded;
-  const spare = enough ? surplus - totalNeeded : 0;
+  const weights = undated.reduce((s, g) => s + UNDATED_WEIGHT[g.goal.priority], 0);
+  for (const g of undated) {
+    share.set(
+      g.goal.id,
+      weights > 0 ? round0((remaining * UNDATED_WEIGHT[g.goal.priority]) / weights) : 0,
+    );
+  }
   return open
     .map((g) => {
-      const assignedArs =
-        g.months > 0
-          ? enough
-            ? g.neededArs
-            : totalNeeded > 0
-              ? round0((surplus * g.neededArs) / totalNeeded)
-              : 0
-          : undated.length
-            ? round0(spare / undated.length)
-            : 0;
+      const assignedArs = share.get(g.goal.id) ?? 0;
       const toGo = assignedArs > 0 ? Math.ceil(g.leftArs / assignedArs - 1e-9) : 0;
       const onTrack = g.months > 0 ? assignedArs >= g.neededArs - 1 : null;
       const eta = onTrack ? g.goal.deadline.slice(0, 7) : toGo > 0 ? addMonths(current, toGo) : "";
@@ -96,5 +108,9 @@ export function goalPlan(
         usdHint: g.goal.currency === "ARS" && horizon > 6,
       };
     })
-    .sort((a, b) => (a.goal.deadline || "9999").localeCompare(b.goal.deadline || "9999"));
+    .sort(
+      (a, b) =>
+        a.goal.priority - b.goal.priority ||
+        (a.goal.deadline || "9999").localeCompare(b.goal.deadline || "9999"),
+    );
 }

@@ -286,6 +286,7 @@ const goal = (extra: Partial<Goal>): Goal => ({
   target: 2000,
   saved: 500,
   deadline: "2027-04-08",
+  priority: 2,
   active: true,
   createdAt: "",
   updatedAt: "",

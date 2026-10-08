@@ -2,6 +2,20 @@ import type { Currency } from "./types";
 
 export type GoalKind = "ahorro" | "viaje" | "bien" | "inversion";
 
+/** 1 alta, 2 media, 3 baja. The surplus goes to higher ones first. */
+export type GoalPriority = 1 | 2 | 3;
+
+export const GOAL_PRIORITIES: { id: GoalPriority; label: string }[] = [
+  { id: 1, label: "Alta" },
+  { id: 2, label: "Media" },
+  { id: 3, label: "Baja" },
+];
+
+export function parsePriority(raw: unknown): GoalPriority {
+  const n = Number(raw);
+  return n === 1 || n === 3 ? n : 2;
+}
+
 export type Goal = {
   id: string;
   bookId: string;
@@ -12,6 +26,7 @@ export type Goal = {
   saved: number;
   /** YYYY-MM-DD, or empty when there is no date. */
   deadline: string;
+  priority: GoalPriority;
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -74,6 +89,7 @@ export function parseGoals(raw: unknown): Goal[] {
       target: roundGoal(Number(g.target), currency),
       saved: roundGoal(Number(g.saved), currency),
       deadline: /^\d{4}-\d{2}-\d{2}$/.test(String(g.deadline ?? "")) ? String(g.deadline) : "",
+      priority: parsePriority(g.priority),
       active: g.active !== false,
       createdAt: String(g.createdAt ?? ""),
       updatedAt: String(g.updatedAt ?? g.createdAt ?? ""),
