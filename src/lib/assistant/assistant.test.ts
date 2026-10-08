@@ -15,7 +15,7 @@ import {
   toolGuide,
   type ModelCall,
 } from "./run.ts";
-import { runTool, ToolRun, type AssistantData } from "./tools.ts";
+import { goalsVerdict, runTool, ToolRun, type AssistantData } from "./tools.ts";
 import { answerBlocks } from "./blocks.ts";
 
 const today = "2026-10-08";
@@ -924,6 +924,54 @@ describe("easy to read on the phone", () => {
       "the first call does not know the tool yet",
     );
     assert.match(sys(1), /la cuota, la primera, la última/);
+  });
+
+  it("metas: Cifra writes the verdict, the model only repeats it", () => {
+    assert.equal(goalsVerdict([true, true]), "llegás a tiempo con todas tus metas");
+    assert.equal(goalsVerdict([true]), "llegás a tiempo con tu meta");
+    assert.equal(goalsVerdict([false, false]), "no llegás a tiempo con ninguna de tus metas");
+    assert.equal(goalsVerdict([false]), "no llegás a tiempo con tu meta");
+    assert.equal(
+      goalsVerdict([false, true, null]),
+      "no llegás a tiempo con 1 de tus 2 metas con fecha",
+    );
+    assert.match(goalsVerdict([null]), /no tienen fecha/);
+    // The 5th real test (oct 8): "Sí llegás…" when no goal arrived on time.
+    const r = runTool(new ToolRun(tight()), "metas", {});
+    assert.equal(r.valores[String(r.data.conclusion)], "no llegás a tiempo con tu meta");
+    assert.match(r.summary, /^No llegás a tiempo con tu meta\. /);
+    assert.match(chipById("metas")!.guide!, /id de conclusion tal cual/);
+    assert.match(chipById("metas")!.guide!, /por mes/);
+  });
+
+  it("chips do not carry earlier turns (a simulated purchase confused the metas chip)", async () => {
+    const m = fake([responder({ texto: "Listo.", propuestas: [], seguir: [] })]);
+    await runAssistant({
+      data: data(),
+      message: "¿Llego con mis metas?",
+      chip: chipById("metas"),
+      history: [
+        { role: "user", content: "¿y si compro una tele de 600 mil en 12 cuotas?" },
+        { role: "assistant", content: "Entrás sin problema." },
+      ],
+      call: m.call,
+    });
+    const msgs = m.bodies[0]!.messages as { role: string; content?: string }[];
+    assert.deepEqual(
+      msgs.map((x) => x.role),
+      ["system", "user", "assistant", "tool"],
+    );
+    assert.doesNotMatch(JSON.stringify(msgs), /tele/);
+    // Free text still gets them.
+    const f = fake([responder({ texto: "Listo.", propuestas: [], seguir: [] })]);
+    await runAssistant({
+      data: data(),
+      message: "¿y en 6?",
+      chip: null,
+      history: [{ role: "user", content: "¿y si compro una tele de 600 mil en 12 cuotas?" }],
+      call: f.call,
+    });
+    assert.match(JSON.stringify(f.bodies[0]!.messages), /tele/);
   });
 
   it("metas and informe guides: no 'no;' rows, one line for the plan", () => {

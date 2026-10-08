@@ -5,11 +5,11 @@
  * Vercel sets VERCEL_ENV to "production", "preview" or "development" on its
  * builds (unset elsewhere: local, GitHub Actions without `vercel build`).
  *
- * - Migrations: only production builds touch the database. Today Preview
- *   shares DATABASE_URL with Production, so a preview (any open PR) running
- *   its migrations would change the real database before anyone approved the
- *   PR. Once Preview has its own database (Neon branch), set
- *   MIGRATE_ON_PREVIEW=1 in the Preview environment to migrate it too.
+ * - Migrations: only production builds touch the database. Preview has its
+ *   own database (Neon project "cifra-preview", separate from Production's;
+ *   checked on 8 oct 2026), but previews still skip migrations unless
+ *   MIGRATE_ON_PREVIEW=1 is set in the Preview environment, so the preview
+ *   database can lack the newest tables (e.g. ai_call_log).
  * - Tests: production builds run the unit tests first; a failing test fails
  *   the build, and Vercel keeps serving the previous deployment.
  */
