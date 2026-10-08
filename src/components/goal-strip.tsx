@@ -1,11 +1,11 @@
 import { Link } from "@tanstack/react-router";
 import { GOAL_KINDS, goalPace } from "@/lib/goals";
 import { money } from "@/lib/format";
-import { useLedger } from "@/lib/store";
+import { useBookGoals } from "@/lib/store";
 import { todayISO } from "@/lib/utils";
 
 export function GoalStrip() {
-  const goals = useLedger((s) => s.goals.filter((g) => g.bookId === s.activeBookId && g.active));
+  const goals = useBookGoals();
   const today = todayISO();
   if (!goals.length) return null;
 

@@ -1,0 +1,332 @@
+{
+ "visa-galicia": {
+  "closingDate": "2026-09-24",
+  "dueDate": "2026-10-06",
+  "nextClosingDate": "2026-10-22",
+  "nextDueDate": "2026-11-04",
+  "totalArs": 150014.6,
+  "totalUsd": 14.49,
+  "minimumArs": 41000.0,
+  "previousArs": 210000.0,
+  "previousUsd": 15.0,
+  "paymentsArs": 210000.0,
+  "paymentsUsd": 15.0,
+  "lines": [
+   {
+    "date": "2026-08-28",
+    "description": "COTO SUC 123",
+    "installmentNo": null,
+    "installmentCount": null,
+    "currency": "ARS",
+    "amount": 45300.5,
+    "kind": "purchase",
+    "categoryId": "alimentos"
+   },
+   {
+    "date": "2026-09-02",
+    "description": "FRAVEGA ONLINE",
+    "installmentNo": 3,
+    "installmentCount": 12,
+    "currency": "ARS",
+    "amount": 50000.0,
+    "kind": "purchase",
+    "categoryId": "compras"
+   },
+   {
+    "date": "2026-09-05",
+    "description": "YPF SERVICLUB 0042",
+    "installmentNo": null,
+    "installmentCount": null,
+    "currency": "ARS",
+    "amount": 38250.0,
+    "kind": "purchase",
+    "categoryId": "transporte"
+   },
+   {
+    "date": "2026-09-11",
+    "description": "NETFLIX.COM",
+    "installmentNo": null,
+    "installmentCount": null,
+    "currency": "USD",
+    "amount": 9.99,
+    "kind": "purchase",
+    "categoryId": "suscripciones"
+   },
+   {
+    "date": "2026-09-15",
+    "description": "SPOTIFY P1A2B3",
+    "installmentNo": null,
+    "installmentCount": null,
+    "currency": "USD",
+    "amount": 4.5,
+    "kind": "purchase",
+    "categoryId": "suscripciones"
+   },
+   {
+    "date": "2026-09-18",
+    "description": "FARMACITY 221",
+    "installmentNo": null,
+    "installmentCount": null,
+    "currency": "ARS",
+    "amount": 12890.0,
+    "kind": "purchase",
+    "categoryId": "salud"
+   },
+   {
+    "date": "2026-09-20",
+    "description": "DEVOLUCION FARMACITY 221",
+    "installmentNo": null,
+    "installmentCount": null,
+    "currency": "ARS",
+    "amount": 2000.0,
+    "kind": "refund",
+    "categoryId": "salud"
+   },
+   {
+    "date": "2026-09-24",
+    "description": "IMPUESTO DE SELLOS",
+    "installmentNo": null,
+    "installmentCount": null,
+    "currency": "ARS",
+    "amount": 1450.3,
+    "kind": "charge",
+    "categoryId": "impuestos"
+   },
+   {
+    "date": "2026-09-24",
+    "description": "IVA RG 4240 21% SERV DIGITALES",
+    "installmentNo": null,
+    "installmentCount": null,
+    "currency": "ARS",
+    "amount": 4123.8,
+    "kind": "charge",
+    "categoryId": "impuestos"
+   }
+  ]
+ },
+ "mastercard-santander": {
+  "closingDate": "2026-09-26",
+  "dueDate": "2026-10-08",
+  "nextClosingDate": "2026-10-29",
+  "nextDueDate": "2026-11-10",
+  "totalArs": 207911.55,
+  "totalUsd": 35.2,
+  "minimumArs": 18800.0,
+  "previousArs": 98500.0,
+  "previousUsd": 0.0,
+  "paymentsArs": 98500.0,
+  "paymentsUsd": 0.0,
+  "lines": [
+   {
+    "date": "2026-04-14",
+    "description": "GARBARINO SA",
+    "installmentNo": 6,
+    "installmentCount": 6,
+    "currency": "ARS",
+    "amount": 22000.0,
+    "kind": "purchase",
+    "categoryId": "compras"
+   },
+   {
+    "date": "2026-09-01",
+    "description": "MERPAGO*RAPPI",
+    "installmentNo": null,
+    "installmentCount": null,
+    "currency": "ARS",
+    "amount": 18760.4,
+    "kind": "purchase",
+    "categoryId": "alimentos"
+   },
+   {
+    "date": "2026-09-03",
+    "description": "SUBE RECARGA",
+    "installmentNo": null,
+    "installmentCount": null,
+    "currency": "ARS",
+    "amount": 10000.0,
+    "kind": "purchase",
+    "categoryId": "transporte"
+   },
+   {
+    "date": "2026-09-09",
+    "description": "CARREFOUR HIPER 77",
+    "installmentNo": null,
+    "installmentCount": null,
+    "currency": "ARS",
+    "amount": 67432.15,
+    "kind": "purchase",
+    "categoryId": "alimentos"
+   },
+   {
+    "date": "2026-09-12",
+    "description": "AMAZON MKTPLACE",
+    "installmentNo": null,
+    "installmentCount": null,
+    "currency": "USD",
+    "amount": 35.2,
+    "kind": "purchase",
+    "categoryId": "compras"
+   },
+   {
+    "date": "2026-09-21",
+    "description": "OSDE BINARIO",
+    "installmentNo": null,
+    "installmentCount": null,
+    "currency": "ARS",
+    "amount": 85000.0,
+    "kind": "purchase",
+    "categoryId": "salud"
+   },
+   {
+    "date": "2026-09-26",
+    "description": "COMISION MANTENIMIENTO CUENTA",
+    "installmentNo": null,
+    "installmentCount": null,
+    "currency": "ARS",
+    "amount": 3900.0,
+    "kind": "charge",
+    "categoryId": "impuestos"
+   },
+   {
+    "date": "2026-09-26",
+    "description": "IVA 21%",
+    "installmentNo": null,
+    "installmentCount": null,
+    "currency": "ARS",
+    "amount": 819.0,
+    "kind": "charge",
+    "categoryId": "impuestos"
+   }
+  ]
+ },
+ "amex-galicia": {
+  "closingDate": "2026-09-25",
+  "dueDate": "2026-10-07",
+  "nextClosingDate": "2026-10-23",
+  "nextDueDate": "2026-11-05",
+  "totalArs": 237179.12,
+  "totalUsd": 210.0,
+  "minimumArs": 9500.0,
+  "previousArs": 45000.0,
+  "previousUsd": 120.0,
+  "paymentsArs": 45000.0,
+  "paymentsUsd": 120.0,
+  "lines": [
+   {
+    "date": "2026-07-30",
+    "description": "MUSIMUNDO PALERMO",
+    "installmentNo": 3,
+    "installmentCount": 6,
+    "currency": "ARS",
+    "amount": 31666.67,
+    "kind": "purchase",
+    "categoryId": "compras"
+   },
+   {
+    "date": "2026-09-04",
+    "description": "AEROLINEAS ARG",
+    "installmentNo": null,
+    "installmentCount": null,
+    "currency": "ARS",
+    "amount": 154300.0,
+    "kind": "purchase",
+    "categoryId": "ocio"
+   },
+   {
+    "date": "2026-09-10",
+    "description": "HOTEL MIRADOR BRC",
+    "installmentNo": null,
+    "installmentCount": null,
+    "currency": "USD",
+    "amount": 210.0,
+    "kind": "purchase",
+    "categoryId": "ocio"
+   },
+   {
+    "date": "2026-09-17",
+    "description": "LA PARRILLA DE TOTO",
+    "installmentNo": null,
+    "installmentCount": null,
+    "currency": "ARS",
+    "amount": 48900.0,
+    "kind": "purchase",
+    "categoryId": "alimentos"
+   },
+   {
+    "date": "2026-09-25",
+    "description": "INTERESES FINANCIACION",
+    "installmentNo": null,
+    "installmentCount": null,
+    "currency": "ARS",
+    "amount": 2312.45,
+    "kind": "charge",
+    "categoryId": "impuestos"
+   }
+  ]
+ },
+ "visa-nacion": {
+  "closingDate": "2026-09-23",
+  "dueDate": "2026-10-05",
+  "nextClosingDate": "2026-10-21",
+  "nextDueDate": "2026-11-02",
+  "totalArs": 102965.66,
+  "totalUsd": 0.0,
+  "minimumArs": 15000.0,
+  "previousArs": 60000.0,
+  "previousUsd": 0.0,
+  "paymentsArs": 30000.0,
+  "paymentsUsd": 0.0,
+  "lines": [
+   {
+    "date": "2026-06-10",
+    "description": "MERCADOLIBRE*ELECTRO",
+    "installmentNo": 4,
+    "installmentCount": 9,
+    "currency": "ARS",
+    "amount": 15555.56,
+    "kind": "purchase",
+    "categoryId": "compras"
+   },
+   {
+    "date": "2026-09-06",
+    "description": "DIA TIENDA 1820",
+    "installmentNo": null,
+    "installmentCount": null,
+    "currency": "ARS",
+    "amount": 23410.0,
+    "kind": "purchase",
+    "categoryId": "alimentos"
+   },
+   {
+    "date": "2026-09-14",
+    "description": "EDENOR DEBITO AUTOM",
+    "installmentNo": null,
+    "installmentCount": null,
+    "currency": "ARS",
+    "amount": 28700.0,
+    "kind": "purchase",
+    "categoryId": "servicios"
+   },
+   {
+    "date": "2026-09-23",
+    "description": "INTERESES DE FINANCIACION",
+    "installmentNo": null,
+    "installmentCount": null,
+    "currency": "ARS",
+    "amount": 4380.25,
+    "kind": "charge",
+    "categoryId": "impuestos"
+   },
+   {
+    "date": "2026-09-23",
+    "description": "IVA S/INTERESES 21%",
+    "installmentNo": null,
+    "installmentCount": null,
+    "currency": "ARS",
+    "amount": 919.85,
+    "kind": "charge",
+    "categoryId": "impuestos"
+   }
+  ]
+ }
+}
