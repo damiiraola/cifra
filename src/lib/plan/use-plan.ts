@@ -24,6 +24,8 @@ import { goalPlan } from "./goal-plan";
 import { planAlerts } from "./alerts";
 import { committedByCategory, suggestBudgets } from "./budgets";
 import { monthPlan, planLevers } from "./month-plan";
+import { cardDebts, compareDebtPlans, suggestedDebtBudget } from "./debt";
+import { simulate, type Scenario } from "./simulate";
 
 /** Everything the planner needs, from the store, for the active book. */
 export function usePlanData(): PlanData {
@@ -122,4 +124,35 @@ export function useMonthPlan() {
     });
     return { plan, suggestion, levers, hasHistory: flow.history.months.length > 0 };
   }, [data, flow, surplus, lines, goals, cats]);
+}
+
+/** Card debts, a suggested monthly budget and avalancha vs bola de nieve vs mínimo. */
+export function useDebtPlan(budget: number | null) {
+  const { data, surplus } = usePlan(6);
+  const debts = useMemo(
+    () =>
+      cardDebts({
+        today: data.today,
+        cards: data.cards,
+        txs: data.txs,
+        statements: data.statements,
+        accounts: data.accounts,
+        usdRate: data.rates.usd,
+      }),
+    [data],
+  );
+  return useMemo(() => {
+    const suggested = suggestedDebtBudget(debts, data.today, surplus);
+    const comparison = debts.length
+      ? compareDebtPlans(debts, budget != null && budget > 0 ? budget : suggested, data.today)
+      : null;
+    return { debts, suggested, comparison, today: data.today };
+  }, [debts, data.today, surplus, budget]);
+}
+
+/** "¿Y si…?": the plan with and without the scenario. Nothing is saved. */
+export function useSimulation(scenario: Scenario | null) {
+  const data = usePlanData();
+  const goals = useBookGoals();
+  return useMemo(() => (scenario ? simulate(data, goals, scenario, 6) : null), [data, goals, scenario]);
 }
