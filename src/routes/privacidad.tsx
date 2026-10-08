@@ -108,7 +108,11 @@ function Privacidad() {
               metas. No recibe la lista de tus movimientos, ni comercios, ni notas. Con un resumen de
               tarjeta recibe solo las líneas de consumos y los totales de ese resumen, sin tu nombre, domicilio, CUIT,
               mail ni número de tarjeta. Nunca le mandamos tu mail. Le pedimos que solo use proveedores que no
-              entrenan sus modelos con lo que mandás, y el Gateway no guarda las preguntas.
+              entrenan sus modelos con lo que mandás, y el Gateway no guarda las preguntas. De cada
+              llamada guardamos solo cuánto costó (modelo, proveedor, cantidad de tokens, costo estimado,
+              tiempo de respuesta y si salió bien), para no pasarnos del tope gratis del día. Nunca guardamos
+              lo que escribiste ni lo que respondió. Esos registros se borran a los 90 días, y al borrar la
+              cuenta dejan de estar asociados a tu usuario.
             </li>
             {ai.groq ? (
               <li>

@@ -182,7 +182,8 @@ export function Asistente() {
 
       <p className="max-w-xl text-sm text-muted">
         Cifra hace las cuentas con tus tarjetas, metas y plan, y el asistente te las explica en criollo. Si
-        propone un cambio, lo aplicás vos con un botón.{" "}
+        propone un cambio, lo aplicás vos con un botón. Si el asistente no está disponible o ya
+        usaste el tope del día, te muestra los números de Cifra igual.{" "}
         <Link to="/aprender" className="underline-offset-4 hover:underline">
           Si nunca anotaste la plata, empezá por Aprender.
         </Link>

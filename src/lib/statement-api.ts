@@ -1,7 +1,16 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { getSql } from "@/lib/db";
-import { callProvider, providersForRequest, refundPdfQuota, takePdfQuota } from "@/lib/ai-call";
+import {
+  callProvider,
+  globalAiCapReached,
+  providersForRequest,
+  recordAiCalls,
+  refundPdfQuota,
+  takePdfQuota,
+  type AiTrack,
+} from "@/lib/ai-call";
+import { PDF_GLOBAL_CAP, capLog } from "@/lib/ai-cost";
 import { AI_UNAVAILABLE, failureMessage, statementBody, type Failure } from "@/lib/ai-provider";
 import {
   amountInText,
@@ -77,6 +86,10 @@ export const readStatementPdf = createServerFn({ method: "POST" })
 
     const providers = await providersForRequest();
     if (!providers.length) return { ok: false, error: AI_UNAVAILABLE };
+    if (await globalAiCapReached()) {
+      await recordAiCalls(context.userId, [capLog("pdf")]);
+      return { ok: false, error: PDF_GLOBAL_CAP };
+    }
     const quota = await takePdfQuota(context.userId, PDF_AI_UNITS);
     if (!quota.ok) return { ok: false, error: quota.error };
 
@@ -87,19 +100,23 @@ export const readStatementPdf = createServerFn({ method: "POST" })
     ];
     const schema = statementSchema(categoryIds);
     const deadline = Date.now() + PDF_AI_MS;
+    const track: AiTrack = { kind: "pdf", logs: [] };
     let last: Failure | null = null;
     for (const [i, p] of providers.entries()) {
       const until = i < providers.length - 1 ? Math.min(deadline, Date.now() + 40_000) : deadline;
-      const r = await callProvider(p, statementBody(p, messages, schema), until);
+      const r = await callProvider(p, statementBody(p, messages, schema), until, track);
       if (!r.ok) {
         last = r.failure;
         continue;
       }
       const statement = parseModelStatement(r.text, categoryIds);
       if (!statement || !statement.lines.length) {
+        const lastCall = track.logs[track.logs.length - 1];
+        if (lastCall) lastCall.result = "error";
         last = "other";
         continue;
       }
+      await recordAiCalls(context.userId, track.logs);
       return {
         ok: true,
         statement,
@@ -109,6 +126,7 @@ export const readStatementPdf = createServerFn({ method: "POST" })
         droppedLines,
       };
     }
+    await recordAiCalls(context.userId, track.logs);
     await refundPdfQuota(context.userId, PDF_AI_UNITS);
     return {
       ok: false,

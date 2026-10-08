@@ -52,6 +52,7 @@ Variables de entorno (no se commitean). En Vercel se cargan en Project → Setti
 | `AI_MODEL` | servidor | **opcional**. Modelo del Gateway (default `spacexai/grok-4.1-fast-non-reasoning`, del plan gratis) |
 | `GROQ_API_KEY` / `GROQ_MODEL` | servidor | **opcional**. Respaldo en Groq si el Gateway falla (default `openai/gpt-oss-120b`) |
 | `AI_DAILY_LIMIT` | servidor | **opcional**. Preguntas por usuario por día (default 30; `0` apaga el asistente) |
+| `AI_GLOBAL_DAILY_USD` | servidor | **opcional**. Tope diario de IA de toda la app en USD (default 0.12, máximo 0.16 para no pasar el crédito gratis de US$ 5 cada 30 días; `0` apaga la IA). El gasto se ve en `/costos` (solo el dueño) |
 | `VITE_AUTH_ENABLED` | build | `true` en producción |
 | `RESEND_API_KEY` | servidor | mails (confirmar cuenta + olvidé clave) |
 | `MAIL_FROM` | servidor | `Cifra <hola@cifra.lol>` cuando el dominio está verificado en Resend |

@@ -7,6 +7,11 @@ import { getSql } from "@/lib/db";
 import { aiDailyLimit, aiLimitMessage, aiUsageDay, pdfLimitMessage } from "@/lib/ai-limit";
 import { aiProviders, classifyFailure, responseText, type AiProvider, type Failure } from "@/lib/ai-provider";
 import { PDF_DAILY_LIMIT } from "@/lib/statement-import";
+import { aiGlobalDailyUsd, callLog, type AiCallLog, type AiKind } from "@/lib/ai-cost";
+import { insertCallLogs, purgeCallLog, spentSince } from "@/lib/ai-cost-db";
+
+/** Where one request's calls are collected (metadata only), to be saved with recordAiCalls. */
+export type AiTrack = { kind: AiKind; logs: AiCallLog[] };
 
 function isAbort(err: unknown) {
   const name = err instanceof Error ? err.name : "";
@@ -23,9 +28,21 @@ export async function callProviderJson(
   p: AiProvider,
   body: Record<string, unknown>,
   deadline: number,
+  track?: AiTrack,
 ): Promise<{ ok: true; body: unknown } | { ok: false; failure: Failure }> {
   const ms = deadline - Date.now();
   if (ms < 1500) return { ok: false, failure: "timeout" };
+  const started = Date.now();
+  const r = await fetchJson(p, body, ms);
+  track?.logs.push(callLog(track.kind, p, r, Date.now() - started));
+  return r;
+}
+
+async function fetchJson(
+  p: AiProvider,
+  body: Record<string, unknown>,
+  ms: number,
+): Promise<{ ok: true; body: unknown } | { ok: false; failure: Failure }> {
   try {
     const res = await fetch(p.url, {
       method: "POST",
@@ -54,30 +71,53 @@ export async function callProvider(
   p: AiProvider,
   body: Record<string, unknown>,
   deadline: number,
+  track?: AiTrack,
 ): Promise<{ ok: true; text: string } | { ok: false; failure: Failure }> {
   const ms = deadline - Date.now();
   if (ms < 1500) return { ok: false, failure: "timeout" };
-  try {
-    const res = await fetch(p.url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${p.token}` },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(ms),
-    });
-    if (!res.ok) {
-      const detail = (await res.text().catch(() => "")).slice(0, 300);
-      const failure = classifyFailure(res.status, detail);
-      console.warn(`[ai] ${p.id} (${p.auth ?? "key"}) ${p.model}: HTTP ${res.status} → ${failure}`);
-      return { ok: false, failure };
-    }
-    const text = responseText(await res.json().catch(() => null));
-    if (!text.trim()) return { ok: false, failure: "other" };
-    return { ok: true, text };
-  } catch (err) {
-    const failure: Failure = isAbort(err) ? "timeout" : "other";
-    console.warn(`[ai] ${p.id} ${p.model}: ${failure}`);
-    return { ok: false, failure };
+  const started = Date.now();
+  const r = await fetchJson(p, body, ms);
+  track?.logs.push(callLog(track.kind, p, r, Date.now() - started));
+  if (!r.ok) return r;
+  const text = responseText(r.body);
+  if (!text.trim()) {
+    const last = track?.logs[track.logs.length - 1];
+    if (last) last.result = "error";
+    return { ok: false, failure: "other" };
   }
+  return { ok: true, text };
+}
+
+/**
+ * Whether the global daily cap (AI_GLOBAL_DAILY_USD, see ai-cost.ts) is
+ * reached. Checked before every AI request, before the user's own units.
+ * If the log can't be read, it says "reached" (fail closed).
+ */
+export async function globalAiCapReached(): Promise<boolean> {
+  const cap = aiGlobalDailyUsd(process.env.AI_GLOBAL_DAILY_USD);
+  if (cap <= 0) return true;
+  try {
+    return (await spentSince(await getSql(), aiUsageDay())) >= cap;
+  } catch (err) {
+    // Can't read today's spend: stop rather than spend blind (the assistant still answers with the template).
+    console.warn(`[ai] cost cap check: ${err instanceof Error ? err.name : "error"}`);
+    return true;
+  }
+}
+
+/** Save one request's calls (metadata only). Never throws: the answer matters more. */
+export async function recordAiCalls(userId: string | null, logs: AiCallLog[]) {
+  if (!logs.length) return;
+  try {
+    await insertCallLogs(await getSql(), userId, aiUsageDay(), logs);
+  } catch (err) {
+    console.warn(`[ai] cost log: ${err instanceof Error ? err.name : "error"}`);
+  }
+}
+
+/** Retention: drop log rows older than AI_LOG_DAYS (daily cron). */
+export async function purgeAiCallLog(): Promise<number> {
+  return purgeCallLog(await getSql(), aiUsageDay());
 }
 
 /**
