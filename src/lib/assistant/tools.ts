@@ -372,6 +372,26 @@ function proximos(run: ToolRun, args: Record<string, unknown>): ToolResult {
   };
 }
 
+/**
+ * The one-line answer to "¿Llego con mis metas?", from each goal's onTrack
+ * (true / false / null = no date).
+ */
+export function goalsVerdict(onTrack: (boolean | null)[]): string {
+  const dated = onTrack.filter((x) => x !== null);
+  const late = dated.filter((x) => x === false).length;
+  if (!dated.length) return "tus metas no tienen fecha, así que no hay un plazo que cumplir";
+  if (!late)
+    return dated.length === 1
+      ? "llegás a tiempo con tu meta"
+      : "llegás a tiempo con todas tus metas";
+  if (late === dated.length) {
+    return dated.length === 1
+      ? "no llegás a tiempo con tu meta"
+      : "no llegás a tiempo con ninguna de tus metas";
+  }
+  return `no llegás a tiempo con ${late} de tus ${dated.length} metas con fecha`;
+}
+
 function metas(run: ToolRun): ToolResult {
   const d = run.data;
   const f = run.facts;
@@ -424,14 +444,22 @@ function metas(run: ToolRun): ToolResult {
         : {}),
     };
   });
+  const verdict = goalsVerdict(lines.map((l) => l.onTrack));
   return {
-    data: { ...signed(f, surplus, "sobrante_por_mes", "falta_por_mes"), metas: out },
+    data: {
+      // The model must not decide "sí llegás" on its own: Cifra says it.
+      conclusion: f.label(verdict),
+      ...signed(f, surplus, "sobrante_por_mes", "falta_por_mes"),
+      metas: out,
+    },
     summary: textLines([
-      surplus > 0
-        ? `Te sobran unos ${ars(surplus)} por mes para metas.`
-        : surplus < 0
-          ? `Hoy no te sobra nada para metas: faltan ${ars(-surplus)} por mes.`
-          : "Hoy no te sobra nada para metas.",
+      `${verdict.charAt(0).toUpperCase()}${verdict.slice(1)}. ${
+        surplus > 0
+          ? `Te sobran unos ${ars(surplus)} por mes para metas.`
+          : surplus < 0
+            ? `Hoy no te sobra nada para metas: faltan ${ars(-surplus)} por mes.`
+            : "Hoy no te sobra nada para metas."
+      }`,
       ...parts,
     ]),
   };

@@ -56,7 +56,7 @@ export const CHIPS: Chip[] = [
     tools: [["metas", {}]],
     units: 1,
     guide:
-      'Formato: una frase con la conclusión y cuánto sobra por mes. Después una línea por meta, "- " más el nombre y dos puntos: "llega a tiempo", o "llegaría en" más el mes en que llegaría con lo que sobra y "; a tiempo necesita" más cuánto por mes. Si no le toca nada de lo que sobra, decilo así. Sin "no;" ni fechas sueltas.',
+      'Formato: arrancá con el id de conclusion tal cual (no digas otra cosa sobre si llega o no) y cuánto sobra por mes, sin mezclar compras que se simularon antes. Después una línea por meta, "- " más el nombre y dos puntos: "llega a tiempo", o "llegaría en" más el mes en que llegaría con lo que sobra y "; a tiempo necesita" más el id y "por mes". Si no le toca nada de lo que sobra, decilo así. Sin "no;" ni fechas sueltas.',
   },
   {
     id: "gasto",
@@ -173,7 +173,9 @@ export async function runAssistant(input: {
   const guide = input.chip?.guide ? `\n${input.chip.guide}` : "";
   const base: LlmMessage[] = [
     { role: "system", content: systemPrompt(input.data.plan.today) + guide },
-    ...historyMessages(input.history),
+    // A chip is a fixed question with fixed tools: earlier turns (a simulated
+    // purchase, say) only confuse it ("sobran $ X después de la tele").
+    ...(input.chip ? [] : historyMessages(input.history)),
     { role: "user", content: input.message.slice(0, 600) },
   ];
 

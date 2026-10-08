@@ -11,7 +11,7 @@
  *
  * No DATABASE_URL (local builds) -> skip; the PGLite fallback applies the same
  * files at startup instead (see src/lib/db.ts). Vercel Preview builds also
- * skip (they share the production DATABASE_URL) unless MIGRATE_ON_PREVIEW=1 —
+ * skip (they have their own database, not migrated) unless MIGRATE_ON_PREVIEW=1 —
  * see ./deploy-policy.mjs.
  */
 import { readdir, readFile } from "node:fs/promises";
@@ -22,7 +22,7 @@ import { pendingMigrations } from "./migration-plan.mjs";
 import { migrationDecision } from "./deploy-policy.mjs";
 
 const databaseUrl = process.env.DATABASE_URL;
-// Production only on Vercel (previews share the production database today).
+// Production only on Vercel (previews use their own database; see deploy-policy.mjs).
 const decision = migrationDecision(process.env);
 if (!decision.run) {
   console.log(`[migrate] ${decision.reason}`);
