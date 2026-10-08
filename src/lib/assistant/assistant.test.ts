@@ -12,6 +12,7 @@ import {
   cleanAssistantInput,
   retryWhenBusy,
   runAssistant,
+  toolGuide,
   type ModelCall,
 } from "./run.ts";
 import { runTool, ToolRun, type AssistantData } from "./tools.ts";
@@ -848,7 +849,7 @@ describe("easy to read on the phone", () => {
   it("blocks: 'Etiqueta: valor.' sentences in one paragraph become rows", () => {
     assert.deepEqual(
       answerBlocks(
-        "Podés comprarla en 12 cuotas sin interés. Cuota: $ 50.000. Primera: noviembre 2026. Total: $ 600.000. Visa Galicia queda con $ 363.000 libre. Cambia 1 meta.",
+        "Podés comprarla en 12 cuotas sin interés. Cuota: $ 50.000. Primera: noviembre 2026. La tarjeta queda bien. Cambia una meta.",
       ),
       [
         { kind: "p", text: "Podés comprarla en 12 cuotas sin interés." },
@@ -857,10 +858,9 @@ describe("easy to read on the phone", () => {
           items: [
             { label: "Cuota", value: "$ 50.000" },
             { label: "Primera", value: "noviembre 2026" },
-            { label: "Total", value: "$ 600.000" },
           ],
         },
-        { kind: "p", text: "Visa Galicia queda con $ 363.000 libre. Cambia 1 meta." },
+        { kind: "p", text: "La tarjeta queda bien. Cambia una meta." },
       ],
     );
     // One "X: y." alone, or a long label, stays text.
@@ -878,6 +878,58 @@ describe("easy to read on the phone", () => {
       label: "Plan",
       value: "no cierra, te faltan $ 515.722",
     });
+  });
+
+  it("blocks: a conclusion and 3+ sentences with numbers in one paragraph become a list", () => {
+    // What the model wrote for the tele in the 4th real test (oct 8).
+    const b = answerBlocks(
+      "Entra en el plan sin rojo. Cuota fija de $ 50.000 por 12 cuotas, total $ 600.000. Primera en noviembre 2026, última en octubre 2027. Sobrante baja de $ 81.500 a $ 31.500 por mes. Meta Bariloche pasa de mayo 2028 a octubre 2030. Te queda $ 363.000 libre en Visa Galicia. Mes más justo: octubre 2026, con $ 1.153.000 en cajas.",
+    );
+    assert.deepEqual(b[0], { kind: "p", text: "Entra en el plan sin rojo." });
+    assert.equal(b.length, 2);
+    const items = (b[1] as { kind: "list"; items: Record<string, string>[] }).items;
+    assert.equal(items.length, 6);
+    assert.deepEqual(items[0], { text: "Cuota fija de $ 50.000 por 12 cuotas, total $ 600.000" });
+    assert.deepEqual(items[5], {
+      label: "Mes más justo",
+      value: "octubre 2026, con $ 1.153.000 en cajas",
+    });
+    // Prose without many numbers stays a paragraph.
+    const prose = "Un tope es un límite. Cifra te avisa. Podés cambiarlo. Tiene 1 número.";
+    assert.deepEqual(answerBlocks(prose), [{ kind: "p", text: prose }]);
+  });
+
+  it("free text with a single tool: the second call gets that tool's layout", async () => {
+    assert.match(toolGuide(["simular"])!, /la cuota, la primera, la última/);
+    assert.equal(toolGuide(["metas"]), chipById("metas")!.guide);
+    assert.equal(toolGuide(["metas", "tarjetas"]), null);
+    assert.equal(toolGuide(["proximos"]), null);
+    for (const g of [toolGuide(["simular"])!]) assert.doesNotMatch(g, /\d/);
+    const m = fake([
+      calls([["simular", { tipo: "cuotas", monto: 600000, cuotas: 12 }]]),
+      responder({ texto: "Listo.", propuestas: [], seguir: [] }),
+    ]);
+    await runAssistant({
+      data: data(),
+      message: "¿y si compro una tele de 600 mil en 12?",
+      chip: null,
+      history: [],
+      call: m.call,
+    });
+    const sys = (i: number) =>
+      (m.bodies[i]!.messages as { role: string; content: string }[])[0]!.content;
+    assert.doesNotMatch(
+      sys(0),
+      /la cuota, la primera/,
+      "the first call does not know the tool yet",
+    );
+    assert.match(sys(1), /la cuota, la primera, la última/);
+  });
+
+  it("metas and informe guides: no 'no;' rows, one line for the plan", () => {
+    assert.match(chipById("metas")!.guide!, /llegaría en/);
+    assert.match(chipById("metas")!.guide!, /a tiempo necesita/);
+    assert.match(chipById("informe")!.guide!, /- Mes: no cierra, faltan/);
   });
 
   it("the prompt asks for real line breaks, and the guides for the goals total and 'llegaría'", () => {

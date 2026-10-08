@@ -56,7 +56,7 @@ export const CHIPS: Chip[] = [
     tools: [["metas", {}]],
     units: 1,
     guide:
-      "Formato: una frase con la conclusión y cuánto sobra por mes. Después una línea por meta: si llega a tiempo; si no, cuándo llegaría con lo que sobra y cuánto haría falta por mes para llegar a tiempo.",
+      'Formato: una frase con la conclusión y cuánto sobra por mes. Después una línea por meta, "- " más el nombre y dos puntos: "llega a tiempo", o "llegaría en" más el mes en que llegaría con lo que sobra y "; a tiempo necesita" más cuánto por mes. Si no le toca nada de lo que sobra, decilo así. Sin "no;" ni fechas sueltas.',
   },
   {
     id: "gasto",
@@ -87,9 +87,29 @@ export const CHIPS: Chip[] = [
     units: 2,
     maxTokens: 600,
     guide:
-      'Formato: una frase con la conclusión del mes. Después tres bloques cortos, cada uno con una línea que termina en ":" y una lista: "Este mes:" (entró, gastaste, si seguís así), "Plan:" (si cierra, y cuánto sobra o falta) y "Tarjetas:" (a pagar y vencimiento). Cada línea de cada lista en su propio renglón. Breve.',
+      'Formato: una frase con la conclusión del mes. Después tres bloques cortos, cada uno con una línea que termina en ":" y una lista: "Este mes:" (entró, gastaste, si seguís así), "Plan:" (una sola línea: "- Mes: cierra, sobran" o "- Mes: no cierra, faltan" más el id de sobra o falta) y "Tarjetas:" (a pagar y vencimiento). Cada línea de cada lista en su propio renglón. Breve.',
   },
 ];
+
+/**
+ * Free text has no chip: when the model asked for a single tool, the second
+ * call gets the layout for that tool (the same as its chip, or its own).
+ */
+const TOOL_GUIDES: Record<string, string> = {
+  simular:
+    'Formato: una frase corta con la conclusión (si entra en el plan o no, en palabras simples). Después una lista, una línea por dato con "- Etiqueta: " y el id: la cuota, la primera, la última, el total, lo que queda libre en la tarjeta, lo que sobra por mes (antes y después), cada meta que cambia y el mes más justo. Nada más.',
+};
+
+export function toolGuide(names: string[]): string | null {
+  const unique = [...new Set(names)];
+  if (unique.length !== 1) return null;
+  const name = unique[0]!;
+  return (
+    TOOL_GUIDES[name] ??
+    CHIPS.find((c) => c.tools.length === 1 && c.tools[0]![0] === name)?.guide ??
+    null
+  );
+}
 
 export function chipById(id: unknown): Chip | null {
   return CHIPS.find((c) => c.id === id) ?? null;
@@ -199,9 +219,13 @@ export async function runAssistant(input: {
     const r = runTool(run, c.name, c.args);
     return { id: c.id, name: c.name, args: c.args, result: { ...r.data, valores: r.valores } };
   });
+  const layout = toolGuide(ran.map((t) => t.name));
+  const withLayout: LlmMessage[] = layout
+    ? [{ role: "system", content: `${base[0]!.content}\n${layout}` }, ...base.slice(1)]
+    : base;
   modelCalls++;
   const second = await input.call((p) =>
-    toolBody(p, { messages: [...base, ...toolTurn(ran)], force: "responder" }),
+    toolBody(p, { messages: [...withLayout, ...toolTurn(ran)], force: "responder" }),
   );
   if (!second.ok) return done(templateAnswer(run, `modelo: ${second.failure}`));
   add(second.body);
