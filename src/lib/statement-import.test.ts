@@ -48,6 +48,7 @@ const card: Card = {
   accountUsdId: "visa-usd",
   payAccountId: "bank",
   usdPerceptionPct: 30,
+  tna: 0,
   archived: false,
 };
 
