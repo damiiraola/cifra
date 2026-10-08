@@ -1,13 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { AI_TIMEOUT, AI_UNAVAILABLE, aiStatus, askCifra } from "@/lib/ai";
-import { computeMonth, snapshotText } from "@/lib/analytics";
+import { askAssistant } from "@/lib/assistant/ask";
+import { CHIPS } from "@/lib/assistant/run";
 import { todayISO, uid } from "@/lib/utils";
-import { useLedger, useBookTxs, useBookAccounts, useBookCards, useBookPurchases, useAllCategories } from "@/lib/store";
-import { accountBalance, accountLabel } from "@/lib/books";
-import { recurringLines } from "@/lib/budget-math";
-import { wealthPlanText } from "@/lib/wealth-plan";
+import { useLedger, useAllCategories } from "@/lib/store";
+import { AssistantProposals } from "@/components/assistant-proposals";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
 import type { PayMethod, TxType, Currency } from "@/lib/types";
@@ -17,24 +16,12 @@ export const Route = createFileRoute("/_app/ia")({
   component: Asistente,
 });
 
-const SUGGESTIONS = [
-  "¿Dónde más estoy gastando este mes?",
-  "Armame un plan para recortar 20%",
-  "¿Me voy a pasar el presupuesto?",
-  "Armame el plan: ordenar el mes y, si sobra, el largo plazo",
-  "Compará alimentación vs el mes pasado",
-  "Gasté 15 mil en Coto con Mercado Pago",
-];
+const SUGGESTIONS = CHIPS.filter((c) => c.id !== "informe");
 
 const CLIENT_MS = 22_000;
 
 export function Asistente() {
   const {
-    viewMonth,
-    usdRate,
-    usdtRate,
-    budgets,
-    globalBudget,
     chat,
     chatThreads,
     activeChatId,
@@ -43,13 +30,9 @@ export function Asistente() {
     openChat,
     deleteChat,
     openQuick,
-    recurrings,
     activeBookId,
+    outbox,
   } = useLedger();
-  const transactions = useBookTxs();
-  const accounts = useBookAccounts();
-  const cards = useBookCards();
-  const purchases = useBookPurchases();
   const allCats = useAllCategories();
   const [text, setText] = useState("");
   const [pending, setPending] = useState(false);
@@ -70,58 +53,7 @@ export function Asistente() {
     };
   }, []);
 
-  const snapshot = useMemo(() => {
-    const fx = { usd: usdRate, usdt: usdtRate };
-    const cur = computeMonth(transactions, viewMonth, fx);
-    const prevYm = shift(viewMonth);
-    const prev = computeMonth(transactions, prevYm, fx);
-    const fijos = recurrings
-      .filter((r) => r.bookId === activeBookId)
-      .map((r) => ({
-        name: r.name,
-        day: r.day,
-        type: r.type,
-        amount: r.amount,
-        currency: r.currency,
-        active: r.active,
-      }));
-    const catName = new Map(allCats.map((c) => [c.id, c.name]));
-    const moves = transactions
-      .filter((t) => t.date.startsWith(viewMonth))
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .slice(-80)
-      .map((t) => ({
-        date: t.date,
-        type: t.type,
-        name: (t.merchant || t.note || catName.get(t.categoryId) || "Sin detalle").slice(0, 60),
-        category: catName.get(t.categoryId) || t.categoryId,
-        amount: t.amount,
-        currency: t.currency,
-      }));
-    return snapshotText(cur, prev, budgets, globalBudget, fx, allCats, fijos, {
-      accounts: accounts.map((a) => ({
-        label: accountLabel(a),
-        amount: accountBalance(a, transactions),
-        currency: a.currency,
-      })),
-      moves,
-      cards: cards.map((c) => ({ name: c.name, closingDay: c.closingDay, dueDay: c.dueDay })),
-      purchases: purchases.map((p) => ({
-        merchant: p.merchant || "Cuota",
-        cuota: p.installmentAmount,
-        count: p.installments,
-        currency: p.currency,
-      })),
-      plan: wealthPlanText({
-        incomeArs: recurringLines(recurrings, activeBookId, fx, "income").reduce((s, r) => s + r.amount, 0),
-        expenseArs: recurringLines(recurrings, activeBookId, fx, "expense").reduce((s, r) => s + r.amount, 0),
-        capArs: globalBudget,
-        usdtRate: usdtRate,
-      }),
-    });
-  }, [transactions, viewMonth, usdRate, usdtRate, budgets, globalBudget, allCats, recurrings, activeBookId, accounts, cards, purchases]);
-
-  function fail(message: string, mode: "chat" | "parse" | "report") {
+  function fail(message: string, mode: "chat" | "parse") {
     toast.error(message);
     if (mode !== "parse") {
       pushChat({
@@ -133,62 +65,75 @@ export function Asistente() {
     }
   }
 
-  async function send(message: string, mode: "chat" | "parse" | "report" = "chat") {
+  function timeout() {
+    return new Promise<never>((_, reject) => {
+      window.setTimeout(() => reject(new Error("TIMEOUT")), CLIENT_MS);
+    });
+  }
+
+  /** "15 mil en el super ayer con débito" → Nuevo prefilled (unchanged). */
+  async function parse(message: string) {
+    const res = await Promise.race([
+      askCifra({
+        data: {
+          mode: "parse",
+          message,
+          snapshot: "",
+          categories: allCats.map((c) => ({ id: c.id, name: c.name, kind: c.kind })),
+        },
+      }),
+      timeout(),
+    ]);
+    if (!res.ok) return fail(res.error, "parse");
+    const parsed = parseTx(res.text, new Set(allCats.map((c) => c.id)));
+    if (!parsed) {
+      toast.error("No pude armar el movimiento. Probá ser más específico.");
+      return;
+    }
+    openQuick(parsed);
+    toast.success("Revisá y confirmá el movimiento");
+  }
+
+  /** A question or a chip: the assistant with tools (the numbers come from Cifra). */
+  async function ask(message: string, chip = "") {
+    const history = chat.map((m) => ({ role: m.role, content: m.content }));
+    pushChat({ id: uid(), role: "user", content: message, createdAt: new Date().toISOString() });
+    const res = await Promise.race([
+      askAssistant({
+        data: {
+          message: chip ? "" : message,
+          chip,
+          history,
+          bookId: activeBookId,
+          pending: outbox.slice(-20),
+        },
+      }),
+      timeout(),
+    ]);
+    if (!res.ok) return fail(res.error, "chat");
+    pushChat({
+      id: uid(),
+      role: "assistant",
+      content: res.text,
+      createdAt: new Date().toISOString(),
+      extra: { proposals: res.proposals, followUps: res.followUps, source: res.source },
+    });
+  }
+
+  async function send(message: string, opts: { chip?: string; parse?: boolean } = {}) {
     const trimmed = message.trim();
-    if (!trimmed && mode === "chat") return;
-    if (pending) return;
-    if (aiActive === false) {
+    if (!trimmed || pending) return;
+    if (aiActive === false && !opts.chip) {
       toast.error(AI_UNAVAILABLE);
       return;
     }
     setPending(true);
-    if (mode !== "parse") {
-      pushChat({
-        id: uid(),
-        role: "user",
-        content: mode === "report" ? "Informe del mes" : trimmed,
-        createdAt: new Date().toISOString(),
-      });
-    }
     setText("");
     try {
-      const history = chat.map((m) => ({ role: m.role, content: m.content }));
-      const res = await Promise.race([
-        askCifra({
-          data: {
-            mode,
-            message: trimmed,
-            snapshot,
-            history,
-            categories: allCats.map((c) => ({ id: c.id, name: c.name, kind: c.kind })),
-          },
-        }),
-        new Promise<never>((_, reject) => {
-          window.setTimeout(() => reject(new Error("TIMEOUT")), CLIENT_MS);
-        }),
-      ]);
-      if (!res.ok) {
-        fail(res.error, mode);
-        return;
-      }
-      if (mode === "parse") {
-        const parsed = parseTx(res.text, new Set(allCats.map((c) => c.id)));
-        if (!parsed) {
-          toast.error("No pude armar el movimiento. Probá ser más específico.");
-          return;
-        }
-        openQuick(parsed);
-        toast.success("Revisá y confirmá el movimiento");
-        return;
-      }
-      pushChat({
-        id: uid(),
-        role: "assistant",
-        content: res.text,
-        createdAt: new Date().toISOString(),
-      });
+      if (opts.parse) await parse(trimmed);
+      else await ask(trimmed, opts.chip);
     } catch {
-      fail(AI_TIMEOUT, mode);
+      fail(AI_TIMEOUT, opts.parse ? "parse" : "chat");
     } finally {
       setPending(false);
     }
@@ -205,7 +150,7 @@ export function Asistente() {
           <h1 data-tour="titulo" className="font-display text-4xl tracking-tight">Asistente</h1>
         </div>
         <div className="flex gap-2">
-          <Button variant="secondary" size="sm" disabled={busy || blocked} onClick={() => send("informe", "report")}>
+          <Button variant="secondary" size="sm" disabled={busy} onClick={() => send("Informe del mes", { chip: "informe" })}>
             Informe del mes
           </Button>
           {chat.length > 0 ? (
@@ -222,7 +167,8 @@ export function Asistente() {
       </div>
 
       <p className="max-w-xl text-sm text-muted">
-        El asistente lee este libro y lo explica en criollo, para llegar a fin de mes.{" "}
+        Cifra hace las cuentas con tus tarjetas, metas y plan, y el asistente te las explica en criollo. Si
+        propone un cambio, lo aplicás vos con un botón.{" "}
         <Link to="/aprender" className="underline-offset-4 hover:underline">
           Si nunca anotaste la plata, empezá por Aprender.
         </Link>
@@ -253,15 +199,15 @@ export function Asistente() {
       ) : null}
 
       <div data-tour="ideas" className="flex flex-wrap gap-1.5">
-        {SUGGESTIONS.map((s) => (
+        {SUGGESTIONS.map((c) => (
           <button
-            key={s}
+            key={c.id}
             type="button"
-            disabled={busy || blocked}
-            onClick={() => send(s)}
+            disabled={busy}
+            onClick={() => send(c.text, { chip: c.id })}
             className="h-11 rounded-full bg-elevated px-3.5 text-[13px] text-muted transition-colors duration-150 hover:text-fg disabled:opacity-50"
           >
-            {s}
+            {c.text}
           </button>
         ))}
       </div>
@@ -271,8 +217,8 @@ export function Asistente() {
           <div className="flex h-56 flex-col items-center justify-center text-center">
             <p className="font-display text-2xl tracking-tight">Preguntale a tu libro</p>
             <p className="mt-2 max-w-sm text-sm text-muted">
-              Preguntá por tus gastos, topes o fijos. Si tarda más de 20 segundos, podés volver a
-              preguntar. Los números exactos siempre están en el libro.
+              Preguntá por tus tarjetas, metas, deudas o qué pasa si comprás algo en cuotas. Los
+              números los calcula Cifra; el asistente no inventa ninguno.
             </p>
           </div>
         ) : (
@@ -292,6 +238,24 @@ export function Asistente() {
                   </p>
                 ) : null}
                 <div className="whitespace-pre-wrap text-sm leading-relaxed text-fg">{m.content}</div>
+                {m.role === "assistant" && m.extra?.proposals?.length ? (
+                  <AssistantProposals proposals={m.extra.proposals} />
+                ) : null}
+                {m.role === "assistant" && m.id === chat.at(-1)?.id && m.extra?.followUps?.length ? (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {m.extra.followUps.map((q) => (
+                      <button
+                        key={q}
+                        type="button"
+                        disabled={busy || blocked}
+                        onClick={() => send(q)}
+                        className="min-h-9 rounded-full bg-elevated px-3 text-xs text-muted hover:text-fg disabled:opacity-50"
+                      >
+                        {q}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
               </article>
             ))}
             {pending ? <p className="text-sm text-muted">Pensando…</p> : null}
@@ -304,7 +268,7 @@ export function Asistente() {
         className="grid gap-2"
         onSubmit={(e) => {
           e.preventDefault();
-          send(text, parseMode ? "parse" : "chat");
+          void send(text, { parse: parseMode });
         }}
       >
         <label className="flex items-center gap-2 text-xs text-muted">
@@ -321,7 +285,7 @@ export function Asistente() {
           aria-label={parseMode ? "Movimiento a interpretar" : "Pregunta para el asistente"}
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder={parseMode ? "Gasté 12.400 en YPF con Mercado Pago" : "Escribí una pregunta sobre tus gastos"}
+          placeholder={parseMode ? "Gasté 12.400 en YPF con Mercado Pago" : "¿Y si compro una tele de 600 mil en 12 cuotas?"}
           rows={3}
           disabled={busy || blocked}
         />
@@ -331,12 +295,6 @@ export function Asistente() {
       </form>
     </div>
   );
-}
-
-function shift(ym: string) {
-  const [y, m] = ym.split("-").map(Number);
-  const d = new Date(y, m - 2, 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
 function parseTx(raw: string, allowed: Set<string>) {

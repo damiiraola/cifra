@@ -158,6 +158,15 @@ export type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   createdAt: string;
+  /**
+   * Assistant only, this session: proposals to confirm with a button and
+   * follow-up questions. Not synced (the server keeps only the text).
+   */
+  extra?: {
+    proposals?: import("./assistant/tools.ts").Proposal[];
+    followUps?: string[];
+    source?: "ia" | "plantilla";
+  };
 };
 
 export const CURRENCIES: { id: Currency; label: string }[] = [
