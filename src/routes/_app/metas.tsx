@@ -8,6 +8,11 @@ import { todayISO } from "@/lib/utils";
 import type { Currency } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PlanAlerts } from "@/components/plan-alerts";
+import { PlanMonths } from "@/components/plan-months";
+import { periodName } from "@/lib/card-pay";
+import type { GoalLine } from "@/lib/plan/goal-plan";
+import { usePlan } from "@/lib/plan/use-plan";
 
 export const Route = createFileRoute("/_app/metas")({
   component: Metas,
@@ -19,6 +24,7 @@ function Metas() {
   const addToGoal = useLedger((s) => s.addToGoal);
   const removeGoal = useLedger((s) => s.removeGoal);
   const today = todayISO();
+  const plan = usePlan(6);
   const [kind, setKind] = useState<GoalKind>("ahorro");
   const [name, setName] = useState("");
   const [currency, setCurrency] = useState<Currency>("ARS");
@@ -110,13 +116,33 @@ function Metas() {
             target={g.target}
             deadline={g.deadline}
             today={today}
+            plan={plan.goals.find((l) => l.goal.id === g.id)}
             onAdd={(n) => addToGoal(g.id, n)}
             onRemove={() => removeGoal(g.id)}
           />
         ))}
       </div>
+
+      <PlanMonths flow={plan.flow} surplus={plan.surplus} />
+
+      <section id="avisos" className="grid scroll-mt-24 gap-2">
+        <h2 className="text-sm font-medium">Avisos</h2>
+        <PlanAlerts limit={50} title />
+      </section>
     </div>
   );
+}
+
+function planText(line: GoalLine) {
+  const c = line.goal.currency;
+  if (line.onTrack === true) return `Con lo que te sobra por mes llegás a tiempo: apartá ${money(line.needed, c)} por mes.`;
+  if (line.onTrack === false)
+    return line.eta
+      ? `Con lo que te sobra llegás en ${periodName(line.eta)}, no en ${periodName(line.goal.deadline.slice(0, 7))}. Para llegar a tiempo hacen falta ${money(line.needed, c)} por mes.`
+      : `Hoy no te sobra para esta meta. Para llegar a tiempo hacen falta ${money(line.needed, c)} por mes.`;
+  return line.assigned > 0 && line.eta
+    ? `Con lo que sobra después de las otras metas (${money(line.assigned, c)} por mes) llegás en ${periodName(line.eta)}.`
+    : "Sin fecha y sin sobrante libre: sumale cuando puedas.";
 }
 
 function GoalCard({
@@ -127,6 +153,7 @@ function GoalCard({
   target,
   deadline,
   today,
+  plan,
   onAdd,
   onRemove,
 }: {
@@ -137,6 +164,7 @@ function GoalCard({
   target: number;
   deadline: string;
   today: string;
+  plan?: GoalLine;
   onAdd: (n: number) => void;
   onRemove: () => void;
 }) {
@@ -164,6 +192,12 @@ function GoalCard({
             ? `Faltan ${money(pace.left, currency)}. Para llegar a tiempo son ${money(pace.perDay, currency)} por día.`
             : `Faltan ${money(pace.left, currency)}. Sin fecha, no hay ritmo diario.`}
       </p>
+      {plan ? <p className="mt-1 text-sm text-subtle">{planText(plan)}</p> : null}
+      {plan?.usdHint ? (
+        <p className="mt-1 text-xs text-subtle">
+          Son más de 6 meses en pesos y la inflación se come el ahorro. Pensá en guardarlo en dólares.
+        </p>
+      ) : null}
       <div className="mt-4 flex gap-2">
         <Input
           inputMode="decimal"
