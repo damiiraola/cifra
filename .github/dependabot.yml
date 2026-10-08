@@ -8,6 +8,11 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - dependencies
+    ignore:
+      # Los tipos de Node siguen a la versión que corre la app (22 en CI, 24 en Vercel).
+      # Los majors se suben a mano junto con Node.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
