@@ -11,6 +11,7 @@ export const CATEGORIES: Category[] = [
   { id: "compras", name: "Compras", kind: "expense", token: "cat-shop", icon: "ShoppingBag" },
   { id: "suscripciones", name: "Suscripciones", kind: "expense", token: "cat-sub", icon: "Repeat" },
   { id: "impuestos", name: "Impuestos", kind: "expense", token: "cat-tax", icon: "FileText" },
+  { id: "intereses", name: "Intereses y comisiones", kind: "expense", token: "cat-fee", icon: "Percent" },
   { id: "transferencias", name: "Transferencias", kind: "expense", token: "cat-xfer", icon: "ArrowLeftRight" },
   { id: "otros", name: "Otros", kind: "expense", token: "cat-other", icon: "Ellipsis" },
   { id: "sueldo", name: "Sueldo", kind: "income", token: "cat-income", icon: "Banknote" },

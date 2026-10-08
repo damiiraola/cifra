@@ -70,10 +70,11 @@ function Privacidad() {
           <p>
             Tu mail, tu nombre y tu contraseña (guardada cifrada, nunca en texto plano), para que entres a tu cuenta.
             Tus movimientos, fijos, cajas, tarjetas, presupuestos, categorías y cotizaciones, para mostrarte tu libro. De
-            una tarjeta guardamos el nombre que le pongas, la red, el banco, los días de cierre y vencimiento, el límite y,
-            si querés, los últimos 4 números; nunca el número completo, el vencimiento del plástico ni el código. De una compra en
+            una tarjeta guardamos el nombre que le pongas, la red, el banco, los días de cierre y vencimiento, el límite, el
+            porcentaje de percepción, la TNA si la cargás y, si querés, los últimos 4 números; nunca el número completo, el vencimiento del plástico ni el código. De una compra en
             cuotas, qué compraste, el monto, la cantidad de cuotas y si tiene interés. De un resumen de tarjeta que
             importes, las fechas de cierre y vencimiento, los totales, el pago mínimo y los cargos del banco; nunca el PDF.
+            Un pago de resumen es un movimiento más (un Cambio de tu caja a la tarjeta); no nos conectamos a tu banco.
             La sesión,
             para no pedirte la clave cada vez. Datos técnicos mínimos (fecha de inicio de sesión, dirección IP y
             navegador) por seguridad y para frenar abusos.

@@ -741,6 +741,7 @@ function asCard(input: Card): Card {
   const name = String(input.name ?? "").trim().slice(0, 60);
   if (name.length < 2) throw new Error("Poné un nombre para la tarjeta");
   const pct = Number(input.usdPerceptionPct);
+  const tna = Number(input.tna);
   return {
     id: input.id,
     bookId: String(input.bookId),
@@ -755,6 +756,7 @@ function asCard(input: Card): Card {
     accountUsdId: String(input.accountUsdId),
     payAccountId: String(input.payAccountId ?? ""),
     usdPerceptionPct: Number.isFinite(pct) && pct >= 0 && pct <= 100 ? pct : 30,
+    tna: Number.isFinite(tna) && tna > 0 && tna <= 1000 ? Math.round(tna * 100) / 100 : 0,
     archived: Boolean(input.archived),
   };
 }
@@ -773,13 +775,14 @@ type CardRow = {
   account_usd_id: string;
   pay_account_id: string;
   usd_perception_pct: number;
+  tna: number | null;
   archived: boolean | number;
 };
 
 async function loadCards(sql: Awaited<ReturnType<typeof getSql>>, userId: string): Promise<Card[]> {
   const rows = await sql<CardRow>`
     select id, book_id, name, bank, network, last4, closing_day, due_day, limit_ars,
-           account_ars_id, account_usd_id, pay_account_id, usd_perception_pct, archived
+           account_ars_id, account_usd_id, pay_account_id, usd_perception_pct, tna, archived
     from ledger_cards
     where user_id = ${userId}
     order by created_at
@@ -798,6 +801,7 @@ async function loadCards(sql: Awaited<ReturnType<typeof getSql>>, userId: string
     accountUsdId: r.account_usd_id,
     payAccountId: r.pay_account_id ?? "",
     usdPerceptionPct: Number(r.usd_perception_pct),
+    tna: Number(r.tna) || 0,
     archived: Boolean(r.archived),
   }));
 }
@@ -840,11 +844,11 @@ export const saveCards = createServerFn({ method: "POST" })
         await sql`
           insert into ledger_cards (
             id, user_id, book_id, name, bank, network, last4, closing_day, due_day, limit_ars,
-            account_ars_id, account_usd_id, pay_account_id, usd_perception_pct, archived
+            account_ars_id, account_usd_id, pay_account_id, usd_perception_pct, tna, archived
           ) values (
             ${c.id}, ${context.userId}, ${c.bookId}, ${c.name}, ${c.bank}, ${c.network}, ${c.last4},
             ${c.closingDay}, ${c.dueDay}, ${c.limitArs}, ${c.accountArsId}, ${c.accountUsdId},
-            ${c.payAccountId}, ${c.usdPerceptionPct}, ${c.archived}
+            ${c.payAccountId}, ${c.usdPerceptionPct}, ${c.tna}, ${c.archived}
           )
           on conflict (id) do update set
             name = excluded.name,
@@ -856,6 +860,7 @@ export const saveCards = createServerFn({ method: "POST" })
             limit_ars = excluded.limit_ars,
             pay_account_id = excluded.pay_account_id,
             usd_perception_pct = excluded.usd_perception_pct,
+            tna = excluded.tna,
             archived = excluded.archived
           where ledger_cards.user_id = ${context.userId}
         `;

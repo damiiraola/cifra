@@ -2,17 +2,18 @@ import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { CreditCard, FileUp } from "lucide-react";
 import { toast } from "sonner";
-import { accountBalance, accountLabel } from "@/lib/books";
+import { accountBalance } from "@/lib/books";
 import {
   cardDebt,
+  closingOf,
   dueOf,
-  lastClosedStatement,
   limitUse,
   openStatement,
   purchaseProgress,
   shiftPeriod,
   upcomingStatements,
 } from "@/lib/card-math";
+import { estimatedInterest, gapCharge, lastClosedBalance, periodName, statementBalance, type StatementBalance } from "@/lib/card-pay";
 import { money, monthLabel } from "@/lib/format";
 import { argentinaDay } from "@/lib/market-hours";
 import { useBookAccounts, useBookCards, useBookPurchases, useBookStatements, useBookTxs, useLedger } from "@/lib/store";
@@ -21,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { PurchaseForm } from "@/components/purchase-form";
 import { StatementImport } from "@/components/statement-import";
+import { PayStatement } from "@/components/pay-statement";
 
 export const Route = createFileRoute("/_app/tarjetas")({
   component: Tarjetas,
@@ -38,6 +40,7 @@ function Tarjetas() {
   const cards = useBookCards();
   const txs = useBookTxs();
   const statements = useBookStatements();
+  const accounts = useBookAccounts();
   const book = useLedger((s) => s.books.find((b) => b.id === s.activeBookId));
   const today = argentinaDay();
 
@@ -49,10 +52,11 @@ function Tarjetas() {
   }, []);
 
   const toPay = cards
-    .map((c) => ({ card: c, st: lastClosedStatement(c, txs, today, statements) }))
-    .filter((x) => (x.st.ars > 0 || x.st.usd > 0) && x.st.due >= today);
-  const payArs = toPay.reduce((s, x) => s + x.st.ars, 0);
-  const payUsd = toPay.reduce((s, x) => s + x.st.usd, 0);
+    .map((c) => ({ card: c, st: lastClosedBalance(c, txs, today, statements, accounts) }))
+    .filter((x) => x.st.leftArs > 0 || x.st.leftUsd > 0);
+  const payArs = toPay.reduce((s, x) => s + x.st.leftArs, 0);
+  const payUsd = toPay.reduce((s, x) => s + x.st.leftUsd, 0);
+  const late = toPay.some((x) => x.st.due < today);
 
   return (
     <div className="grid gap-6">
@@ -62,7 +66,9 @@ function Tarjetas() {
         {cards.length ? (
           <p className="mt-1 text-sm text-muted">
             {toPay.length
-              ? `Próximo a pagar: ${both(payArs, payUsd)} (vence${toPay.length > 1 ? "n" : ""} ${toPay.map((x) => dm(x.st.due)).join(" y ")}).`
+              ? `${late ? "Para pagar" : "Próximo a pagar"}: ${both(payArs, payUsd)} (${toPay
+                  .map((x) => `${x.st.due < today ? "venció" : "vence"} ${dm(x.st.due)}`)
+                  .join(" y ")}).`
               : "No tenés resúmenes cerrados por pagar."}
           </p>
         ) : null}
@@ -95,12 +101,17 @@ function CardBlock({ card, today, tour = false }: { card: Card; today: string; t
   const statements = useBookStatements();
   const [adding, setAdding] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [paying, setPaying] = useState(false);
+  const addTx = useLedger((s) => s.addTx);
   const [editingId, setEditingId] = useState("");
   const [confirmId, setConfirmId] = useState("");
 
   const open = openStatement(card, txs, today, statements);
-  const closed = lastClosedStatement(card, txs, today, statements);
-  const bank = statements.find((s) => s.cardId === card.id && s.period === closed.period);
+  const closed = lastClosedBalance(card, txs, today, statements, accounts);
+  const openBal = statementBalance(card, txs, open.period, today, statements, accounts);
+  const financed = closed.due < today ? Math.max(0, openBal.carriedArs) : 0;
+  const financedUsd = closed.due < today ? Math.max(0, openBal.carriedUsd) : 0;
+  const gap = gapCharge(card, closed);
   const nextDue = dueOf(card, shiftPeriod(open.period, 1), statements);
   const upcoming = upcomingStatements(card, txs, recurrings, today, 6, statements);
   const max = Math.max(1, ...upcoming.map((u) => u.ars + u.usd * usdRate));
@@ -109,7 +120,6 @@ function CardBlock({ card, today, tour = false }: { card: Card; today: string; t
   const debtArs = ars ? cardDebt(ars, accountBalance(ars, txs)) : 0;
   const debtUsd = usd ? cardDebt(usd, accountBalance(usd, txs)) : 0;
   const limit = limitUse(card, debtArs, debtUsd, usdRate);
-  const payFrom = accounts.find((a) => a.id === card.payAccountId);
   const network = CARD_NETWORKS.find((n) => n.id === card.network)?.label ?? "";
   const endings = upcoming.filter((u, i) => i > 0 && u.ending.count > 0).slice(0, 2);
 
@@ -130,31 +140,40 @@ function CardBlock({ card, today, tour = false }: { card: Card; today: string; t
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
-        <div className="rounded-2xl bg-elevated p-4">
-          <p className="text-[11px] tracking-wide text-muted uppercase">
-            Resumen cerrado · {closed.due >= today ? `vence ${dm(closed.due)}` : `venció ${dm(closed.due)}`}
-          </p>
-          <p className="mt-1 font-display text-3xl tabular-nums">{both(closed.ars, closed.usd)}</p>
-          {bank ? (
-            <p className="mt-1 text-xs text-muted tabular-nums">
-              Según el banco: {both(bank.totalArs, bank.totalUsd)}
-              {bank.minimumArs ? ` · mínimo ${money(bank.minimumArs, "ARS")}` : ""}
-            </p>
-          ) : null}
-          <p className="mt-1 text-xs text-subtle">
-            {closed.ars > 0 || closed.usd > 0
-              ? `Pagalo con un Cambio ${payFrom ? `desde ${accountLabel(payFrom)} ` : ""}a la tarjeta. No cuenta como gasto.`
-              : "Sin consumos cargados en ese resumen."}
-          </p>
-        </div>
+        <ClosedStatement
+          card={card}
+          closed={closed}
+          today={today}
+          paying={paying}
+          onPay={() => {
+            setAdding(false);
+            setImporting(false);
+            setEditingId("");
+            setPaying(true);
+          }}
+          onLoadGap={
+            gap
+              ? () => {
+                  addTx(gap);
+                  toast.success(`Cargué ${money(gap.amount, "ARS")} en Intereses y comisiones, en el resumen de ${periodName(closed.period)}`);
+                }
+              : undefined
+          }
+        />
         <div className="rounded-2xl bg-elevated p-4">
           <p className="text-[11px] tracking-wide text-muted uppercase">Resumen abierto · cierra {dm(open.closing)}</p>
           <p className="mt-1 font-display text-3xl tabular-nums">{both(open.ars, open.usd)}</p>
+          {financed > 0 || financedUsd > 0 ? (
+            <p className="mt-1 text-xs text-expense tabular-nums">
+              Más {both(financed, financedUsd)} de saldo financiado del resumen anterior (con intereses).
+            </p>
+          ) : null}
           <p className="mt-1 text-xs text-subtle">
             Vence el {dm(open.due)}. Si comprás después del {dm(open.closing)}, lo pagás el {dm(nextDue)}.
           </p>
         </div>
       </div>
+      {paying ? <PayStatement card={card} balance={closed} onDone={() => setPaying(false)} /> : null}
 
       <div className="mt-5" data-tour={tour ? "resumen" : undefined}>
         <h3 className="text-sm font-medium">Próximos 6 resúmenes</h3>
@@ -299,5 +318,109 @@ function CardBlock({ card, today, tour = false }: { card: Card; today: string; t
         )}
       </div>
     </section>
+  );
+}
+
+const STATUS: Record<StatementBalance["status"], string> = {
+  "sin-deuda": "",
+  pagado: "Pagado",
+  parcial: "Pago parcial",
+  "a-pagar": "A pagar",
+  vencido: "Vencido",
+};
+
+function ClosedStatement({
+  card,
+  closed,
+  today,
+  paying,
+  onPay,
+  onLoadGap,
+}: {
+  card: Card;
+  closed: StatementBalance;
+  today: string;
+  paying: boolean;
+  onPay: () => void;
+  onLoadGap?: () => void;
+}) {
+  const statements = useBookStatements();
+  const left = closed.leftArs > 0 || closed.leftUsd > 0;
+  const bank = closed.bank;
+  const status = STATUS[closed.status];
+  const nextClosing = closingOf(card, shiftPeriod(closed.period, 1), statements);
+  const interest = closed.status === "vencido" ? estimatedInterest(closed.leftArs, card.tna, closed.due, nextClosing) : null;
+  const over = bank ? Math.round(closed.cifraArs - bank.totalArs) : 0;
+  return (
+    <div className="rounded-2xl bg-elevated p-4" aria-label="Resumen cerrado">
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="text-[11px] tracking-wide text-muted uppercase">
+          Resumen cerrado · {closed.due >= today ? `vence ${dm(closed.due)}` : `venció ${dm(closed.due)}`}
+        </p>
+        {status ? (
+          <span
+            className={cn(
+              "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium",
+              closed.status === "pagado" ? "bg-income/15 text-income" : closed.status === "vencido" ? "bg-expense/15 text-expense" : "bg-surface text-muted",
+            )}
+          >
+            {status}
+          </span>
+        ) : null}
+      </div>
+      <p className="mt-1 font-display text-3xl tabular-nums">{both(closed.owedArs, closed.owedUsd)}</p>
+      {bank ? (
+        <p className="mt-1 text-xs text-muted tabular-nums">
+          Según el banco{bank.minimumArs ? ` · mínimo ${money(bank.minimumArs, "ARS")}` : ""}.
+          {Math.abs(bank.totalArs - closed.cifraArs) >= 1 || Math.abs(bank.totalUsd - closed.cifraUsd) >= 0.01
+            ? ` En Cifra: ${both(Math.max(0, closed.cifraArs), Math.max(0, closed.cifraUsd))}.`
+            : " Coincide con lo que tenés en Cifra."}
+        </p>
+      ) : null}
+      {closed.carriedArs > 0 || closed.carriedUsd > 0 ? (
+        <p className="mt-1 text-xs text-muted tabular-nums">
+          Incluye {both(Math.max(0, closed.carriedArs), Math.max(0, closed.carriedUsd))} que venían de antes sin pagar. ¿Ya
+          lo pagaste? Registrá ese pago con su fecha.
+        </p>
+      ) : null}
+      {closed.paidArs > 0 || closed.paidUsd > 0 ? (
+        <p className="mt-1 text-xs text-muted tabular-nums">
+          Pagaste {both(closed.paidArs, closed.paidUsd)}
+          {left ? ` · quedan ${both(closed.leftArs, closed.leftUsd)}` : ""}
+          {closed.minimumArs > 0 && left ? (closed.minimumCovered ? " · cubriste el mínimo" : " · no llegaste al mínimo") : ""}.
+        </p>
+      ) : null}
+      {onLoadGap ? (
+        <div className="mt-2 rounded-lg bg-surface p-2.5 text-xs text-muted">
+          <p className="tabular-nums">
+            El banco dice {money(bank!.totalArs, "ARS")} y Cifra tiene {money(Math.max(0, closed.cifraArs), "ARS")}. Faltan{" "}
+            {money(Math.round(bank!.totalArs - closed.cifraArs), "ARS")}: ¿intereses, comisiones o un consumo sin cargar?
+          </p>
+          <Button variant="secondary" size="sm" className="mt-2 h-10 w-full" onClick={onLoadGap}>
+            Cargar la diferencia como cargo del banco
+          </Button>
+        </div>
+      ) : over > 1 ? (
+        <p className="mt-1 text-xs text-subtle tabular-nums">
+          Cifra tiene {money(over, "ARS")} más que el banco: revisá si cargaste algo dos veces o falta registrar un pago.
+        </p>
+      ) : null}
+      {interest && interest.total > 0 ? (
+        <p className="mt-1 text-xs text-expense tabular-nums">
+          Lo que quede sin pagar pasa al próximo resumen. Interés estimado: {money(interest.total, "ARS")} (con IVA).
+        </p>
+      ) : null}
+      {left ? (
+        !paying ? (
+          <Button className="mt-3 h-11 w-full" onClick={onPay}>
+            Pagar
+          </Button>
+        ) : null
+      ) : (
+        <p className="mt-1 text-xs text-subtle">
+          {closed.status === "pagado" ? "Listo, este resumen está pago." : "Sin consumos cargados en ese resumen."}
+        </p>
+      )}
+    </div>
   );
 }
