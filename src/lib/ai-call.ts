@@ -18,6 +18,37 @@ export async function providersForRequest(): Promise<AiProvider[]> {
   return aiProviders(process.env, vercelOidcToken());
 }
 
+/** One provider, one try, whole JSON answer (tool calling). Never throws or logs prompts. */
+export async function callProviderJson(
+  p: AiProvider,
+  body: Record<string, unknown>,
+  deadline: number,
+): Promise<{ ok: true; body: unknown } | { ok: false; failure: Failure }> {
+  const ms = deadline - Date.now();
+  if (ms < 1500) return { ok: false, failure: "timeout" };
+  try {
+    const res = await fetch(p.url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${p.token}` },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(ms),
+    });
+    if (!res.ok) {
+      const detail = (await res.text().catch(() => "")).slice(0, 300);
+      const failure = classifyFailure(res.status, detail);
+      console.warn(`[ai] ${p.id} (${p.auth ?? "key"}) ${p.model}: HTTP ${res.status} → ${failure}`);
+      return { ok: false, failure };
+    }
+    const json = await res.json().catch(() => null);
+    if (!json) return { ok: false, failure: "other" };
+    return { ok: true, body: json };
+  } catch (err) {
+    const failure: Failure = isAbort(err) ? "timeout" : "other";
+    console.warn(`[ai] ${p.id} ${p.model}: ${failure}`);
+    return { ok: false, failure };
+  }
+}
+
 /** One provider, one try. Never throws; never logs the token or the prompt. */
 export async function callProvider(
   p: AiProvider,
@@ -50,17 +81,18 @@ export async function callProvider(
 }
 
 /**
- * Count one assistant question for today and say whether it is still under
- * the cap. Atomic upsert, so parallel requests cannot sneak past the limit.
+ * Count one assistant question (`units`: chat 1, informe 2) for today and say
+ * whether it is still under the cap. Atomic upsert, so parallel requests cannot sneak past the limit.
  */
-export async function takeAiQuota(userId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+export async function takeAiQuota(userId: string, units = 1): Promise<{ ok: true } | { ok: false; error: string }> {
   const limit = aiDailyLimit(process.env.AI_DAILY_LIMIT);
   if (limit === 0) return { ok: false, error: aiLimitMessage(0) };
+  const n = Math.max(1, Math.round(units));
   const sql = await getSql();
   const rows = await sql<{ count: number }>`
     insert into ai_usage (user_id, day, count)
-    values (${userId}, ${aiUsageDay()}::date, 1)
-    on conflict (user_id, day) do update set count = ai_usage.count + 1
+    values (${userId}, ${aiUsageDay()}::date, ${n})
+    on conflict (user_id, day) do update set count = ai_usage.count + ${n}
     returning count
   `;
   const used = Number(rows[0]?.count ?? 0);

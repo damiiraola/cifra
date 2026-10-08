@@ -102,8 +102,10 @@ function Privacidad() {
             </li>
             <li>
               <span className="text-fg">Vercel AI Gateway</span>, y a través de él {aiModel}: solo si usás el
-              asistente o importás un resumen de tarjeta. Con el asistente recibe un resumen del mes (totales,
-              categorías, fijos y presupuestos) y lo que le escribís, no la lista de tus movimientos. Con un resumen de
+              asistente o importás un resumen de tarjeta. Con el asistente recibe lo que le escribís, los últimos mensajes
+              de la charla y los números que Cifra calcula para contestarte (totales del mes por categoría, tus tarjetas,
+              metas, plan del mes, simulaciones y plan de deudas), con los nombres de tus tarjetas, cajas, categorías y
+              metas. No recibe la lista de tus movimientos, ni comercios, ni notas. Con un resumen de
               tarjeta recibe solo las líneas de consumos y los totales de ese resumen, sin tu nombre, domicilio, CUIT,
               mail ni número de tarjeta. Nunca le mandamos tu mail. Le pedimos que solo use proveedores que no
               entrenan sus modelos con lo que mandás, y el Gateway no guarda las preguntas.

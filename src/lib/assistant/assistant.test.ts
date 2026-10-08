@@ -1,0 +1,573 @@
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
+import type { Goal } from "../goals.ts";
+import type { Account, Card, Transaction } from "../types.ts";
+import { money } from "../format.ts";
+import type { AiProvider } from "../ai-provider.ts";
+import { checkText, finalAnswer } from "./answer.ts";
+import { assistantData, cleanPending, type LedgerForAssistant } from "./context.ts";
+import { historyMessages, toolBody, toolCalls } from "./llm.ts";
+import { chipById, cleanAssistantInput, runAssistant, type ModelCall } from "./run.ts";
+import { runTool, ToolRun, type AssistantData } from "./tools.ts";
+
+const today = "2026-10-08";
+
+const card: Card = {
+  id: "visa",
+  bookId: "p",
+  name: "Visa",
+  bank: "",
+  network: "visa",
+  last4: "",
+  closingDay: 23,
+  dueDay: 5,
+  limitArs: 2_000_000,
+  accountArsId: "visa-ars",
+  accountUsdId: "visa-usd",
+  payAccountId: "bank",
+  usdPerceptionPct: 30,
+  tna: 75,
+  archived: false,
+};
+
+const accounts: Account[] = [
+  {
+    id: "bank",
+    bookId: "p",
+    name: "Banco",
+    kind: "bank",
+    currency: "ARS",
+    opening: 1_000_000,
+    archived: false,
+  },
+  {
+    id: "visa-ars",
+    bookId: "p",
+    name: "Visa",
+    kind: "card",
+    currency: "ARS",
+    opening: 0,
+    archived: false,
+  },
+  {
+    id: "visa-usd",
+    bookId: "p",
+    name: "Visa USD",
+    kind: "card",
+    currency: "USD",
+    opening: 0,
+    archived: false,
+  },
+];
+
+let n = 0;
+const tx = (extra: Partial<Transaction>): Transaction => ({
+  id: `t${++n}`,
+  type: "expense",
+  amount: 1000,
+  currency: "ARS",
+  categoryId: "compras",
+  note: "",
+  merchant: "",
+  date: "2026-09-10",
+  method: "credito",
+  createdAt: "",
+  bookId: "p",
+  accountId: "visa-ars",
+  counterpartyId: "",
+  amountTo: 0,
+  rateArs: 0,
+  rateLocked: false,
+  recurringId: "",
+  cardPeriod: "",
+  purchaseId: "",
+  installmentNo: 0,
+  installmentCount: 0,
+  ...extra,
+});
+
+const goal: Goal = {
+  id: "brasil",
+  bookId: "p",
+  kind: "viaje",
+  name: "Brasil",
+  currency: "ARS",
+  target: 3_000_000,
+  saved: 0,
+  deadline: "2027-02-08",
+  priority: 2,
+  active: true,
+  createdAt: "",
+  updatedAt: "",
+};
+
+const txs = [
+  tx({ amount: 30_000 }),
+  tx({
+    amount: 900_000,
+    type: "income",
+    categoryId: "sueldo",
+    accountId: "bank",
+    method: "transferencia",
+    date: "2026-10-01",
+  }),
+  tx({
+    amount: 120_000,
+    categoryId: "alimentos",
+    accountId: "bank",
+    method: "debito",
+    date: "2026-10-03",
+  }),
+];
+
+const data = (): AssistantData => ({
+  plan: {
+    today,
+    bookId: "p",
+    txs,
+    accounts,
+    cards: [card],
+    statements: [],
+    recurrings: [],
+    rates: { usd: 1000, usdt: 1000 },
+  },
+  goals: [goal],
+  categories: [
+    { id: "compras", name: "Compras", kind: "expense" },
+    { id: "alimentos", name: "Alimentación", kind: "expense" },
+    { id: "sueldo", name: "Sueldo", kind: "income" },
+  ],
+  topes: { alimentos: 100_000 },
+});
+
+const responder = (args: Record<string, unknown>) => ({
+  choices: [
+    {
+      message: {
+        tool_calls: [
+          {
+            id: "r1",
+            type: "function",
+            function: { name: "responder", arguments: JSON.stringify(args) },
+          },
+        ],
+      },
+    },
+  ],
+  usage: { prompt_tokens: 900, completion_tokens: 80 },
+});
+
+const calls = (list: [string, Record<string, unknown>][]) => ({
+  choices: [
+    {
+      message: {
+        tool_calls: list.map(([name, args], i) => ({
+          id: `c${i}`,
+          type: "function",
+          function: { name, arguments: JSON.stringify(args) },
+        })),
+      },
+    },
+  ],
+  usage: { prompt_tokens: 800, completion_tokens: 40 },
+});
+
+/** A fake model that answers each call in order and records the bodies. */
+function fake(answers: unknown[]) {
+  const bodies: Record<string, unknown>[] = [];
+  const provider: AiProvider = { id: "gateway", url: "x", token: "x", model: "m" };
+  const call: ModelCall = async (build) => {
+    bodies.push(build(provider));
+    const next = answers.shift();
+    return next === "fail" ? { ok: false, failure: "busy" } : { ok: true, body: next };
+  };
+  return { call, bodies };
+}
+
+describe("never a number the app did not compute", () => {
+  const run = new ToolRun(data());
+  const f1 = run.facts.ars(30_000);
+  const f2 = run.facts.pct(0.4);
+
+  it("replaces markers with Cifra's values", () => {
+    const r = checkText(`Tenés que pagar {${f1}}, el {${f2}} del límite.`, run, "¿cuánto pago?");
+    assert.deepEqual(r, {
+      ok: true,
+      text: `Tenés que pagar ${money(30_000, "ARS")}, el 40% del límite.`,
+    });
+  });
+
+  it("tolerates a $ or % next to a marker that already has it", () => {
+    const r = checkText(`Pagás $ {${f1}} ({${f2}}%).`, run, "x");
+    assert.equal(r.ok && r.text, `Pagás ${money(30_000, "ARS")} (40%).`);
+  });
+
+  it("rejects invented numbers, signs, number words and unknown markers", () => {
+    assert.deepEqual(checkText("Pagás 45.000 este mes.", run, "x"), {
+      ok: false,
+      reason: "número sin fuente 45.000",
+    });
+    assert.equal(checkText("Te sale 2027.", run, "x").ok, false);
+    assert.equal(checkText("Gastás el 30% en comida.", run, "x").ok, false);
+    assert.equal(checkText("Son como cincuenta mil pesos.", run, "x").ok, false);
+    assert.equal(checkText("Mirá {f99}.", run, "x").ok, false);
+  });
+
+  it("allows numbers the user wrote", () => {
+    assert.equal(
+      checkText("En 12 cuotas de {f1} queda bien.", run, "¿y si compro en 12 cuotas de 50 mil?").ok,
+      true,
+    );
+  });
+
+  it("final answer: unknown proposals and follow-ups with numbers are dropped", () => {
+    const r2 = new ToolRun(data());
+    runTool(r2, "plan_mes", {});
+    const a = finalAnswer(
+      {
+        texto: "Listo.",
+        propuestas: ["p1", "p99", "p1"],
+        seguir: ["¿Y si gasto 200 mil?", "¿Llego con Brasil?"],
+      },
+      r2,
+      "x",
+    );
+    assert.equal(a.source, "ia");
+    assert.deepEqual(
+      a.proposals.map((p) => p.id),
+      r2.proposals.length ? ["p1"] : [],
+    );
+    assert.deepEqual(a.followUps, ["¿Llego con Brasil?"]);
+  });
+
+  it("a bad answer falls back to Cifra's template, never retried", () => {
+    const r3 = new ToolRun(data());
+    runTool(r3, "tarjetas", {});
+    const a = finalAnswer({ texto: "Pagás 45.000.", propuestas: [], seguir: [] }, r3, "x");
+    assert.equal(a.source, "plantilla");
+    assert.match(a.text, /Visa: venció el 5 de octubre con \$\s?30\.000 a pagar/);
+    assert.equal(finalAnswer(null, r3, "x").reason, "esquema");
+  });
+});
+
+describe("tools", () => {
+  it("tarjetas: numbers only as ids, values from card math", () => {
+    const run = new ToolRun(data());
+    const r = runTool(run, "tarjetas", {});
+    const visa = (r.data.tarjetas as Record<string, Record<string, unknown>>[])[0]!;
+    const cerrado = visa.resumen_cerrado as Record<string, unknown>;
+    assert.match(String(cerrado.a_pagar), /^f\d+$/);
+    assert.equal(r.valores[String(cerrado.a_pagar)], money(30_000, "ARS"));
+    assert.equal(cerrado.vencido, true);
+    assert.equal(r.valores[String(visa.tna)], "75%");
+    assert.ok(!JSON.stringify(r.data).match(/\d{3,}/), "no raw amounts in the data");
+  });
+
+  it("simular cuotas: the plan with and without, a proposal and nothing saved", () => {
+    const run = new ToolRun(data());
+    const r = runTool(run, "simular", {
+      tipo: "cuotas",
+      monto: 600_000,
+      cuotas: 12,
+      tarjeta: "visa",
+      que: "Tele",
+    });
+    assert.equal(r.data.guardado, false);
+    const p = run.proposals.find((x) => x.id === r.data.propuesta)!;
+    assert.equal(p.kind, "compra_cuotas");
+    if (p.kind !== "compra_cuotas") return;
+    assert.deepEqual(
+      [p.cardId, p.amount, p.installments, p.interestFree, p.what],
+      ["visa", 600_000, 12, true, "Tele"],
+    );
+    assert.match(p.label, /Cargar Tele de \$\s?600\.000 en 12 cuotas en la Visa/);
+    const cuotas = r.data.cuotas as Record<string, string>;
+    assert.equal(r.valores[cuotas.cada_una!], money(50_000, "ARS"));
+    assert.equal(txs.length, 3, "the data was not touched");
+  });
+
+  it("plan_deuda: avalancha vs bola de nieve with the card's TNA", () => {
+    const run = new ToolRun(data());
+    const r = runTool(run, "plan_deuda", {});
+    const av = r.data.avalancha as Record<string, unknown>;
+    assert.match(String(av.intereses_estimados), /^f\d+$/);
+    assert.equal(r.data.las_dos_estrategias_son_iguales, true);
+    assert.match(r.summary, /avalancha salís en/);
+  });
+
+  it("metas and resumen_mes", () => {
+    const run = new ToolRun(data());
+    const m = runTool(run, "metas", {});
+    assert.equal((m.data.metas as unknown[]).length, 1);
+    const r = runTool(run, "resumen_mes", {});
+    const cats = r.data.categorias as Record<string, unknown>[];
+    const food = cats.find((c) => c.categoria === "Alimentación")!;
+    assert.equal(food.pasado, true);
+    assert.equal(r.valores[String(food.tope)], money(100_000, "ARS"));
+  });
+
+  it("unknown tool or bad arguments: an error, never a throw", () => {
+    const run = new ToolRun(data());
+    assert.ok(runTool(run, "borrar_todo", {}).data.error);
+    assert.ok(runTool(run, "simular", "nope").data.error);
+    assert.ok(runTool(run, "tendencia_categoria", { categoria: "Viajes espaciales" }).data.error);
+  });
+});
+
+describe("runAssistant", () => {
+  it("chip: Cifra runs the tools, one model call forced to responder", async () => {
+    const m = fake([
+      responder({
+        texto: "Del último resumen de la Visa te quedan {f1} y ya venció.",
+        propuestas: [],
+        seguir: ["¿Cómo salgo de la deuda?"],
+      }),
+    ]);
+    const r = await runAssistant({
+      data: data(),
+      message: "¿Cuánto pago de tarjeta este mes?",
+      chip: chipById("tarjeta"),
+      history: [],
+      call: m.call,
+    });
+    assert.equal(r.source, "ia");
+    assert.equal(r.modelCalls, 1);
+    assert.equal(
+      r.text,
+      `Del último resumen de la Visa te quedan ${money(30_000, "ARS")} y ya venció.`,
+    );
+    assert.deepEqual(m.bodies[0]!.tool_choice, {
+      type: "function",
+      function: { name: "responder" },
+    });
+    const msgs = m.bodies[0]!.messages as { role: string }[];
+    assert.deepEqual(
+      msgs.map((x) => x.role),
+      ["system", "user", "assistant", "tool"],
+    );
+    assert.deepEqual(r.usage, { input: 900, output: 80 });
+  });
+
+  it("free text: one round of tools, then the answer; an invented number → template", async () => {
+    const m = fake([
+      calls([["simular", { tipo: "cuotas", monto: 600000, cuotas: 12 }]]),
+      responder({ texto: "Vas a pagar 50.000 por mes.", propuestas: ["p1"], seguir: [] }),
+    ]);
+    const r = await runAssistant({
+      data: data(),
+      message: "¿y si compro una tele de 600 mil en 12?",
+      chip: null,
+      history: [],
+      call: m.call,
+    });
+    assert.equal(r.modelCalls, 2);
+    assert.equal(r.source, "plantilla");
+    assert.match(r.reason ?? "", /número sin fuente/);
+    assert.equal(r.proposals[0]?.kind, "compra_cuotas", "the proposal still comes from the tool");
+    assert.match(r.text, /No se guardó nada/);
+  });
+
+  it("at most 3 tools per turn and two model calls", async () => {
+    const m = fake([
+      calls([
+        ["tarjetas", {}],
+        ["metas", {}],
+        ["metas", {}],
+        ["plan_mes", {}],
+        ["resumen_mes", {}],
+      ]),
+      responder({ texto: "Ok.", propuestas: [], seguir: [] }),
+    ]);
+    const r = await runAssistant({
+      data: data(),
+      message: "contame todo",
+      chip: null,
+      history: [],
+      call: m.call,
+    });
+    const tools = (m.bodies[1]!.messages as { role: string }[]).filter((x) => x.role === "tool");
+    assert.equal(tools.length, 3);
+    assert.equal(r.modelCalls, 2);
+    assert.equal(r.text, "Ok.");
+  });
+
+  it("the model can answer directly (no tools) if it says no numbers", async () => {
+    const m = fake([
+      responder({
+        texto: "¡Hola! Preguntame por tus tarjetas o metas.",
+        propuestas: [],
+        seguir: [],
+      }),
+    ]);
+    const r = await runAssistant({
+      data: data(),
+      message: "hola",
+      chip: null,
+      history: [],
+      call: m.call,
+    });
+    assert.equal(r.source, "ia");
+    assert.equal(r.modelCalls, 1);
+  });
+
+  it("no model (off or out of quota): chips still answer with the template", async () => {
+    const r = await runAssistant({
+      data: data(),
+      message: "x",
+      chip: chipById("tarjeta"),
+      history: [],
+      call: null,
+      note: "Hoy no.",
+    });
+    assert.equal(r.source, "plantilla");
+    assert.equal(r.modelCalls, 0);
+    assert.match(r.text, /^Hoy no\.\n\nVisa:/);
+  });
+
+  it("model failure on a chip: template with the numbers", async () => {
+    const m = fake(["fail"]);
+    const r = await runAssistant({
+      data: data(),
+      message: "x",
+      chip: chipById("metas"),
+      history: [],
+      call: m.call,
+    });
+    assert.equal(r.source, "plantilla");
+    assert.equal(r.reason, "modelo: busy");
+    assert.match(r.text, /Brasil/);
+  });
+
+  it("plan chip: proposals come from the planner (topes, levers), never from the model", async () => {
+    const m = fake([
+      responder({
+        texto: "Mirá las propuestas.",
+        propuestas: ["p1", "p2", "p3", "p4"],
+        seguir: [],
+      }),
+    ]);
+    const r = await runAssistant({
+      data: data(),
+      message: "x",
+      chip: chipById("plan"),
+      history: [],
+      call: m.call,
+    });
+    assert.ok(r.proposals.length <= 3);
+    for (const p of r.proposals) assert.ok(["aplicar_topes", "meta"].includes(p.kind));
+  });
+});
+
+describe("plumbing", () => {
+  it("history: last 4 turns, short, numbers of past answers blanked", () => {
+    const h = historyMessages([
+      { role: "user", content: "a" },
+      { role: "user", content: "b" },
+      { role: "user", content: "¿cuánto pago?" },
+      { role: "assistant", content: "Pagás $ 45.000 el 5 de noviembre (40%)." },
+      { role: "user", content: "x".repeat(500) },
+    ]);
+    assert.equal(h.length, 4);
+    assert.equal(
+      (h[2] as { content: string }).content,
+      "Pagás [dato] el [dato] de noviembre ([dato]).",
+    );
+    assert.equal((h[3] as { content: string }).content.length, 300);
+  });
+
+  it("request body: no prompt training on the Gateway, tool choice", () => {
+    const gw: AiProvider = {
+      id: "gateway",
+      url: "x",
+      token: "x",
+      model: "spacexai/grok-4.1-fast-non-reasoning",
+    };
+    const b = toolBody(gw, { messages: [] });
+    assert.deepEqual(b.providerOptions, { gateway: { disallowPromptTraining: true } });
+    assert.equal(b.tool_choice, "required");
+    assert.equal((b.tools as unknown[]).length, 9);
+    assert.equal(b.max_tokens, 450);
+  });
+
+  it("tool calls: bad JSON arguments become null", () => {
+    const c = toolCalls({
+      choices: [
+        { message: { tool_calls: [{ id: "a", function: { name: "metas", arguments: "{oops" } }] } },
+      ],
+    });
+    assert.deepEqual(c, [{ id: "a", name: "metas", args: null }]);
+    assert.deepEqual(toolCalls(null), []);
+  });
+
+  it("input: chip text wins, empty is invalid, at most 20 pending ops", () => {
+    assert.equal(
+      cleanAssistantInput({ chip: "metas", message: "ignorado" }).message,
+      "¿Llego con mis metas?",
+    );
+    assert.throws(() => cleanAssistantInput({ message: "  " }));
+    assert.equal(
+      cleanAssistantInput({ message: "hola", pending: Array.from({ length: 30 }, () => ({})) })
+        .pending.length,
+      20,
+    );
+  });
+
+  it("outbox: pending movements are merged for this answer only, rows cleaned", () => {
+    const ops = cleanPending([
+      {
+        id: "new1",
+        action: "add",
+        at: 1,
+        tries: 0,
+        row: {
+          id: "new1",
+          type: "expense",
+          amount: 5000,
+          date: "2026-10-07",
+          bookId: "p",
+          accountId: "bank",
+          categoryId: "alimentos",
+          merchant: "Coto",
+        },
+      },
+      {
+        id: "bad",
+        action: "add",
+        at: 2,
+        tries: 0,
+        row: { id: "bad", type: "robo", amount: 5, date: "x" },
+      },
+      { id: txs[2]!.id, action: "delete", at: 3, tries: 0 },
+    ]);
+    assert.deepEqual(
+      ops.map((o) => o.id),
+      ["new1", txs[2]!.id],
+    );
+    assert.equal(ops[0]!.row?.merchant, "", "merchants are not needed by the tools");
+    const ledger: LedgerForAssistant = {
+      books: [{ id: "p" }, { id: "n" }],
+      activeBookId: "p",
+      transactions: txs,
+      accounts,
+      cards: [card],
+      statements: [],
+      recurrings: [],
+      goals: [goal, { ...goal, id: "otra", bookId: "n" }],
+      usdRate: 1000,
+      usdtRate: 1000,
+      customCategories: [],
+      categoryNames: {},
+      bookBudgets: { p: { alimentos: 100_000, ocio: 50_000 } },
+      bookBudgetLocks: { p: { alimentos: true } },
+    };
+    const d = assistantData(ledger, "zzz", today, ops);
+    assert.equal(d.plan.bookId, "p", "unknown book → active book");
+    assert.ok(d.plan.txs.some((t) => t.id === "new1"));
+    assert.ok(!d.plan.txs.some((t) => t.id === txs[2]!.id));
+    assert.deepEqual(d.topes, { alimentos: 100_000 });
+    assert.deepEqual(
+      d.goals.map((g) => g.id),
+      ["brasil"],
+    );
+  });
+});
