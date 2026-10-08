@@ -17,7 +17,7 @@ El libro de Negocio no hereda categorías, topes ni analítica del personal. Los
 | UI | TanStack Start + React 19 + Tailwind 4. Rutas en `src/routes/`. |
 | Estado local | Zustand, `src/lib/store.ts`, vault v2 |
 | DB | Neon Postgres en prod. PGLite solo si no hay `DATABASE_URL` (se pierde al reiniciar). |
-| SQL | `src/lib/db.ts`. Migraciones en `migrations/0001`–`0015`. `npm run db:migrate` corre en el build. |
+| SQL | `src/lib/db.ts`. Migraciones en `migrations/0001`–`0015`. `npm run db:migrate` corre en el build. El pool de Neon (app y Better Auth) sale de `src/lib/pg-pool.ts`: idle 5 s, `attachDatabasePool` en Vercel, ping a conexiones que quedaron quietas y un reintento solo si la conexión se cortó (`pg-retry.ts`). |
 | Auth | Better Auth. Solo mail + contraseña (`src/lib/auth/email-password.ts`). Sin Google, X ni Grok/OAuth genérico. |
 | Mail | Resend. Plantillas en `src/lib/mail.ts`. Remitente `Cifra <hola@cifra.lol>`. |
 | IA | Vercel AI Gateway (OIDC o `AI_GATEWAY_API_KEY`), `src/lib/ai.ts` + `src/lib/ai-provider.ts` |
