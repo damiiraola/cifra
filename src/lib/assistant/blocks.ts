@@ -25,7 +25,8 @@ function item(raw: string): ListItem {
  * Última: octubre 2027." (no line breaks): two or more "Etiqueta: valor."
  * sentences in a row become rows; the other sentences stay as text. Dots
  * inside numbers ("$ 1.250.000") are not followed by a space, so they don't
- * end a sentence.
+ * end a sentence. A conclusion followed by three or more sentences with
+ * numbers becomes the conclusion plus a list.
  */
 function inlineRows(text: string): Block[] {
   const sentences = text.split(/(?<=[.!?])\s+(?=[¿¡]?\p{Lu})/u);
@@ -34,6 +35,16 @@ function inlineRows(text: string): Block[] {
     if (!m || m[1]!.trim().split(/\s+/).length > 4) return null;
     return { label: m[1]!.trim(), value: m[2]!.trim() };
   };
+  // A conclusion and then three or more sentences with numbers, all in one
+  // paragraph ("Cuota fija de $ 50.000… Sobrante baja de… Meta Bariloche
+  // pasa…"): the conclusion stays text, the rest becomes a list.
+  const rest = sentences.slice(1);
+  if (rest.length >= 3 && rest.filter((x) => /\d/.test(x)).length >= 3) {
+    return [
+      { kind: "p", text: sentences[0]! },
+      { kind: "list", items: rest.map((x) => rowOf(x) ?? { text: x.replace(/\.$/, "") }) },
+    ];
+  }
   const out: Block[] = [];
   let i = 0;
   while (i < sentences.length) {
