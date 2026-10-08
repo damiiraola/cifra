@@ -7,7 +7,13 @@ import type { AiProvider } from "../ai-provider.ts";
 import { checkText, finalAnswer } from "./answer.ts";
 import { assistantData, cleanPending, type LedgerForAssistant } from "./context.ts";
 import { historyMessages, toolBody, toolCalls } from "./llm.ts";
-import { chipById, cleanAssistantInput, runAssistant, type ModelCall } from "./run.ts";
+import {
+  chipById,
+  cleanAssistantInput,
+  retryWhenBusy,
+  runAssistant,
+  type ModelCall,
+} from "./run.ts";
 import { runTool, ToolRun, type AssistantData } from "./tools.ts";
 
 const today = "2026-10-08";
@@ -220,6 +226,64 @@ describe("never a number the app did not compute", () => {
     );
   });
 
+  it("accepts Cifra's values written out instead of their marker", () => {
+    const r = new ToolRun(data());
+    const pay = r.facts.ars(127_000);
+    r.facts.day("2026-10-12");
+    r.facts.month("2027-05");
+    r.facts.count(12, "cuota", "cuotas");
+    const out = checkText(
+      `Pagás ${money(127_000, "ARS")} el 12 de octubre, en 12 cuotas hasta Mayo 2027. Son 127.000 justos.`,
+      r,
+      "¿cuánto pago?",
+    );
+    assert.equal(out.ok, true, JSON.stringify(out));
+    assert.equal(
+      out.ok && out.text,
+      `Pagás ${money(127_000, "ARS")} el 12 de octubre, en 12 cuotas hasta mayo 2027. Son 127.000 justos.`,
+    );
+    // Without the space after $, too; and the marker version still works.
+    assert.equal(checkText(`Son $127.000 ({${pay}}).`, r, "x").ok, true);
+  });
+
+  it("a written-out value is never found inside a longer number", () => {
+    const r = new ToolRun(data());
+    r.facts.day("2026-10-05");
+    r.facts.count(3, "cuota", "cuotas");
+    assert.deepEqual(checkText("Vence el 15 de octubre.", r, "x"), {
+      ok: false,
+      reason: "número sin fuente 15",
+    });
+    assert.equal(checkText("Son 13 cuotas.", r, "x").ok, false);
+    // A small number alone (not the value "3 cuotas") is still an invented count.
+    assert.equal(checkText("Tenés 3 metas.", r, "x").ok, false);
+  });
+
+  it("the user's '600 mil' may come back as 600.000, $ 600.000 or 600 mil, nothing else", () => {
+    const r = new ToolRun(data());
+    const q = "¿y si compro una tele de 600 mil en 12 cuotas?";
+    for (const t of [
+      "Una tele de 600.000 en 12 cuotas entra.",
+      "Una tele de $ 600.000 entra.",
+      "Con 600 mil en 12 cuotas, el mes más justo es este.",
+    ])
+      assert.equal(checkText(t, r, q).ok, true, t);
+    assert.deepEqual(checkText("Mejor una de 400 mil.", r, q), {
+      ok: false,
+      reason: "monto sin fuente 400 mil",
+    });
+    assert.equal(checkText("Mejor una de 400.000.", r, q).ok, false);
+    assert.equal(checkText("Cada cuota es de $ 12.", r, q).ok, false);
+    assert.equal(checkText("Son 50 mil por mes.", r, q).ok, false);
+    assert.equal(checkText("Son cincuenta mil por mes.", r, q).ok, false);
+    assert.equal(
+      checkText("Con 1,5 palos llegás.", r, "¿me alcanza con 1,5 palos?").ok,
+      true,
+      "decimals in the user's amount",
+    );
+    assert.equal(checkText("Son $ 1.500.000.", r, "¿me alcanza con 1,5 palos?").ok, true);
+  });
+
   it("final answer: unknown proposals and follow-ups with numbers are dropped", () => {
     const r2 = new ToolRun(data());
     runTool(r2, "plan_mes", {});
@@ -306,6 +370,39 @@ describe("tools", () => {
     assert.equal(r.valores[String(food.tope)], money(100_000, "ARS"));
   });
 
+  it("no tool sends the model a raw number (only fact and proposal ids)", () => {
+    const run = new ToolRun(data());
+    const all: [string, Record<string, unknown>][] = [
+      ["resumen_mes", {}],
+      ["tendencia_categoria", { categoria: "Alimentación", meses: 3 }],
+      ["tarjetas", {}],
+      ["proximos", { dias: 15 }],
+      ["metas", {}],
+      ["plan_mes", {}],
+      ["simular", { tipo: "cuotas", monto: 600_000, cuotas: 12, que: "Tele" }],
+      ["simular", { tipo: "gasto", monto: 2_500_000 }],
+      ["simular", { tipo: "sueldo", monto: 100_000, baja: true }],
+      ["plan_deuda", {}],
+      ["plan_deuda", { presupuesto: 1 }],
+    ];
+    for (const [name, args] of all) {
+      const r = runTool(run, name, args);
+      const text = JSON.stringify(r.data).replace(/"[fp]\d+"/g, '""');
+      assert.ok(!/\d/.test(text), `${name}: ${text.match(/.{0,30}\d.{0,10}/)?.[0]}`);
+    }
+  });
+
+  it("simular: how many goals change is a fact; the template says 'Cambia 1 meta'", () => {
+    const run = new ToolRun(data());
+    const r = runTool(run, "simular", { tipo: "gasto", monto: 900_000 });
+    const changed = r.data.metas_que_cambian as unknown[];
+    if (changed.length === 1) {
+      assert.equal(r.valores[String(r.data.cuantas_metas_cambian)], "1 meta");
+      assert.match(r.summary, /Cambia 1 meta\./);
+    }
+    assert.doesNotMatch(r.summary, /Cambian 1 meta/);
+  });
+
   it("unknown tool or bad arguments: an error, never a throw", () => {
     const run = new ToolRun(data());
     assert.ok(runTool(run, "borrar_todo", {}).data.error);
@@ -351,7 +448,7 @@ describe("runAssistant", () => {
   it("free text: one round of tools, then the answer; an invented number → template", async () => {
     const m = fake([
       calls([["simular", { tipo: "cuotas", monto: 600000, cuotas: 12 }]]),
-      responder({ texto: "Vas a pagar 50.000 por mes.", propuestas: ["p1"], seguir: [] }),
+      responder({ texto: "Vas a pagar 55.000 por mes.", propuestas: ["p1"], seguir: [] }),
     ]);
     const r = await runAssistant({
       data: data(),
@@ -569,5 +666,38 @@ describe("plumbing", () => {
       d.goals.map((g) => g.id),
       ["brasil"],
     );
+  });
+});
+
+describe("busy model", () => {
+  const ok = { ok: true as const, body: {} };
+  const busy = { ok: false as const, failure: "busy" as const };
+  it("a 429 busy gets one more try after a short wait, if there is time", async () => {
+    let n = 0;
+    const waits: number[] = [];
+    const r = await retryWhenBusy(async () => (++n === 1 ? busy : ok), {
+      deadline: 100_000,
+      now: () => 0,
+      sleep: async (ms) => void waits.push(ms),
+    });
+    assert.equal(r.ok, true);
+    assert.equal(n, 2);
+    assert.deepEqual(waits, [1_500]);
+  });
+  it("only once, never for credit or auth, never without time left", async () => {
+    let n = 0;
+    const sleep = async () => {};
+    await retryWhenBusy(async () => (n++, busy), { deadline: 100_000, now: () => 0, sleep });
+    assert.equal(n, 2);
+    n = 0;
+    await retryWhenBusy(async () => (n++, { ok: false, failure: "credit" }), {
+      deadline: 100_000,
+      now: () => 0,
+      sleep,
+    });
+    assert.equal(n, 1);
+    n = 0;
+    await retryWhenBusy(async () => (n++, busy), { deadline: 5_000, now: () => 0, sleep });
+    assert.equal(n, 1);
   });
 });

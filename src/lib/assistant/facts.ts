@@ -71,6 +71,14 @@ export class Facts {
   day(iso: string) {
     return this.put(dayLabel(iso, this.thisYear));
   }
+  /** Fixed text with a number Cifra decided ("más de 10 años"). */
+  label(text: string) {
+    return this.put(text);
+  }
+  /** Every [id, value] registered so far (the validator accepts values written out). */
+  entries(): [string, string][] {
+    return [...this.values.entries()];
+  }
   get(id: string) {
     return this.values.get(id);
   }
