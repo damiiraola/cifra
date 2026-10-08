@@ -91,11 +91,18 @@ export async function callProvider(
 /**
  * Whether the global daily cap (AI_GLOBAL_DAILY_USD, see ai-cost.ts) is
  * reached. Checked before every AI request, before the user's own units.
+ * If the log can't be read, it says "reached" (fail closed).
  */
 export async function globalAiCapReached(): Promise<boolean> {
   const cap = aiGlobalDailyUsd(process.env.AI_GLOBAL_DAILY_USD);
   if (cap <= 0) return true;
-  return (await spentSince(await getSql(), aiUsageDay())) >= cap;
+  try {
+    return (await spentSince(await getSql(), aiUsageDay())) >= cap;
+  } catch (err) {
+    // Can't read today's spend: stop rather than spend blind (the assistant still answers with the template).
+    console.warn(`[ai] cost cap check: ${err instanceof Error ? err.name : "error"}`);
+    return true;
+  }
 }
 
 /** Save one request's calls (metadata only). Never throws: the answer matters more. */
