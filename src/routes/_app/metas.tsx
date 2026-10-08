@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { PlanAlerts } from "@/components/plan-alerts";
 import { PlanMonths } from "@/components/plan-months";
 import { MonthPlanCard } from "@/components/month-plan-card";
+import { WhatIfCard } from "@/components/what-if-card";
 import { periodName } from "@/lib/card-pay";
 import type { GoalLine } from "@/lib/plan/goal-plan";
 import { usePlan } from "@/lib/plan/use-plan";
@@ -146,6 +147,8 @@ function Metas() {
       </div>
 
       <MonthPlanCard />
+
+      <WhatIfCard />
 
       <PlanMonths flow={plan.flow} surplus={plan.surplus} />
 

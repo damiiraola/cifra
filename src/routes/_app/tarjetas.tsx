@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { PurchaseForm } from "@/components/purchase-form";
 import { StatementImport } from "@/components/statement-import";
 import { PayStatement } from "@/components/pay-statement";
+import { DebtPlanCard } from "@/components/debt-plan-card";
 
 export const Route = createFileRoute("/_app/tarjetas")({
   component: Tarjetas,
@@ -87,6 +88,7 @@ function Tarjetas() {
       ) : (
         cards.map((c, i) => <CardBlock key={c.id} card={c} today={today} tour={i === 0} />)
       )}
+      {cards.length ? <DebtPlanCard /> : null}
     </div>
   );
 }
