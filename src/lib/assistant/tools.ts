@@ -500,17 +500,17 @@ function planMes(run: ToolRun): ToolResult {
     entra_por_mes: f.ars(plan.income),
     fijos: f.ars(plan.fijos),
     tarjetas: f.ars(plan.cards),
+    metas_por_mes_en_total: f.ars(plan.goalsTotal),
     metas: plan.goals.map((g) => ({
       nombre: g.name,
       prioridad: PRIORITY[g.priority],
       por_mes: f.ars(g.needArs),
     })),
-    ...signed(
-      f,
-      plan.dayToDay,
-      "queda_para_el_dia_a_dia",
-      "para_el_dia_a_dia_no_queda_nada_faltan",
+    // Ready for a row ("Día a día: faltan $ 42.222"): the word says which way.
+    dia_a_dia: f.label(
+      plan.dayToDay >= 0 ? `quedan ${ars(plan.dayToDay)}` : `faltan ${ars(-plan.dayToDay)}`,
     ),
+    alcanza_para_el_dia_a_dia: plan.dayToDay >= 0,
     gasto_normal_dia_a_dia: f.ars(plan.usual),
     cierra: plan.closes,
     ...(plan.closes ? { sobra: f.ars(plan.gap) } : { falta: f.ars(-plan.gap) }),

@@ -48,7 +48,7 @@ export const CHIPS: Chip[] = [
     tools: [["plan_mes", {}]],
     units: 1,
     guide:
-      'Formato: primero una frase con la conclusión: si el mes cierra y cuánto sobra, o si no cierra y cuánto falta. Después una lista con Entra, Fijos, Tarjetas, Metas y Día a día. Después la línea "Topes sugeridos:" y una línea por tope: "- " más la categoría, dos puntos y el id de su tope. Al final una frase con cuánto liberan los topes. Nada más.',
+      'Formato: primero una frase con la conclusión: si el mes cierra y cuánto sobra, o si no cierra y cuánto falta. Después una lista con Entra, Fijos, Tarjetas, Metas (el total por mes) y Día a día (el id de dia_a_dia, que ya dice "quedan" o "faltan"). Después la línea "Topes sugeridos:" y una línea por tope: "- " más la categoría, dos puntos y el id de su tope. Al final una frase con cuánto liberan los topes. Nada más.',
   },
   {
     id: "metas",
@@ -56,7 +56,7 @@ export const CHIPS: Chip[] = [
     tools: [["metas", {}]],
     units: 1,
     guide:
-      "Formato: una frase con la conclusión y cuánto sobra por mes. Después una línea por meta: si llega a tiempo o cuándo llegaría, y cuánto necesita por mes para llegar a tiempo.",
+      "Formato: una frase con la conclusión y cuánto sobra por mes. Después una línea por meta: si llega a tiempo; si no, cuándo llegaría con lo que sobra y cuánto haría falta por mes para llegar a tiempo.",
   },
   {
     id: "gasto",
@@ -87,7 +87,7 @@ export const CHIPS: Chip[] = [
     units: 2,
     maxTokens: 600,
     guide:
-      'Formato: una frase con la conclusión del mes. Después tres bloques cortos, cada uno con una línea que termina en ":" y una lista: "Este mes:" (entró, gastaste, si seguís así), "Plan:" (si cierra, y cuánto sobra o falta) y "Tarjetas:" (a pagar y vencimiento). Breve.',
+      'Formato: una frase con la conclusión del mes. Después tres bloques cortos, cada uno con una línea que termina en ":" y una lista: "Este mes:" (entró, gastaste, si seguís así), "Plan:" (si cierra, y cuánto sobra o falta) y "Tarjetas:" (a pagar y vencimiento). Cada línea de cada lista en su propio renglón. Breve.',
   },
 ];
 

@@ -177,7 +177,8 @@ const fold = (w: string) =>
 /**
  * Put the values in. The values carry their unit, so a word the model repeats
  * around the marker goes: "{f1} meta" with "1 meta" → "1 meta" (not "1 meta
- * meta"), "enero {f2}" with "15 de enero de 2027" → "15 de enero de 2027".
+ * meta"), "enero {f2}" with "15 de enero de 2027" → "15 de enero de 2027",
+ * "faltan {f3}" with "faltan $ 42.222" → "faltan $ 42.222".
  */
 function fill(text: string, facts: Facts) {
   return text
@@ -186,8 +187,10 @@ function fill(text: string, facts: Facts) {
       return fold(last) === fold(word) ? `{${id}}` : all;
     })
     .replace(/(\p{L}+)\s+\{(f\d+)\}/gu, (all, word: string, id: string) => {
-      const value = fold(facts.get(id) ?? "");
-      return MONTH.test(word) && value.split(/\s+/).includes(fold(word)) ? `{${id}}` : all;
+      const words = fold(facts.get(id) ?? "").split(/\s+/);
+      const w = fold(word);
+      // "faltan {f}" with "faltan $ 42.222"; "enero {f}" with "15 de enero de 2027".
+      return w === words[0] || (MONTH.test(word) && words.includes(w)) ? `{${id}}` : all;
     })
     .replace(MARKER, (_, id: string) => facts.get(id) ?? "");
 }
