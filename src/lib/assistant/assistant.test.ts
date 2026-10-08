@@ -819,6 +819,74 @@ describe("easy to read on the phone", () => {
     );
   });
 
+  it("plan_mes: the goals total and a 'Día a día' value that says which way", () => {
+    const r = runTool(new ToolRun(tight()), "plan_mes", {});
+    const total = (r.data.metas as { por_mes: string }[])
+      .map((m) => r.valores[m.por_mes]!)
+      .map((v) => Number(v.replace(/\D/g, "")))
+      .reduce((a, b) => a + b, 0);
+    assert.equal(
+      Number(r.valores[String(r.data.metas_por_mes_en_total)]!.replace(/\D/g, "")),
+      total,
+    );
+    assert.equal(r.data.alcanza_para_el_dia_a_dia, false);
+    assert.match(r.valores[String(r.data.dia_a_dia)]!, /^faltan \$\s?[\d.]+$/);
+    assert.equal(r.data.queda_para_el_dia_a_dia, undefined);
+    const ok = runTool(new ToolRun(data()), "plan_mes", {});
+    if (ok.data.alcanza_para_el_dia_a_dia) {
+      assert.match(ok.valores[String(ok.data.dia_a_dia)]!, /^quedan \$\s?[\d.]+$/);
+    }
+  });
+
+  it("'faltan {f}' with 'faltan $ X' does not say 'faltan' twice", () => {
+    const r = new ToolRun(data());
+    const f = r.facts.label("faltan $ 42.222");
+    const out = checkText(`Día a día: faltan {${f}}. Día a día: {${f}}.`, r, "x");
+    assert.equal(out.ok && out.text, "Día a día: faltan $ 42.222. Día a día: faltan $ 42.222.");
+  });
+
+  it("blocks: 'Etiqueta: valor.' sentences in one paragraph become rows", () => {
+    assert.deepEqual(
+      answerBlocks(
+        "Podés comprarla en 12 cuotas sin interés. Cuota: $ 50.000. Primera: noviembre 2026. Total: $ 600.000. Visa Galicia queda con $ 363.000 libre. Cambia 1 meta.",
+      ),
+      [
+        { kind: "p", text: "Podés comprarla en 12 cuotas sin interés." },
+        {
+          kind: "list",
+          items: [
+            { label: "Cuota", value: "$ 50.000" },
+            { label: "Primera", value: "noviembre 2026" },
+            { label: "Total", value: "$ 600.000" },
+          ],
+        },
+        { kind: "p", text: "Visa Galicia queda con $ 363.000 libre. Cambia 1 meta." },
+      ],
+    );
+    // One "X: y." alone, or a long label, stays text.
+    assert.deepEqual(answerBlocks("Ojo: esto. Nada más."), [
+      { kind: "p", text: "Ojo: esto. Nada más." },
+    ]);
+    assert.deepEqual(answerBlocks("El mes no cierra: te faltan $ 1.250.000."), [
+      { kind: "p", text: "El mes no cierra: te faltan $ 1.250.000." },
+    ]);
+    const informe = answerBlocks(
+      "En octubre gastaste más. Este mes: entró $ 1.250.000, gastaste $ 810.000. Plan: no cierra, te faltan $ 515.722.",
+    );
+    assert.equal(informe[1]!.kind, "list");
+    assert.deepEqual((informe[1] as { items: unknown[] }).items[1], {
+      label: "Plan",
+      value: "no cierra, te faltan $ 515.722",
+    });
+  });
+
+  it("the prompt asks for real line breaks, and the guides for the goals total and 'llegaría'", () => {
+    assert.match(chipById("plan")!.guide!, /Metas \(el total por mes\)/);
+    assert.match(chipById("plan")!.guide!, /dia_a_dia/);
+    assert.match(chipById("metas")!.guide!, /llegaría/);
+    assert.match(chipById("informe")!.guide!, /renglón/);
+  });
+
   it("chips say how to lay out the answer, without digits the model could copy", async () => {
     for (const id of ["tarjeta", "plan", "metas", "informe"]) {
       const c = chipById(id)!;
@@ -836,6 +904,7 @@ describe("easy to read on the phone", () => {
     const sys = (m.bodies[0]!.messages as { role: string; content: string }[])[0]!;
     assert.match(sys.content, /Topes sugeridos:/);
     assert.match(sys.content, /te faltan/);
+    assert.match(sys.content, /salto de línea/);
   });
 
   it("resumen_mes: fijos and cuotas are not stretched to the whole month", () => {
