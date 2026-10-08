@@ -1,4 +1,4 @@
-import type { Account, Book, Card, CardPurchase, Category, ChatMessage, Recurring, Transaction } from "./types";
+import type { Account, BankStatement, Book, Card, CardPurchase, Category, ChatMessage, Recurring, Transaction } from "./types";
 import { parseChatThreads, threadFromMessages, type ChatThread } from "./chat-threads";
 import { parseGoals, type Goal } from "./goals";
 import { parseOutbox, type OutboxOp } from "./outbox";
@@ -60,6 +60,8 @@ export type LocalVault = {
   /** Purchases in cuotas (their cuotas are in `transactions`). */
   purchases?: CardPurchase[];
   pendingPurchaseIds?: string[];
+  /** Statements imported from PDFs (bank dates and totals). */
+  statements?: BankStatement[];
 };
 
 function mailOf(email: string | null | undefined) {
@@ -102,6 +104,7 @@ export function buildLocalVault(input: {
   pendingCardIds?: string[];
   purchases?: CardPurchase[];
   pendingPurchaseIds?: string[];
+  statements?: BankStatement[];
 }): LocalVault | null {
   const email = mailOf(input.email);
   if (!email) return null;
@@ -152,6 +155,7 @@ export function buildLocalVault(input: {
     pendingCardIds: [...new Set(input.pendingCardIds ?? [])],
     purchases: input.purchases ?? [],
     pendingPurchaseIds: [...new Set(input.pendingPurchaseIds ?? [])],
+    statements: input.statements ?? [],
   };
 }
 
@@ -274,6 +278,9 @@ export function asVault(raw: unknown): LocalVault | null {
       ? p.purchases.filter((x): x is CardPurchase => Boolean(x && typeof x === "object" && x.id && x.cardId))
       : [],
     pendingPurchaseIds: Array.isArray(p.pendingPurchaseIds) ? p.pendingPurchaseIds.map(String).filter(Boolean) : [],
+    statements: Array.isArray(p.statements)
+      ? p.statements.filter((x): x is BankStatement => Boolean(x && typeof x === "object" && x.id && x.cardId && x.period))
+      : [],
   };
 }
 

@@ -7,7 +7,7 @@ import { computeMonth } from "@/lib/analytics";
 import { money, moneyARS, monthLabel, parseAmount, amountInput } from "@/lib/format";
 import { toGoalCurrency } from "@/lib/goals";
 import { CatIcon } from "@/lib/icons";
-import { useAllCategories, useBookTxs, useLedger } from "@/lib/store";
+import { useAllCategories, useBookGoals, useBookTxs, useLedger } from "@/lib/store";
 import { committedForMonth } from "@/lib/card-math";
 import { cn, daysInMonth, monthISO, todayISO } from "@/lib/utils";
 import { MonthSwitcher } from "@/components/month-switcher";
@@ -309,7 +309,7 @@ function PlanCard({
   }));
   const used = rows.reduce((s, r) => s + r.amount, 0);
   const cushion = plan.left - used;
-  const goals = useLedger((s) => s.goals.filter((g) => g.bookId === s.activeBookId && g.active));
+  const goals = useBookGoals();
   const addToGoal = useLedger((s) => s.addToGoal);
   const usdRate = useLedger((s) => s.usdRate);
   const usdtRate = useLedger((s) => s.usdtRate);

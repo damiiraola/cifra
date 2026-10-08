@@ -27,6 +27,7 @@ import {
   saveCards,
   savePurchases,
   removePurchases,
+  saveStatement as saveStatementFn,
   loadLatestBackup,
   saveDailyBackup,
   saveSettings,
@@ -60,7 +61,7 @@ import { mergeGoals, roundGoal, type Goal } from "./goals";
 import { applyOutbox, enqueue, OUTBOX_MAX_TRIES, pruneOutbox, resetTries, type OutboxOp } from "./outbox";
 import { mergeRecurrings } from "./recurring-sync";
 import { hydrateBookMoney, locksForBook, moneyForBook } from "./budget-math";
-import type { Account, Book, Card, CardPurchase, Category, CategoryKind, ChatMessage, Recurring, Transaction } from "./types";
+import type { Account, BankStatement, Book, Card, CardPurchase, Category, CategoryKind, ChatMessage, Recurring, Transaction } from "./types";
 
 const LOCAL_KEY = "cifra-ledger-v1";
 
@@ -93,6 +94,8 @@ type LedgerState = {
   purchases: CardPurchase[];
   /** Purchases to send (if they exist) or to delete on the server (if not). */
   pendingPurchaseIds: string[];
+  /** Statements imported from the bank's PDF (real dates and totals). Saved online only. */
+  statements: BankStatement[];
   budgets: Record<string, number>;
   globalBudget: number;
   bookBudgets: Record<string, Record<string, number>>;
@@ -149,6 +152,8 @@ type LedgerState = {
   /** Delete a purchase and all its cuotas. */
   removePurchase: (id: string) => void;
   flushPurchases: () => Promise<void>;
+  /** Save what the bank printed on a statement (replaces the same card + month). Throws if offline. */
+  saveStatement: (input: BankStatement) => Promise<BankStatement>;
   pushChat: (msg: ChatMessage) => void;
   startChat: () => void;
   openChat: (id: string) => void;
@@ -202,6 +207,7 @@ function vaultInput(get: () => LedgerState) {
     pendingCardIds: s.pendingCardIds,
     purchases: s.purchases,
     pendingPurchaseIds: s.pendingPurchaseIds,
+    statements: s.statements,
     budgets: s.budgets,
     globalBudget: s.globalBudget,
     bookBudgets: s.bookBudgets,
@@ -420,6 +426,7 @@ function fillTx(get: () => LedgerState, tx: TxInput, previous?: Transaction): Tr
       cards,
       { type: tx.type, accountId, date: tx.date, cardPeriod: tx.cardPeriod, purchaseId: tx.purchaseId },
       previous,
+      get().statements ?? [],
     ),
     purchaseId: tx.purchaseId ?? "",
     installmentNo: tx.installmentNo ?? 0,
@@ -585,6 +592,7 @@ function paintVault(set: (p: Partial<LedgerState>) => void, get: () => LedgerSta
     pendingCardIds: vault.pendingCardIds?.length ? vault.pendingCardIds : get().pendingCardIds,
     purchases: vault.purchases?.length ? vault.purchases : get().purchases,
     pendingPurchaseIds: vault.pendingPurchaseIds?.length ? vault.pendingPurchaseIds : get().pendingPurchaseIds,
+    statements: vault.statements?.length ? vault.statements : get().statements,
     activeBookId,
     onboarded: vault.onboarded || get().onboarded,
     recurrings: vault.recurrings.length ? remapVaultRecurrings(vault, books, accounts) : get().recurrings,
@@ -638,6 +646,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
   pendingCardIds: [],
   purchases: [],
   pendingPurchaseIds: [],
+  statements: [],
   budgets: { ...DEFAULT_BUDGETS },
   globalBudget: DEFAULT_GLOBAL_BUDGET,
   bookBudgets: {},
@@ -716,6 +725,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
               accounts: legacyCards.accounts,
               cards: legacyCards.cards,
               purchases: withPendingPurchases(remote.purchases ?? [], get().purchases, get().pendingPurchaseIds),
+              statements: remote.statements ?? get().statements,
               activeBookId: remote.activeBookId,
               onboarded: true,
               categoryNames: remote.categoryNames,
@@ -762,6 +772,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
           accounts: merged.accounts,
           cards: merged.cards,
           purchases: withPendingPurchases(remote.purchases ?? [], get().purchases, get().pendingPurchaseIds),
+          statements: remote.statements ?? get().statements,
           activeBookId: remote.activeBookId,
           onboarded: remote.onboarded,
           categoryNames: remote.categoryNames,
@@ -820,6 +831,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
       pendingCardIds: [],
       purchases: [],
       pendingPurchaseIds: [],
+      statements: [],
       chat: [],
       chatThreads: [],
       activeChatId: "",
@@ -1281,7 +1293,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
       total,
       cashPrice: input.cashPrice > 0 ? input.cashPrice : 0,
     };
-    const cuotas = deriveInstallments(purchase, card);
+    const cuotas = deriveInstallments(purchase, card, s.statements);
     const stale = staleCuotaIds(s.transactions, purchase.id, cuotas);
     const exists = s.purchases.some((p) => p.id === purchase.id);
     set({
@@ -1341,6 +1353,13 @@ export const useLedger = create<LedgerState>()((set, get) => ({
       }
     })();
     return purchaseFlushLock;
+  },
+  saveStatement: async (input) => {
+    const saved = await saveStatementFn({ data: input });
+    const rest = get().statements.filter((x) => !(x.cardId === saved.cardId && x.period === saved.period));
+    set({ statements: [saved, ...rest].sort((a, b) => b.period.localeCompare(a.period)) });
+    persistLocal(get);
+    return saved;
   },
   pushChat: (msg) => {
     const id = get().activeChatId || uid();
@@ -1470,6 +1489,14 @@ export function useBookTxs() {
 
 export function useBookCards() {
   return useLedger(useShallow((s) => s.cards.filter((c) => c.bookId === s.activeBookId && !c.archived)));
+}
+
+export function useBookStatements() {
+  return useLedger(useShallow((s) => s.statements.filter((x) => x.bookId === s.activeBookId)));
+}
+
+export function useBookGoals() {
+  return useLedger(useShallow((s) => s.goals.filter((g) => g.bookId === s.activeBookId && g.active)));
 }
 
 export function useBookPurchases() {

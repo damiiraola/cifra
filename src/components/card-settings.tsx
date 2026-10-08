@@ -108,8 +108,9 @@ function CardRow({
   const txs = useBookTxs();
   const accounts = useBookAccounts();
   const today = argentinaDay();
-  const open = openStatement(card, txs, today);
-  const closed = lastClosedStatement(card, txs, today);
+  const statements = useLedger((s) => s.statements);
+  const open = openStatement(card, txs, today, statements);
+  const closed = lastClosedStatement(card, txs, today, statements);
   const ars = accounts.find((a) => a.id === card.accountArsId);
   const usd = accounts.find((a) => a.id === card.accountUsdId);
   const owesArs = ars ? cardDebt(ars, accountBalance(ars, txs)) : 0;

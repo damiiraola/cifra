@@ -8,7 +8,7 @@
  * - Closing/due days past the end of a short month use its last day.
  * - The due date is the first `dueDay` after the closing.
  */
-import type { Account, Book, Card, CardPurchase, Recurring, Transaction } from "./types";
+import type { Account, BankStatement, Book, Card, CardPurchase, Recurring, Transaction } from "./types";
 import { dueDate as fijoDate, isPosted } from "./recurring.ts";
 
 function pad(n: number) {
@@ -77,6 +77,7 @@ export function cardPeriodFor(
   cards: Card[],
   tx: Pick<Transaction, "type" | "accountId" | "date"> & { cardPeriod?: string; purchaseId?: string },
   previous?: Pick<Transaction, "accountId" | "date" | "cardPeriod">,
+  statements: BankStatement[] = [],
 ): string {
   if (tx.type === "transfer") return "";
   const card = cardForAccount(cards, tx.accountId);
@@ -92,7 +93,45 @@ export function cardPeriodFor(
   ) {
     return tx.cardPeriod!;
   }
-  return periodFor(tx.date, card.closingDay);
+  // A new movement that already knows its statement (imported from the bank's PDF).
+  if (!previous && /^\d{4}-\d{2}$/.test(tx.cardPeriod ?? "")) return tx.cardPeriod!;
+  return periodForCard(tx.date, card, statements);
+}
+
+// ------------------------------------------------- real dates from the bank
+
+function statementOf(card: Card, period: string, statements: BankStatement[]) {
+  return statements.find((s) => s.cardId === card.id && s.period === period);
+}
+
+/** Closing date of a statement: the bank's (imported) if known, else the card's default day. */
+export function closingOf(card: Card, period: string, statements: BankStatement[] = []): string {
+  const own = statementOf(card, period, statements);
+  if (own?.closingDate) return own.closingDate;
+  const prev = statementOf(card, shiftPeriod(period, -1), statements);
+  if (prev?.nextClosingDate) return prev.nextClosingDate;
+  return closingDate(period, card.closingDay);
+}
+
+/** Due date of a statement: the bank's if known, else from the card's days. */
+export function dueOf(card: Card, period: string, statements: BankStatement[] = []): string {
+  const own = statementOf(card, period, statements);
+  if (own?.dueDate) return own.dueDate;
+  const prev = statementOf(card, shiftPeriod(period, -1), statements);
+  if (prev?.nextDueDate) return prev.nextDueDate;
+  return dueDate(period, card.closingDay, card.dueDay);
+}
+
+/**
+ * Statement a date goes to, using the real closings printed by the bank
+ * (they move a few days month to month) and the card's day otherwise.
+ */
+export function periodForCard(date: string, card: Card, statements: BankStatement[] = []): string {
+  const p = periodFor(date, card.closingDay);
+  if (!statements.some((s) => s.cardId === card.id)) return p;
+  if (date <= closingOf(card, shiftPeriod(p, -1), statements)) return shiftPeriod(p, -1);
+  if (date > closingOf(card, p, statements)) return shiftPeriod(p, 1);
+  return p;
 }
 
 export type CardStatement = {
@@ -108,7 +147,12 @@ function round2(n: number) {
 }
 
 /** What a statement carries so far: expenses minus refunds, per currency. */
-export function statementTotals(card: Card, txs: Transaction[], period: string): CardStatement {
+export function statementTotals(
+  card: Card,
+  txs: Transaction[],
+  period: string,
+  statements: BankStatement[] = [],
+): CardStatement {
   let ars = 0;
   let usd = 0;
   for (const t of txs) {
@@ -116,7 +160,7 @@ export function statementTotals(card: Card, txs: Transaction[], period: string):
     const isArs = t.accountId === card.accountArsId;
     const isUsd = t.accountId === card.accountUsdId;
     if (!isArs && !isUsd) continue;
-    const p = t.cardPeriod || periodFor(t.date, card.closingDay);
+    const p = t.cardPeriod || periodForCard(t.date, card, statements);
     if (p !== period) continue;
     const sign = t.type === "income" ? -1 : 1;
     if (isArs) ars += sign * t.amount;
@@ -124,21 +168,26 @@ export function statementTotals(card: Card, txs: Transaction[], period: string):
   }
   return {
     period,
-    closing: closingDate(period, card.closingDay),
-    due: dueDate(period, card.closingDay, card.dueDay),
+    closing: closingOf(card, period, statements),
+    due: dueOf(card, period, statements),
     ars: round2(ars),
     usd: round2(usd),
   };
 }
 
 /** The statement still open today (purchases today go here). */
-export function openStatement(card: Card, txs: Transaction[], today: string): CardStatement {
-  return statementTotals(card, txs, periodFor(today, card.closingDay));
+export function openStatement(card: Card, txs: Transaction[], today: string, statements: BankStatement[] = []): CardStatement {
+  return statementTotals(card, txs, periodForCard(today, card, statements), statements);
 }
 
 /** Last closed statement (already closed, maybe not due yet). */
-export function lastClosedStatement(card: Card, txs: Transaction[], today: string): CardStatement {
-  return statementTotals(card, txs, shiftPeriod(periodFor(today, card.closingDay), -1));
+export function lastClosedStatement(
+  card: Card,
+  txs: Transaction[],
+  today: string,
+  statements: BankStatement[] = [],
+): CardStatement {
+  return statementTotals(card, txs, shiftPeriod(periodForCard(today, card, statements), -1), statements);
 }
 
 /** What you owe on a caja-tarjeta: the opposite of its balance, never < 0. */
@@ -218,11 +267,11 @@ function monthOf(date: string) {
  * following month and goes one statement later. So a 12-cuota purchase counts
  * one cuota per month in budgets, starting the month of purchase.
  */
-export function deriveInstallments(p: CardPurchase, card: Card): Transaction[] {
+export function deriveInstallments(p: CardPurchase, card: Card, statements: BankStatement[] = []): Transaction[] {
   const amounts = installmentAmounts(p);
   const n = amounts.length;
   const first = Math.min(n, Math.max(1, Math.round(p.paidBefore) + 1));
-  const anchorPeriod = periodFor(p.date, card.closingDay);
+  const anchorPeriod = periodForCard(p.date, card, statements);
   const anchorMonth = monthOf(p.date);
   const accountId = p.currency === "USD" ? card.accountUsdId : card.accountArsId;
   const label = p.merchant.trim() || "Compra en cuotas";
@@ -321,19 +370,20 @@ export function upcomingStatements(
   recurrings: Recurring[],
   today: string,
   months = 6,
+  statements: BankStatement[] = [],
 ): UpcomingStatement[] {
-  const open = periodFor(today, card.closingDay);
+  const open = periodForCard(today, card, statements);
   const cardIds = new Set([card.accountArsId, card.accountUsdId]);
   const out: UpcomingStatement[] = [];
   for (let i = 0; i < months; i++) {
     const period = shiftPeriod(open, i);
-    const base = statementTotals(card, txs, period);
+    const base = statementTotals(card, txs, period, statements);
     let cuotasArs = 0;
     let cuotasUsd = 0;
     const ending = { count: 0, ars: 0, usd: 0 };
     for (const t of txs) {
       if (!t.purchaseId || !cardIds.has(t.accountId) || t.type !== "expense") continue;
-      if ((t.cardPeriod || periodFor(t.date, card.closingDay)) !== period) continue;
+      if ((t.cardPeriod || periodForCard(t.date, card, statements)) !== period) continue;
       const usd = t.accountId === card.accountUsdId;
       if (usd) cuotasUsd += t.amount;
       else cuotasArs += t.amount;
@@ -361,7 +411,7 @@ export function upcomingStatements(
       const ym = shiftPeriod(firstMonth, i);
       const date = fijoDate(ym, r.day);
       if (date < today || isPosted(r, txs, ym)) continue;
-      const s = byPeriod.get(periodFor(date, card.closingDay));
+      const s = byPeriod.get(periodForCard(date, card, statements));
       if (!s) continue;
       const usd = r.accountId === card.accountUsdId;
       if (usd) {
