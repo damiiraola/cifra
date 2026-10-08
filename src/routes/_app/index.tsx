@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { FxStrip } from "@/components/fx-strip";
 import { WalletStrip } from "@/components/wallet-strip";
 import { GoalStrip } from "@/components/goal-strip";
+import { PlanAlerts } from "@/components/plan-alerts";
 
 export const Route = createFileRoute("/_app/")({
   component: Diario,
@@ -119,6 +120,7 @@ function Diario() {
         </div>
       </div>
 
+      {viewMonth === monthISO() && !searching ? <PlanAlerts limit={2} /> : null}
       <FxStrip />
       <WalletStrip />
       <GoalStrip />

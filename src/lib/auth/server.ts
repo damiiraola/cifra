@@ -27,7 +27,7 @@ import { bearer } from "better-auth/plugins";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
 import { getCookie } from "@tanstack/react-start/server";
 import { randomBytes } from "node:crypto";
-import { Pool } from "pg";
+import { createPgPool } from "../pg-pool";
 import { ensureDbReady, getPglite } from "../db";
 import { emailAndPasswordEnabled, emailPasswordOptions, emailVerificationOptions } from "./email-password";
 import { pgliteDialect } from "./pglite-dialect";
@@ -90,8 +90,11 @@ const databaseUrl = env("DATABASE_URL");
 // `migrations/0001_auth.sql`. The `account` table stays: email/password users
 // keep their hashed password there (providerId "credential"); older rows from
 // the removed external logins are left untouched.
+// The pool checks idle connections and closes them before Vercel suspends the
+// instance (see lib/pg-retry.ts: the first sign-up after a quiet spell used to
+// fail with "Connection terminated unexpectedly").
 const database = databaseUrl
-  ? new Pool({ connectionString: databaseUrl })
+  ? createPgPool(databaseUrl)
   : { dialect: pgliteDialect(() => getPglite()), type: "postgres" as const };
 
 /** Session token cookie name. */

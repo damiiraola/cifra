@@ -1,4 +1,5 @@
 import { pendingMigrations } from "../../scripts/migration-plan.mjs";
+import { retryTransient } from "./pg-retry";
 
 /** Which database backend is active. */
 export type DbSource = "neon" | "pglite";
@@ -90,14 +91,17 @@ function createNeonSql(): Promise<Sql> {
   globalRef.__pgSqlPromise__ ??= (async () => {
     // Regular Postgres driver: node-postgres (`pg`) — works directly with Neon's
     // pooled endpoint. One pool per process; warm serverless instances reuse it.
-    const { Pool, types } = await import("pg");
+    const { types } = await import("pg");
+    const { createPgPool } = await import("./pg-pool");
     types.setTypeParser(OID_INT8, Number);
     types.setTypeParser(OID_DATE, identity);
     types.setTypeParser(OID_INTERVAL, identity);
-    const pool = new Pool({ connectionString: databaseUrl });
+    const pool = createPgPool(databaseUrl!);
     globalRef.__pgPool__ = pool;
+    // One more try on a fresh connection when the first one was dropped (see
+    // pg-retry.ts). Single statements only; transactions are not retried.
     return toSql(async <T>(text: string, params: unknown[]) => {
-      const res = await pool.query(text, params);
+      const res = await retryTransient(() => pool.query(text, params));
       return res.rows as T[];
     });
   })().catch((err) => {
