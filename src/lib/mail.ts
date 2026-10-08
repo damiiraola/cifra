@@ -22,7 +22,13 @@ export type SendInput = {
   signoff?: string;
   /** Footer note under "cifra.lol · hola@cifra.lol". */
   note?: string;
+  /** List of short lines, each with a coloured dot (the alert digest). */
+  items?: ReadonlyArray<MailItem>;
+  /** Unsubscribe link: footer link plus List-Unsubscribe headers (one click). */
+  unsubscribeUrl?: string;
 };
+
+export type MailItem = { text: string; tone: "bad" | "warn" | "info" };
 
 export type SendResult = { ok: true } | { ok: false; error: string };
 
@@ -233,7 +239,7 @@ export function renderMailHtml(
   content: MailContent,
   opts: { assetOrigin?: string } = {},
 ): string {
-  const { heading, body, cta, url, preheader, kicker, info, ledger, showLink, signoff, note } =
+  const { heading, body, cta, url, preheader, kicker, info, ledger, showLink, signoff, note, items, unsubscribeUrl } =
     content;
   const accent = content.accent ?? C.silver;
   const assets = (opts.assetOrigin ?? MAIL_ASSET_ORIGIN).replace(/\/+$/, "");
@@ -330,6 +336,53 @@ export function renderMailHtml(
         ),
       )
     : "";
+
+  const dot: Record<MailItem["tone"], string> = { bad: C.rose, warn: C.gold, info: C.silver };
+  const itemsRow =
+    items && items.length
+      ? row(
+          cell(
+            C.card,
+            "padding:24px 0 0;",
+            table(
+              items
+                .map((it, i) =>
+                  row(
+                    cell(
+                      C.card,
+                      i ? "padding-top:10px;" : "",
+                      framed(
+                        C.elevated,
+                        12,
+                        "14px 16px",
+                        table(
+                          row(
+                            cell(
+                              C.elevated,
+                              "padding-top:7px;width:8px;",
+                              table(row(cell(dot[it.tone], "width:8px;height:8px;border-radius:4px;font-size:0;line-height:0;", "&nbsp;", 'width="8" height="8"'))),
+                              'width="8" valign="top"',
+                            ) +
+                              cell(
+                                C.elevated,
+                                `padding-left:12px;font-family:${SANS};font-size:14px;line-height:21px;color:${C.body};`,
+                                keepLight(e(it.text)),
+                                'valign="top"',
+                                "sans c-body",
+                              ),
+                          ),
+                          'width="100%"',
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+                .join(""),
+              'width="100%"',
+            ),
+          ),
+        )
+      : "";
 
   const ledgerRow =
     ledger && ledger.length
@@ -440,6 +493,7 @@ export function renderMailHtml(
           ),
         ) +
         infoRow +
+        itemsRow +
         ledgerRow +
         button +
         linkRow +
@@ -461,7 +515,7 @@ export function renderMailHtml(
           C.bg,
           `padding:22px 0 0 14px;font-family:${SANS};font-size:12px;line-height:19px;color:${C.subtle};`,
           keepLight(
-            `<a href="${APP_ORIGIN}" target="_blank" class="c-muted" style="color:${C.muted};text-decoration:none;">cifra.lol</a> · <a href="mailto:hola@cifra.lol" class="c-muted" style="color:${C.muted};text-decoration:none;">hola@cifra.lol</a>${note ? `<br>${e(note)}` : ""}`,
+            `<a href="${APP_ORIGIN}" target="_blank" class="c-muted" style="color:${C.muted};text-decoration:none;">cifra.lol</a> · <a href="mailto:hola@cifra.lol" class="c-muted" style="color:${C.muted};text-decoration:none;">hola@cifra.lol</a>${note ? `<br>${e(note)}` : ""}${unsubscribeUrl ? `<br><a href="${e(unsubscribeUrl)}" target="_blank" class="c-muted" style="color:${C.muted};text-decoration:underline;">Dejar de recibir estos avisos</a>` : ""}`,
           ),
           'valign="top"',
           "sans c-subtle",
@@ -557,6 +611,10 @@ export function renderMailText(content: MailContent): string {
   if (content.info) {
     lines.push("", [content.info.lead, content.info.text].filter(Boolean).join(" "));
   }
+  if (content.items?.length) {
+    lines.push("");
+    for (const it of content.items) lines.push(`• ${it.text}`);
+  }
   if (content.ledger?.length) {
     lines.push("");
     for (const [k, v] of content.ledger) lines.push(`${k}: ${v}`);
@@ -567,6 +625,7 @@ export function renderMailText(content: MailContent): string {
   if (content.signoff) lines.push("", content.signoff);
   lines.push("", "—", "cifra.lol · hola@cifra.lol");
   if (content.note) lines.push(content.note);
+  if (content.unsubscribeUrl) lines.push(`Dejar de recibir estos avisos: ${content.unsubscribeUrl}`);
   return lines.join("\n");
 }
 
@@ -618,6 +677,14 @@ async function deliverMail(input: SendInput, opts?: { from?: string }): Promise<
       subject: input.subject,
       html: renderMailHtml(input),
       text: renderMailText(input),
+      ...(input.unsubscribeUrl
+        ? {
+            headers: {
+              "List-Unsubscribe": `<${input.unsubscribeUrl}>`,
+              "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+            },
+          }
+        : {}),
     }),
   });
 

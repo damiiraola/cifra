@@ -92,6 +92,10 @@ export default defineConfig(({ command, isPreview }) => ({
               functions: { maxDuration: 60 },
               config: {
                 routes: [{ src: "/(.*)", headers: securityHeaders(), continue: true }],
+                // Avisos por mail: once a day at 9:00 Argentina (Hobby allows
+                // daily crons only). The route answers 404 until
+                // ALERT_MAILS_ENABLED=1 and CRON_SECRET are set.
+                crons: [{ path: "/api/cron/alertas", schedule: "0 12 * * *" }],
               },
             },
           }),

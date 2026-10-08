@@ -56,6 +56,8 @@ Variables de entorno (no se commitean). En Vercel se cargan en Project → Setti
 | `RESEND_API_KEY` | servidor | mails (confirmar cuenta + olvidé clave) |
 | `MAIL_FROM` | servidor | `Cifra <hola@cifra.lol>` cuando el dominio está verificado en Resend |
 | `MAIL_DRILL_TOKEN` | servidor | **opcional**. Prende `/api/mail-drill` (ver abajo). Sin esta variable la ruta da 404 |
+| `ALERT_MAILS_ENABLED` | servidor | **opcional**. `1` prende los avisos por mail (opt-in en Ajustes). Sin esto, no aparece la opción y `/api/cron/alertas` da 404 |
+| `CRON_SECRET` | servidor | **opcional**, obligatorio para los avisos por mail. Vercel Cron lo manda como `Authorization: Bearer …` al llamar `/api/cron/alertas` (todos los días a las 9:00 de Argentina) |
 
 Sin `DATABASE_URL` la app igual arranca (PGLite). No uses ese modo para testers reales: el libro se borra al reiniciar.
 
