@@ -69,5 +69,5 @@ export function cleanAskInput(input: unknown): {
         .slice(0, 80)
         .map((c) => ({ id: str(c.id, 60), name: str(c.name, 60), kind: str(c.kind, 20) }))
     : [];
-  return { mode, message: str(i.message, 2000), snapshot: str(i.snapshot, 4000), history, categories };
+  return { mode, message: str(i.message, 2000), snapshot: str(i.snapshot, 14000), history, categories };
 }

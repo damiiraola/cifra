@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { AI_TIMEOUT, AI_UNAVAILABLE, aiStatus, askCifra } from "@/lib/ai";
 import { computeMonth, snapshotText } from "@/lib/analytics";
 import { todayISO, uid } from "@/lib/utils";
-import { useLedger, useBookTxs, useAllCategories } from "@/lib/store";
+import { useLedger, useBookTxs, useBookAccounts, useBookCards, useBookPurchases, useAllCategories } from "@/lib/store";
+import { accountBalance, accountLabel } from "@/lib/books";
+import { recurringLines } from "@/lib/budget-math";
+import { wealthPlanText } from "@/lib/wealth-plan";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
 import type { PayMethod, TxType, Currency } from "@/lib/types";
@@ -18,6 +21,7 @@ const SUGGESTIONS = [
   "¿Dónde más estoy gastando este mes?",
   "Armame un plan para recortar 20%",
   "¿Me voy a pasar el presupuesto?",
+  "Armame el plan: ordenar el mes y, si sobra, el largo plazo",
   "Compará alimentación vs el mes pasado",
   "Gasté 15 mil en Coto con Mercado Pago",
 ];
@@ -32,13 +36,20 @@ export function Asistente() {
     budgets,
     globalBudget,
     chat,
+    chatThreads,
+    activeChatId,
     pushChat,
-    clearChat,
+    startChat,
+    openChat,
+    deleteChat,
     openQuick,
     recurrings,
     activeBookId,
   } = useLedger();
   const transactions = useBookTxs();
+  const accounts = useBookAccounts();
+  const cards = useBookCards();
+  const purchases = useBookPurchases();
   const allCats = useAllCategories();
   const [text, setText] = useState("");
   const [pending, setPending] = useState(false);
@@ -74,8 +85,41 @@ export function Asistente() {
         currency: r.currency,
         active: r.active,
       }));
-    return snapshotText(cur, prev, budgets, globalBudget, fx, allCats, fijos);
-  }, [transactions, viewMonth, usdRate, usdtRate, budgets, globalBudget, allCats, recurrings, activeBookId]);
+    const catName = new Map(allCats.map((c) => [c.id, c.name]));
+    const moves = transactions
+      .filter((t) => t.date.startsWith(viewMonth))
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(-80)
+      .map((t) => ({
+        date: t.date,
+        type: t.type,
+        name: (t.merchant || t.note || catName.get(t.categoryId) || "Sin detalle").slice(0, 60),
+        category: catName.get(t.categoryId) || t.categoryId,
+        amount: t.amount,
+        currency: t.currency,
+      }));
+    return snapshotText(cur, prev, budgets, globalBudget, fx, allCats, fijos, {
+      accounts: accounts.map((a) => ({
+        label: accountLabel(a),
+        amount: accountBalance(a, transactions),
+        currency: a.currency,
+      })),
+      moves,
+      cards: cards.map((c) => ({ name: c.name, closingDay: c.closingDay, dueDay: c.dueDay })),
+      purchases: purchases.map((p) => ({
+        merchant: p.merchant || "Cuota",
+        cuota: p.installmentAmount,
+        count: p.installments,
+        currency: p.currency,
+      })),
+      plan: wealthPlanText({
+        incomeArs: recurringLines(recurrings, activeBookId, fx, "income").reduce((s, r) => s + r.amount, 0),
+        expenseArs: recurringLines(recurrings, activeBookId, fx, "expense").reduce((s, r) => s + r.amount, 0),
+        capArs: globalBudget,
+        usdtRate: usdtRate,
+      }),
+    });
+  }, [transactions, viewMonth, usdRate, usdtRate, budgets, globalBudget, allCats, recurrings, activeBookId, accounts, cards, purchases]);
 
   function fail(message: string, mode: "chat" | "parse" | "report") {
     toast.error(message);
@@ -158,30 +202,57 @@ export function Asistente() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Asesor Cifra</p>
-          <h1 className="font-display text-4xl tracking-tight">Asistente</h1>
+          <h1 data-tour="titulo" className="font-display text-4xl tracking-tight">Asistente</h1>
         </div>
         <div className="flex gap-2">
           <Button variant="secondary" size="sm" disabled={busy || blocked} onClick={() => send("informe", "report")}>
             Informe del mes
           </Button>
           {chat.length > 0 ? (
-            <Button variant="ghost" size="sm" onClick={clearChat}>
-              Limpiar
+            <Button variant="ghost" size="sm" onClick={startChat}>
+              Nueva
+            </Button>
+          ) : null}
+          {activeChatId && chatThreads.some((t) => t.id === activeChatId) ? (
+            <Button variant="ghost" size="sm" onClick={() => deleteChat(activeChatId)}>
+              Borrar
             </Button>
           ) : null}
         </div>
       </div>
 
       <p className="max-w-xl text-sm text-muted">
-        Totales, categorías, fijos y presupuestos del mes. No se mandan comercios, notas ni cada
-        movimiento.
+        El asistente lee este libro y lo explica en criollo, para llegar a fin de mes.{" "}
+        <Link to="/aprender" className="underline-offset-4 hover:underline">
+          Si nunca anotaste la plata, empezá por Aprender.
+        </Link>
       </p>
+
+      {chatThreads.length > 0 ? (
+        <div className="flex gap-1.5 overflow-x-auto pb-1">
+          {chatThreads.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => openChat(t.id)}
+              aria-pressed={t.id === activeChatId}
+              className={
+                t.id === activeChatId
+                  ? "h-11 shrink-0 rounded-full bg-elevated px-3.5 text-sm text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.16)]"
+                  : "h-11 shrink-0 rounded-full bg-elevated px-3.5 text-sm text-muted"
+              }
+            >
+              {t.title}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       {blocked ? (
         <p className="rounded-2xl bg-elevated px-4 py-3 text-sm text-fg">{AI_UNAVAILABLE}</p>
       ) : null}
 
-      <div className="flex flex-wrap gap-1.5">
+      <div data-tour="ideas" className="flex flex-wrap gap-1.5">
         {SUGGESTIONS.map((s) => (
           <button
             key={s}
@@ -195,7 +266,7 @@ export function Asistente() {
         ))}
       </div>
 
-      <section className="min-h-72 rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_rgba(244,244,240,0.06)] sm:p-5">
+      <section data-tour="charla" className="min-h-72 rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_rgba(244,244,240,0.06)] sm:p-5">
         {chat.length === 0 && !pending ? (
           <div className="flex h-56 flex-col items-center justify-center text-center">
             <p className="font-display text-2xl tracking-tight">Preguntale a tu libro</p>
@@ -229,6 +300,7 @@ export function Asistente() {
       </section>
 
       <form
+        data-tour="pregunta"
         className="grid gap-2"
         onSubmit={(e) => {
           e.preventDefault();

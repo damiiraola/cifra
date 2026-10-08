@@ -17,7 +17,7 @@ export function WalletStrip() {
   if (cajas.length === 0 && cards.length === 0) return null;
 
   return (
-    <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+    <div data-tour="cajas" className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
       {cajas.map((a) => {
         const bal = accountBalance(a, txs);
         return (

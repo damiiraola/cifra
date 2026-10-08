@@ -44,7 +44,7 @@ export const askCifra = createServerFn({ method: "POST" })
       { role: "system", content: systemFor(data.mode, data.categories) },
     ];
     if (data.mode !== "parse" && data.snapshot.trim()) {
-      messages.push({ role: "user", content: `LIBRO (snapshot):\n${data.snapshot.slice(0, 4000)}` });
+      messages.push({ role: "user", content: `LIBRO:\n${data.snapshot.slice(0, 14000)}` });
     }
 
     if (data.mode === "chat" && data.history?.length) {

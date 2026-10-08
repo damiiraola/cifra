@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { money, parseAmount, amountInput } from "@/lib/format";
+import { money, parseAmount, amountInput, shortDay } from "@/lib/format";
 import { toARS } from "@/lib/analytics";
 import { Link } from "@tanstack/react-router";
-import { accountLabel, inferAccount, stampRate } from "@/lib/books";
+import { accountLabel, inferAccount, legsMatch, otherLeg, rateFarFromMarket, stampRate } from "@/lib/books";
 import {
   cardForAccount,
   closingOf,
@@ -65,6 +65,7 @@ export function QuickAdd() {
   const [accountId, setAccountId] = useState("");
   const [counterpartyId, setCounterpartyId] = useState("");
   const [rate, setRate] = useState("");
+  const [fxDriver, setFxDriver] = useState<"sale" | "llega">("llega");
   const [cuotas, setCuotas] = useState("1");
   const [interestFree, setInterestFree] = useState(true);
   const [cashPrice, setCashPrice] = useState("");
@@ -102,6 +103,7 @@ export function QuickAdd() {
     setAccountId(nextAccount);
     setCounterpartyId(src.counterpartyId ?? "");
     setRate(src.rateLocked && src.rateArs ? amountInput(src.rateArs) : "");
+    setFxDriver(src.amountTo ? "llega" : "sale");
     setCuotas("1");
     setInterestFree(true);
     setCashPrice("");
@@ -117,7 +119,31 @@ export function QuickAdd() {
   const customRate = parseAmount(rate);
   const fromAcc = accounts.find((a) => a.id === accountId);
   const toAcc = accounts.find((a) => a.id === counterpartyId);
+  const cross = type === "transfer" && Boolean(fromAcc && toAcc && fromAcc.currency !== toAcc.currency);
+  const foreign: Currency = cross
+    ? fromAcc!.currency !== "ARS"
+      ? fromAcc!.currency
+      : toAcc!.currency
+    : (fromAcc?.currency ?? currency);
+  const marketRate = stampRate(foreign, usdRate, usdtRate);
   const liveRate = stampRate(currency, usdRate, usdtRate, customRate ?? undefined);
+
+  function reprice(driver: "sale" | "llega", amountStr: string, toStr: string, rateStr: string, src = fromAcc, dest = toAcc) {
+    if (type !== "transfer" || !src || !dest || src.currency === dest.currency) return;
+    const typed = parseAmount(rateStr);
+    const used = typed && typed > 0 ? typed : stampRate(src.currency !== "ARS" ? src.currency : dest.currency, usdRate, usdtRate);
+    if (driver === "llega") {
+      const llega = parseAmount(toStr);
+      if (!llega) return;
+      const sale = otherLeg(src.currency, dest.currency, used, llega, "to");
+      if (sale) setAmount(amountInput(sale));
+    } else {
+      const sale = parseAmount(amountStr);
+      if (!sale) return;
+      const llega = otherLeg(src.currency, dest.currency, used, sale, "from");
+      if (llega) setAmountTo(amountInput(llega));
+    }
+  }
   const card = type !== "transfer" ? cardForAccount(cards, accountId) : undefined;
   const cardPeriod = card && date ? periodForCard(date, card, statements) : "";
   // Crédito with a card in the book: the caja picker only shows cards.
@@ -149,7 +175,32 @@ export function QuickAdd() {
   }
 
   function submit() {
-    const n = parseAmount(amount);
+    if (editing && editing.date < todayISO()) {
+      toast.error("Un día que ya pasó no se puede modificar.");
+      return;
+    }
+    const src = accounts.find((a) => a.id === accountId);
+    const dest = accounts.find((a) => a.id === counterpartyId);
+    const typedRate = parseAmount(rate);
+    const legForeign: Currency =
+      src && dest && src.currency !== dest.currency
+        ? src.currency !== "ARS"
+          ? src.currency
+          : dest.currency
+        : (src?.currency ?? currency);
+    const market = stampRate(legForeign, usdRate, usdtRate);
+    const usedRate = typedRate && typedRate > 0 ? typedRate : market;
+    let n = parseAmount(amount);
+    let to = parseAmount(amountTo) ?? 0;
+    if (type === "transfer" && src && dest && src.currency !== dest.currency) {
+      if (!(n && n > 0) && to > 0) {
+        const sale = otherLeg(src.currency, dest.currency, usedRate, to, "to");
+        if (sale) n = sale;
+      } else if (n && n > 0 && to <= 0) {
+        const llega = otherLeg(src.currency, dest.currency, usedRate, n, "from");
+        if (llega) to = llega;
+      }
+    }
     if (n == null || n <= 0) {
       toast.error("Ingresá un monto válido");
       return;
@@ -193,17 +244,33 @@ export function QuickAdd() {
       toast.error("Elegí a qué caja va");
       return;
     }
+    if (type === "transfer" && src && dest && src.id === dest.id) {
+      toast.error("Elegí dos cajas distintas");
+      return;
+    }
+    if (type === "transfer" && src && dest && src.currency !== dest.currency) {
+      if (to <= 0) {
+        toast.error(`Ingresá cuánto llega en ${dest.currency}`);
+        return;
+      }
+      if (typedRate && rateFarFromMarket(typedRate, market)) {
+        toast.error(
+          `La cotización está muy lejos del mercado (${Math.round(market)}). Revisá si te faltó o sobró un cero.`,
+        );
+        return;
+      }
+      if (n < 0.01) {
+        toast.error("El monto a descontar da menos de un centavo. Revisá la cotización.");
+        return;
+      }
+      if (!legsMatch(n, to, src.currency, dest.currency, usedRate)) {
+        toast.error("Los montos no cierran con esa cotización.");
+        return;
+      }
+    }
     if (type !== "transfer" && !categoryId) {
       toast.error("Elegí una categoría");
       return;
-    }
-    const dest = accounts.find((a) => a.id === counterpartyId);
-    const src = accounts.find((a) => a.id === accountId);
-    let to = parseAmount(amountTo) ?? 0;
-    if (type === "transfer" && src && dest && src.currency !== dest.currency && to <= 0) {
-      if (dest.currency === "ARS") to = n * liveRate;
-      else toast.error("Ingresá cuánto llega en la otra moneda");
-      if (to <= 0) return;
     }
     const payload = {
       type,
@@ -218,8 +285,8 @@ export function QuickAdd() {
       accountId: accountId || inferAccount(accounts, activeBookId, method, currency),
       counterpartyId: type === "transfer" ? counterpartyId : "",
       amountTo: type === "transfer" ? to : 0,
-      rateArs: liveRate,
-      rateLocked: Boolean(customRate),
+      rateArs: type === "transfer" && src && dest && src.currency !== dest.currency ? usedRate : liveRate,
+      rateLocked: Boolean(typedRate),
       recurringId: editing?.recurringId ?? "",
     };
     if (editing) {
@@ -231,6 +298,35 @@ export function QuickAdd() {
       toast.success(type === "expense" ? "Gasto registrado" : type === "income" ? "Ingreso registrado" : "Cambio registrado");
     }
     closeQuick();
+  }
+
+  if (editing && editing.date < todayISO()) {
+    const from = accounts.find((a) => a.id === editing.accountId);
+    const to = accounts.find((a) => a.id === editing.counterpartyId);
+    return (
+      <Drawer open={quickOpen} onOpenChange={(o) => (!o ? closeQuick() : null)} shouldScaleBackground={false}>
+        <DrawerContent>
+          <div className="px-5 pt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+            <DrawerTitle>Movimiento cerrado</DrawerTitle>
+            <DrawerDescription className="mt-1">
+              Es del {shortDay(editing.date)}. Un día que ya pasó queda como se cargó.
+            </DrawerDescription>
+            <p className="mt-4 font-display text-3xl tabular-nums">{money(editing.amount, editing.currency)}</p>
+            <p className="mt-2 text-sm text-muted">
+              {editing.type === "transfer"
+                ? `${from?.name ?? "Caja"} → ${to?.name ?? "Caja"}`
+                : editing.merchant || editing.note || "Movimiento"}
+              {editing.type === "transfer" && editing.amountTo > 0
+                ? ` · llegan ${money(editing.amountTo, to?.currency ?? "ARS")}`
+                : ""}
+            </p>
+            <Button className="mt-6 w-full" onClick={() => closeQuick()}>
+              Cerrar
+            </Button>
+          </div>
+        </DrawerContent>
+      </Drawer>
+    );
   }
 
   if (editing && editingCuota) {
@@ -314,12 +410,17 @@ export function QuickAdd() {
                 id="amount"
                 inputMode="decimal"
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setAmount(v);
+                  setFxDriver("sale");
+                  reprice("sale", v, amountTo, rate);
+                }}
                 placeholder="0"
                 className="h-14 min-w-0 flex-1 rounded-lg bg-elevated px-3 font-display text-3xl tracking-tight text-fg outline-none shadow-[0_0_0_1px_rgba(244,244,240,0.08)] placeholder:text-subtle"
               />
             </div>
-            {parsed && (fromAcc?.currency ?? currency) !== "ARS" ? (
+            {parsed && (fromAcc?.currency ?? currency) !== "ARS" && type !== "transfer" ? (
               <p className="mt-1 text-xs text-subtle tabular-nums">
                 ≈ {money(toARS({
                   id: "",
@@ -348,16 +449,21 @@ export function QuickAdd() {
             ) : null}
           </div>
 
-          {(currency === "USDT" || fromAcc?.currency === "USDT" || fromAcc?.currency === "USD") && type !== "income" ? (
+          {(cross ||
+          ((currency === "USDT" || fromAcc?.currency === "USDT" || fromAcc?.currency === "USD") && type !== "income")) ? (
             <div className="mt-4">
-              <Label htmlFor="rate">Cotización ARS {fromAcc?.currency === "USD" ? "(blue)" : "(cripto / P2P)"}</Label>
+              <Label htmlFor="rate">Cotización ARS {foreign === "USD" ? "(blue)" : "(cripto / P2P)"}</Label>
               <Input
                 id="rate"
                 className="mt-1.5"
                 inputMode="decimal"
-                placeholder={String(Math.round(liveRate))}
+                placeholder={String(Math.round(marketRate))}
                 value={rate}
-                onChange={(e) => setRate(e.target.value)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setRate(v);
+                  reprice(fxDriver, amount, amountTo, v);
+                }}
               />
             </div>
           ) : null}
@@ -374,6 +480,7 @@ export function QuickAdd() {
                 if (acc) {
                   setCurrency(acc.currency);
                   if (type !== "transfer") setMethod(methodForAccount(acc.kind, method));
+                  else reprice(fxDriver, amount, amountTo, rate, acc, toAcc);
                 }
               }}
               className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)] outline-none"
@@ -482,7 +589,11 @@ export function QuickAdd() {
               <select
                 id="to"
                 value={counterpartyId}
-                onChange={(e) => setCounterpartyId(e.target.value)}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setCounterpartyId(id);
+                  reprice(fxDriver, amount, amountTo, rate, fromAcc, accounts.find((a) => a.id === id));
+                }}
                 className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)] outline-none"
               >
                 <option value="">Elegí caja</option>
@@ -498,10 +609,21 @@ export function QuickAdd() {
                     id="amountTo"
                     className="mt-1.5"
                     inputMode="decimal"
-                    placeholder={parsed && toAcc.currency === "ARS" ? String(Math.round(parsed * liveRate)) : "0"}
+                    placeholder={parsed && toAcc.currency === "ARS" ? String(Math.round(parsed * (customRate || marketRate))) : "0"}
                     value={amountTo}
-                    onChange={(e) => setAmountTo(e.target.value)}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setAmountTo(v);
+                      setFxDriver("llega");
+                      reprice("llega", amount, v, rate);
+                    }}
                   />
+                  {cross && parseAmount(amountTo) && parsed ? (
+                    <p className="mt-1 text-xs text-subtle tabular-nums">
+                      Se descuentan {money(parsed, fromAcc?.currency ?? "USDT")}
+                      {customRate ? ` a ${amountInput(customRate)}` : " a la cotización de mercado"}.
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
               <div className="mt-3">

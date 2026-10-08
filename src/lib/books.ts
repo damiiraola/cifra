@@ -77,6 +77,51 @@ export function stampRate(currency: Currency, usd: number, usdt: number, overrid
   return usd;
 }
 
+export function roundMoney(amount: number, currency: Currency) {
+  if (!(amount > 0) || !Number.isFinite(amount)) return 0;
+  if (currency === "ARS") return Math.round(amount);
+  return Math.round(amount * 100) / 100;
+}
+
+/** The other side of a cambio. ARS = foreign × rate. */
+export function otherLeg(
+  from: Currency,
+  to: Currency,
+  rate: number,
+  amount: number,
+  driver: "from" | "to",
+): number | null {
+  if (!(rate > 0) || !(amount > 0) || from === to) return null;
+  let raw: number;
+  if (driver === "from") {
+    raw = from === "ARS" && to !== "ARS" ? amount / rate : amount * rate;
+  } else {
+    raw = to === "ARS" && from !== "ARS" ? amount / rate : amount * rate;
+  }
+  const n = roundMoney(raw, driver === "from" ? to : from);
+  return n > 0 ? n : null;
+}
+
+/** A typed quote more than double or less than half the market is almost always a dropped zero. */
+export function rateFarFromMarket(rate: number, market: number) {
+  if (!(rate > 0) || !(market > 0)) return false;
+  const ratio = rate / market;
+  return ratio < 0.5 || ratio > 2;
+}
+
+export function legsMatch(
+  fromAmount: number,
+  toAmount: number,
+  from: Currency,
+  to: Currency,
+  rate: number,
+) {
+  if (!(fromAmount > 0) || !(toAmount > 0) || !(rate > 0) || from === to) return true;
+  const expected = otherLeg(from, to, rate, fromAmount, "from");
+  if (!expected) return false;
+  return Math.abs(expected - toAmount) <= Math.max(1, expected * 0.01);
+}
+
 export function emptyTxFields(bookId = "", accountId = ""): Pick<
   Transaction,
   "bookId" | "accountId" | "counterpartyId" | "amountTo" | "rateArs" | "rateLocked" | "recurringId" | "cardPeriod" | "purchaseId" | "installmentNo" | "installmentCount"

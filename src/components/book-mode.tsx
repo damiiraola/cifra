@@ -103,9 +103,11 @@ export function BookMark() {
 export function BookEntryButton({
   onPicked,
   className,
+  tour,
 }: {
   onPicked?: () => void;
   className?: string;
+  tour?: string;
 }) {
   const book = useActiveBook();
   const personal = usePersonalBook();
@@ -128,6 +130,7 @@ export function BookEntryButton({
         "flex h-12 w-full items-center gap-3 rounded-xl px-3 text-sm font-medium text-muted hover:bg-elevated hover:text-fg",
         className,
       )}
+      data-tour={tour}
     >
       <Icon className="size-4" />
       {inBusiness ? "Volver a Personal" : "Entrar a Negocio"}

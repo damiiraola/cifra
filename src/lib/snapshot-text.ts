@@ -34,6 +34,18 @@ export function categoryRows(
     .sort((a, b) => b.spent - a.spent);
 }
 
+export type SnapshotAccount = { label: string; amount: number; currency: string };
+export type SnapshotMove = {
+  date: string;
+  type: "expense" | "income" | "transfer";
+  name: string;
+  category: string;
+  amount: number;
+  currency: string;
+};
+export type SnapshotCard = { name: string; closingDay: number; dueDay: number };
+export type SnapshotPurchase = { merchant: string; cuota: number; count: number; currency: string };
+
 export function snapshotText(
   current: SnapshotTotals,
   previous: Pick<SnapshotTotals, "ym" | "spent">,
@@ -42,6 +54,13 @@ export function snapshotText(
   rates?: { usd: number; usdt: number },
   cats: Category[] = [],
   fijos: SnapshotFijo[] = [],
+  book?: {
+    accounts?: SnapshotAccount[];
+    moves?: SnapshotMove[];
+    cards?: SnapshotCard[];
+    purchases?: SnapshotPurchase[];
+    plan?: string;
+  },
 ) {
   const catLines = categoryRows(current.byCat, budgets, cats)
     .filter((c) => c.spent > 0 || c.budget > 0)
@@ -63,6 +82,20 @@ export function snapshotText(
   const fxLine = rates
     ? `FX USD: ${Math.round(rates.usd)} ARS · USDT: ${Math.round(rates.usdt)} ARS\n`
     : "";
+  const accounts = (book?.accounts ?? [])
+    .map((a) => `- ${a.label}: ${Math.round(a.amount)} ${a.currency}`)
+    .join("\n");
+  const moves = (book?.moves ?? [])
+    .slice(0, 80)
+    .map((m) => `- ${m.date} ${m.type} ${m.name} (${m.category}): ${Math.round(m.amount)} ${m.currency}`)
+    .join("\n");
+  const cards = (book?.cards ?? [])
+    .map((c) => `- ${c.name}: cierra ${c.closingDay}, vence ${c.dueDay}`)
+    .join("\n");
+  const purchases = (book?.purchases ?? [])
+    .slice(0, 20)
+    .map((p) => `- ${p.merchant}: ${Math.round(p.cuota)} ${p.currency} × ${p.count}`)
+    .join("\n");
 
   return `MES ${current.ym}
 ${fxLine}GASTOS: ${Math.round(current.spent)} ARS
@@ -75,5 +108,14 @@ VS MES ANTERIOR (${previous.ym}): ${deltaSpent.toFixed(1)}%
 CATEGORIAS:
 ${catLines || "-"}
 FIJOS:
-${fijoLines || "-"}`;
+${fijoLines || "-"}
+CAJAS:
+${accounts || "-"}
+MOVIMIENTOS:
+${moves || "-"}
+TARJETAS:
+${cards || "-"}
+CUOTAS:
+${purchases || "-"}
+${book?.plan?.trim() || "PLAN:\n-"}`;
 }

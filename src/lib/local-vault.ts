@@ -1,4 +1,6 @@
 import type { Account, BankStatement, Book, Card, CardPurchase, Category, ChatMessage, Recurring, Transaction } from "./types";
+import { parseChatThreads, threadFromMessages, type ChatThread } from "./chat-threads";
+import { parseGoals, type Goal } from "./goals";
 import { parseOutbox, type OutboxOp } from "./outbox";
 import { remapRecurrings } from "./recurring-sync";
 
@@ -46,9 +48,12 @@ export type LocalVault = {
   usdtRate: number;
   usdSource: string;
   chat: ChatMessage[];
+  chatThreads?: ChatThread[];
+  goals?: Goal[];
   pendingRecurringIds: string[];
   bookBudgets?: Record<string, Record<string, number>>;
   bookGlobals?: Record<string, number>;
+  bookBudgetLocks?: Record<string, Record<string, boolean>>;
   /** Credit cards (their two cajas are in `accounts`). */
   cards?: Card[];
   pendingCardIds?: string[];
@@ -89,9 +94,12 @@ export function buildLocalVault(input: {
   usdtRate?: number;
   usdSource?: string;
   chat?: ChatMessage[];
+  chatThreads?: ChatThread[];
+  goals?: Goal[];
   pendingRecurringIds?: string[];
   bookBudgets?: Record<string, Record<string, number>>;
   bookGlobals?: Record<string, number>;
+  bookBudgetLocks?: Record<string, Record<string, boolean>>;
   cards?: Card[];
   pendingCardIds?: string[];
   purchases?: CardPurchase[];
@@ -136,10 +144,13 @@ export function buildLocalVault(input: {
     usdRate: input.usdRate ?? 0,
     usdtRate: input.usdtRate ?? 0,
     usdSource: input.usdSource ?? "",
-    chat: (input.chat ?? []).slice(-24),
+    chat: (input.chat ?? []).slice(-40),
+    chatThreads: input.chatThreads ?? [],
+    goals: input.goals ?? [],
     pendingRecurringIds: [...new Set(input.pendingRecurringIds ?? [])],
     bookBudgets: input.bookBudgets ?? {},
     bookGlobals: input.bookGlobals ?? {},
+    bookBudgetLocks: input.bookBudgetLocks ?? {},
     cards: input.cards ?? [],
     pendingCardIds: [...new Set(input.pendingCardIds ?? [])],
     purchases: input.purchases ?? [],
@@ -245,11 +256,20 @@ export function asVault(raw: unknown): LocalVault | null {
     usdtRate: Number(p.usdtRate) || 0,
     usdSource: String(p.usdSource ?? ""),
     chat: parseChat(p.chat),
+    chatThreads: (() => {
+      const saved = parseChatThreads(p.chatThreads);
+      if (saved.length) return saved;
+      const legacy = threadFromMessages("legacy", parseChat(p.chat));
+      return legacy ? [legacy] : [];
+    })(),
+    goals: parseGoals(p.goals),
     pendingRecurringIds: Array.isArray(p.pendingRecurringIds)
       ? p.pendingRecurringIds.map(String).filter(Boolean)
       : [],
     bookBudgets: p.bookBudgets && typeof p.bookBudgets === "object" ? p.bookBudgets : {},
     bookGlobals: p.bookGlobals && typeof p.bookGlobals === "object" ? p.bookGlobals : {},
+    bookBudgetLocks:
+      p.bookBudgetLocks && typeof p.bookBudgetLocks === "object" ? p.bookBudgetLocks : {},
     cards: Array.isArray(p.cards)
       ? p.cards.filter((c): c is Card => Boolean(c && typeof c === "object" && c.id && c.accountArsId && c.accountUsdId))
       : [],

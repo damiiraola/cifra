@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { getSql, withTransaction } from "@/lib/db";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { DEFAULT_BUDGETS, DEFAULT_GLOBAL_BUDGET, parseCustomCategories, parseHiddenIds } from "@/lib/categories";
-import { hydrateBookMoney, moneyForBook, parseBookBudgets, parseBookGlobals } from "@/lib/budget-math";
+import { hydrateBookMoney, locksForBook, moneyForBook, parseBookBudgets, parseBookGlobals, parseBookLocks } from "@/lib/budget-math";
 import {
   ACCOUNT_TEMPLATES,
   BOOK_SPECS,
@@ -11,6 +11,8 @@ import {
 import { DEFAULT_USD_RATE, DEFAULT_USDT_RATE, DEFAULT_USD_SOURCE, isUsdSource, type UsdSource } from "@/lib/fx";
 import type { Account, BankStatement, Book, BookKind, Card, CardNetwork, CardPurchase, Category, Currency, PayMethod, Recurring, Transaction, TxType } from "@/lib/types";
 import { cardAccountNames, clampDay, MAX_INSTALLMENTS, validLast4 } from "@/lib/card-math";
+import { parseChatThreads, type ChatThread } from "@/lib/chat-threads";
+import { parseGoals, type Goal } from "@/lib/goals";
 import { uid } from "@/lib/utils";
 import { MAIL, sendMailQuiet } from "@/lib/mail";
 
@@ -22,6 +24,8 @@ export type LedgerSnapshot = {
   globalBudget: number;
   bookBudgets: Record<string, Record<string, number>>;
   bookGlobals: Record<string, number>;
+  bookBudgetLocks: Record<string, Record<string, boolean>>;
+  budgetLocks: Record<string, boolean>;
   usdRate: number;
   usdtRate: number;
   usdSource: UsdSource;
@@ -30,6 +34,8 @@ export type LedgerSnapshot = {
   categoryNames: Record<string, string>;
   hiddenCategoryIds: string[];
   customCategories: Category[];
+  chatThreads: ChatThread[];
+  goals: Goal[];
   recurrings: Recurring[];
   cards: Card[];
   purchases: CardPurchase[];
@@ -168,11 +174,17 @@ async function ensureSettings(sql: Awaited<ReturnType<typeof getSql>>, userId: s
     custom_categories: unknown;
     book_budgets: unknown;
     book_globals: unknown;
+    book_budget_locks: unknown;
+    chat_threads: unknown;
+    goals: unknown;
   }>`select budgets, global_budget, usd_rate, usdt_rate, usd_source, active_book_id, onboarded, category_names,
              coalesce(hidden_category_ids, '[]'::jsonb) as hidden_category_ids,
              coalesce(custom_categories, '[]'::jsonb) as custom_categories,
              coalesce(book_budgets, '{}'::jsonb) as book_budgets,
-             coalesce(book_globals, '{}'::jsonb) as book_globals
+             coalesce(book_globals, '{}'::jsonb) as book_globals,
+             coalesce(book_budget_locks, '{}'::jsonb) as book_budget_locks,
+             coalesce(chat_threads, '[]'::jsonb) as chat_threads,
+             coalesce(goals, '[]'::jsonb) as goals
       from ledger_settings where user_id = ${userId} limit 1`;
   if (existing[0]) {
     const budgets =
@@ -187,6 +199,7 @@ async function ensureSettings(sql: Awaited<ReturnType<typeof getSql>>, userId: s
       globalBudget: Number(existing[0].global_budget) || DEFAULT_GLOBAL_BUDGET,
       bookBudgets: parseBookBudgets(existing[0].book_budgets),
       bookGlobals: parseBookGlobals(existing[0].book_globals),
+      bookBudgetLocks: parseBookLocks(existing[0].book_budget_locks),
       usdRate: Number(existing[0].usd_rate) || DEFAULT_USD_RATE,
       usdtRate: Number(existing[0].usdt_rate) || DEFAULT_USDT_RATE,
       usdSource: isUsdSource(existing[0].usd_source) ? existing[0].usd_source : DEFAULT_USD_SOURCE,
@@ -195,6 +208,8 @@ async function ensureSettings(sql: Awaited<ReturnType<typeof getSql>>, userId: s
       categoryNames,
       hiddenCategoryIds: parseHiddenIds(existing[0].hidden_category_ids),
       customCategories: parseCustomCategories(existing[0].custom_categories),
+      chatThreads: parseChatThreads(existing[0].chat_threads),
+      goals: parseGoals(existing[0].goals),
     };
   }
   await sql`
@@ -207,6 +222,7 @@ async function ensureSettings(sql: Awaited<ReturnType<typeof getSql>>, userId: s
     globalBudget: DEFAULT_GLOBAL_BUDGET,
     bookBudgets: {},
     bookGlobals: {},
+    bookBudgetLocks: {},
     usdRate: DEFAULT_USD_RATE,
     usdtRate: DEFAULT_USDT_RATE,
     usdSource: DEFAULT_USD_SOURCE,
@@ -215,6 +231,8 @@ async function ensureSettings(sql: Awaited<ReturnType<typeof getSql>>, userId: s
     categoryNames: {} as Record<string, string>,
     hiddenCategoryIds: [] as string[],
     customCategories: [] as Category[],
+    chatThreads: [] as ChatThread[],
+    goals: [] as Goal[],
   };
 }
 
@@ -440,12 +458,14 @@ export const loadLedger = createServerFn({ method: "GET" })
       bookGlobals: settings.bookGlobals,
     });
     const scoped = moneyForBook(books.activeBookId, money.bookBudgets, money.bookGlobals);
+    const budgetLocks = locksForBook(books.activeBookId, settings.bookBudgetLocks);
     return {
       transactions,
       ...settings,
       ...books,
       ...money,
       ...scoped,
+      budgetLocks,
       recurrings,
       cards,
       purchases,
@@ -518,6 +538,9 @@ export const saveSettings = createServerFn({ method: "POST" })
     customCategories?: Category[];
     bookBudgets?: Record<string, Record<string, number>>;
     bookGlobals?: Record<string, number>;
+    bookBudgetLocks?: Record<string, Record<string, boolean>>;
+    chatThreads?: ChatThread[];
+    goals?: Goal[];
   }) => {
     const globalBudget = Number(input.globalBudget);
     const usdRate = Number(input.usdRate);
@@ -548,14 +571,17 @@ export const saveSettings = createServerFn({ method: "POST" })
       customCategories: parseCustomCategories(input.customCategories),
       bookBudgets: parseBookBudgets(input.bookBudgets),
       bookGlobals: parseBookGlobals(input.bookGlobals),
+      bookBudgetLocks: parseBookLocks(input.bookBudgetLocks),
+      chatThreads: parseChatThreads(input.chatThreads),
+      goals: parseGoals(input.goals),
     };
   })
   .middleware([authMiddleware])
   .handler(async ({ context, data }) => {
     const sql = await getSql();
     await sql`
-      insert into ledger_settings (user_id, budgets, global_budget, usd_rate, usdt_rate, usd_source, active_book_id, onboarded, category_names, hidden_category_ids, custom_categories, book_budgets, book_globals)
-      values (${context.userId}, ${JSON.stringify(data.budgets)}::jsonb, ${data.globalBudget}, ${data.usdRate}, ${data.usdtRate}, ${data.usdSource}, ${data.activeBookId}, ${data.onboarded}, ${JSON.stringify(data.categoryNames)}::jsonb, ${JSON.stringify(data.hiddenCategoryIds)}::jsonb, ${JSON.stringify(data.customCategories)}::jsonb, ${JSON.stringify(data.bookBudgets)}::jsonb, ${JSON.stringify(data.bookGlobals)}::jsonb)
+      insert into ledger_settings (user_id, budgets, global_budget, usd_rate, usdt_rate, usd_source, active_book_id, onboarded, category_names, hidden_category_ids, custom_categories, book_budgets, book_globals, book_budget_locks, chat_threads, goals)
+      values (${context.userId}, ${JSON.stringify(data.budgets)}::jsonb, ${data.globalBudget}, ${data.usdRate}, ${data.usdtRate}, ${data.usdSource}, ${data.activeBookId}, ${data.onboarded}, ${JSON.stringify(data.categoryNames)}::jsonb, ${JSON.stringify(data.hiddenCategoryIds)}::jsonb, ${JSON.stringify(data.customCategories)}::jsonb, ${JSON.stringify(data.bookBudgets)}::jsonb, ${JSON.stringify(data.bookGlobals)}::jsonb, ${JSON.stringify(data.bookBudgetLocks)}::jsonb, ${JSON.stringify(data.chatThreads)}::jsonb, ${JSON.stringify(data.goals)}::jsonb)
       on conflict (user_id) do update set
         budgets = excluded.budgets,
         global_budget = excluded.global_budget,
@@ -569,6 +595,9 @@ export const saveSettings = createServerFn({ method: "POST" })
         custom_categories = excluded.custom_categories,
         book_budgets = excluded.book_budgets,
         book_globals = excluded.book_globals,
+        book_budget_locks = excluded.book_budget_locks,
+        chat_threads = excluded.chat_threads,
+        goals = excluded.goals,
         updated_at = now()
     `;
     return { ok: true as const };

@@ -27,10 +27,35 @@ describe("snapshotText", () => {
     assert.match(text, /FIJOS:/);
     assert.match(text, /Alquiler/);
     assert.match(text, /PRESUPUESTO GLOBAL/);
+    assert.match(text, /CAJAS:/);
+    assert.match(text, /MOVIMIENTOS:/);
     assert.doesNotMatch(text, /Coto/);
-    assert.doesNotMatch(text, /asado/);
-    assert.doesNotMatch(text, /MOVIMIENTOS RECIENTES/);
-    assert.doesNotMatch(text, /TOP COMERCIOS/);
-    assert.doesNotMatch(text, /mercadopago/);
+  });
+
+  it("includes the accounts, movements and income fijos it is given", () => {
+    const text = snapshotText(
+      {
+        ym: "2026-10",
+        spent: 1_100_000,
+        earned: 0,
+        net: -1_100_000,
+        avgDaily: 0,
+        projected: 1_100_000,
+        byCat: { transferencias: 1_100_000 },
+      },
+      { ym: "2026-09", spent: 0 },
+      {},
+      5_830_000,
+      { usd: 1400, usdt: 1600 },
+      [{ id: "transferencias", name: "Transferencias", kind: "expense", token: "cat-xfer", icon: "ArrowLeftRight" }],
+      [{ name: "Alquiler Auto", day: 5, type: "income", amount: 1_000_000, currency: "ARS", active: true }],
+      {
+        accounts: [{ label: "Galicia · ARS", amount: 200000, currency: "ARS" }],
+        moves: [{ date: "2026-10-04", type: "expense", name: "Coto", category: "Alimentación", amount: 15000, currency: "ARS" }],
+      },
+    );
+    assert.match(text, /Alquiler Auto ingreso/);
+    assert.match(text, /Galicia/);
+    assert.match(text, /Coto/);
   });
 });

@@ -55,10 +55,12 @@ import {
 } from "./card-math";
 import { dueDate, dueUnposted, isPosted, likelyDuplicate, postedTxId } from "./recurring";
 import { buildSeed } from "./seed";
-import { monthISO, uid } from "./utils";
+import { monthISO, todayISO, uid } from "./utils";
+import { mergeChatThreads, threadFromMessages, upsertThread, type ChatThread } from "./chat-threads";
+import { mergeGoals, roundGoal, type Goal } from "./goals";
 import { applyOutbox, enqueue, OUTBOX_MAX_TRIES, pruneOutbox, resetTries, type OutboxOp } from "./outbox";
 import { mergeRecurrings } from "./recurring-sync";
-import { hydrateBookMoney, moneyForBook } from "./budget-math";
+import { hydrateBookMoney, locksForBook, moneyForBook } from "./budget-math";
 import type { Account, BankStatement, Book, Card, CardPurchase, Category, CategoryKind, ChatMessage, Recurring, Transaction } from "./types";
 
 const LOCAL_KEY = "cifra-ledger-v1";
@@ -98,6 +100,8 @@ type LedgerState = {
   globalBudget: number;
   bookBudgets: Record<string, Record<string, number>>;
   bookGlobals: Record<string, number>;
+  budgetLocks: Record<string, boolean>;
+  bookBudgetLocks: Record<string, Record<string, boolean>>;
   usdRate: number;
   usdtRate: number;
   usdSource: UsdSource;
@@ -110,6 +114,9 @@ type LedgerState = {
   editingId: string | null;
   draft: Draft;
   chat: ChatMessage[];
+  chatThreads: ChatThread[];
+  activeChatId: string;
+  goals: Goal[];
   hydrate: (identity?: { id: string; email?: string | null }) => Promise<void>;
   resetClient: () => void;
   refreshQuotes: (quiet?: boolean) => Promise<void>;
@@ -120,8 +127,8 @@ type LedgerState = {
   openQuick: (draft?: Draft) => void;
   closeQuick: () => void;
   addTx: (tx: TxInput) => void;
-  updateTx: (id: string, patch: Partial<Transaction>) => void;
-  deleteTx: (id: string) => void;
+  updateTx: (id: string, patch: Partial<Transaction>, opts?: { force?: boolean }) => void;
+  deleteTx: (id: string, opts?: { force?: boolean }) => void;
   flushOutbox: (opts?: { force?: boolean }) => Promise<void>;
   setBudget: (categoryId: string, amount: number) => void;
   replaceBudgets: (patch: Record<string, number>) => void;
@@ -148,7 +155,19 @@ type LedgerState = {
   /** Save what the bank printed on a statement (replaces the same card + month). Throws if offline. */
   saveStatement: (input: BankStatement) => Promise<BankStatement>;
   pushChat: (msg: ChatMessage) => void;
-  clearChat: () => void;
+  startChat: () => void;
+  openChat: (id: string) => void;
+  deleteChat: (id: string) => void;
+  saveGoal: (input: {
+    id?: string;
+    kind: Goal["kind"];
+    name: string;
+    currency: Goal["currency"];
+    target: number;
+    deadline: string;
+  }) => void;
+  addToGoal: (id: string, amount: number) => void;
+  removeGoal: (id: string) => void;
   loadDemo: () => void;
   wipe: () => void;
 };
@@ -193,6 +212,7 @@ function vaultInput(get: () => LedgerState) {
     globalBudget: s.globalBudget,
     bookBudgets: s.bookBudgets,
     bookGlobals: s.bookGlobals,
+    bookBudgetLocks: s.bookBudgetLocks,
     categoryNames: s.categoryNames,
     hiddenCategoryIds: s.hiddenCategoryIds,
     customCategories: s.customCategories,
@@ -200,6 +220,8 @@ function vaultInput(get: () => LedgerState) {
     usdtRate: s.usdtRate,
     usdSource: s.usdSource,
     chat: s.chat,
+    chatThreads: s.chatThreads,
+    goals: s.goals,
   };
 }
 
@@ -307,7 +329,7 @@ function offerDueRecurrings(get: () => LedgerState) {
   const clean = due.filter((r) => !twins.includes(r));
   const parts: string[] = [];
   if (clean.length) parts.push(fijoNames(clean));
-  if (twins.length) parts.push(`Parece que ya cargaste a mano: ${fijoNames(twins)}. Esos no los anoto; revisalos en Fijos.`);
+  if (twins.length) parts.push(`Parece que ya cargaste a mano: ${fijoNames(twins)}. Esos no los anoto; revisalos en Ajustes.`);
   toast(clean.length === 1 ? "Tenés 1 fijo para anotar este mes" : clean.length > 1 ? `Tenés ${clean.length} fijos para anotar este mes` : "Revisá tus fijos de este mes", {
     id: "fijos-due",
     duration: 20000,
@@ -341,6 +363,7 @@ function pushSettings(get: () => LedgerState, revert?: Partial<LedgerState>, set
   const s = get();
   const bookBudgets = { ...s.bookBudgets, [s.activeBookId]: s.budgets };
   const bookGlobals = { ...s.bookGlobals, [s.activeBookId]: s.globalBudget };
+  const bookBudgetLocks = { ...s.bookBudgetLocks, [s.activeBookId]: s.budgetLocks };
   const personal = s.books.find((b) => b.kind === "personal")?.id;
   void saveSettings({
     data: {
@@ -348,6 +371,9 @@ function pushSettings(get: () => LedgerState, revert?: Partial<LedgerState>, set
       globalBudget: personal ? (bookGlobals[personal] ?? 0) : s.globalBudget,
       bookBudgets,
       bookGlobals,
+      bookBudgetLocks,
+      chatThreads: s.chatThreads,
+      goals: s.goals,
       usdRate: s.usdRate,
       usdtRate: s.usdtRate,
       usdSource: s.usdSource,
@@ -530,6 +556,20 @@ async function restoreVault(get: () => LedgerState, set: (p: Partial<LedgerState
   if (get().pendingRecurringIds.length) void get().flushRecurrings();
 }
 
+function chatsFrom(get: () => LedgerState, remote: ChatThread[] | undefined) {
+  const merged = mergeChatThreads(get().chatThreads ?? [], remote ?? []);
+  const active = merged.find((t) => t.id === get().activeChatId) ?? merged[0];
+  return {
+    chatThreads: merged,
+    activeChatId: active?.id ?? "",
+    chat: active?.messages ?? [],
+  };
+}
+
+function goalsFrom(get: () => LedgerState, remote: Goal[] | undefined) {
+  return { goals: mergeGoals(get().goals ?? [], remote ?? []) };
+}
+
 function paintVault(set: (p: Partial<LedgerState>) => void, get: () => LedgerState, vault: NonNullable<ReturnType<typeof readLocalVault>>) {
   const books = vault.books.length ? vault.books : get().books;
   const accounts = vault.accounts.length ? vault.accounts : get().accounts;
@@ -560,13 +600,26 @@ function paintVault(set: (p: Partial<LedgerState>) => void, get: () => LedgerSta
     globalBudget: scoped.globalBudget,
     bookBudgets: money.bookBudgets,
     bookGlobals: money.bookGlobals,
+    budgetLocks: locksForBook(activeBookId, vault.bookBudgetLocks ?? {}),
+    bookBudgetLocks: vault.bookBudgetLocks ?? {},
     categoryNames: vault.categoryNames,
     hiddenCategoryIds: vault.hiddenCategoryIds,
     customCategories: vault.customCategories,
     usdRate: vault.usdRate || get().usdRate,
     usdtRate: vault.usdtRate || get().usdtRate,
     usdSource: isUsdSource(vault.usdSource) ? vault.usdSource : get().usdSource,
-    chat: vault.chat.length ? vault.chat : get().chat,
+    chat: vault.chatThreads?.length
+      ? (vault.chatThreads[0]?.messages ?? [])
+      : vault.chat.length
+        ? vault.chat
+        : get().chat,
+    chatThreads: vault.chatThreads?.length
+      ? vault.chatThreads
+      : threadFromMessages("legacy", vault.chat)
+        ? [threadFromMessages("legacy", vault.chat)!]
+        : get().chatThreads,
+    activeChatId: vault.chatThreads?.[0]?.id || (vault.chat.length ? "legacy" : get().activeChatId),
+    goals: vault.goals?.length ? vault.goals : get().goals,
     pendingRecurringIds: vault.pendingRecurringIds.length ? vault.pendingRecurringIds : get().pendingRecurringIds,
   });
   paint(set, get, { confirmed, outbox });
@@ -598,6 +651,8 @@ export const useLedger = create<LedgerState>()((set, get) => ({
   globalBudget: DEFAULT_GLOBAL_BUDGET,
   bookBudgets: {},
   bookGlobals: {},
+  budgetLocks: {},
+  bookBudgetLocks: {},
   usdRate: DEFAULT_USD_RATE,
   usdtRate: DEFAULT_USDT_RATE,
   usdSource: DEFAULT_USD_SOURCE,
@@ -610,6 +665,9 @@ export const useLedger = create<LedgerState>()((set, get) => ({
   editingId: null,
   draft: {},
   chat: [],
+  chatThreads: [],
+  activeChatId: "",
+  goals: [],
   hydrate: (identity) => {
     const ownerId = identity?.id ?? "";
     const ownerEmail = identity?.email ?? "";
@@ -679,9 +737,13 @@ export const useLedger = create<LedgerState>()((set, get) => ({
               globalBudget: legacy.globalBudget,
               bookBudgets: {},
               bookGlobals: {},
+              budgetLocks: {},
+              bookBudgetLocks: {},
               usdRate: remote.usdRate,
               usdtRate: remote.usdtRate,
               usdSource: remote.usdSource,
+              ...chatsFrom(get, remote.chatThreads),
+              ...goalsFrom(get, remote.goals),
             });
             paint(set, get, { confirmed: stamped, outbox });
             pushSettings(get);
@@ -722,9 +784,13 @@ export const useLedger = create<LedgerState>()((set, get) => ({
           globalBudget: remote.globalBudget,
           bookBudgets: remote.bookBudgets ?? {},
           bookGlobals: remote.bookGlobals ?? {},
+          budgetLocks: remote.budgetLocks ?? {},
+          bookBudgetLocks: remote.bookBudgetLocks ?? {},
           usdRate: remote.usdRate,
           usdtRate: remote.usdtRate,
           usdSource: remote.usdSource,
+          ...chatsFrom(get, remote.chatThreads),
+          ...goalsFrom(get, remote.goals),
         });
         paint(set, get, { confirmed: remote.transactions, outbox });
         await restoreVault(get, set);
@@ -767,6 +833,9 @@ export const useLedger = create<LedgerState>()((set, get) => ({
       pendingPurchaseIds: [],
       statements: [],
       chat: [],
+      chatThreads: [],
+      activeChatId: "",
+      goals: [],
       selectedDay: null,
       quickOpen: false,
       editingId: null,
@@ -812,16 +881,21 @@ export const useLedger = create<LedgerState>()((set, get) => ({
     const prevGlobal = get().globalBudget;
     const prevBookBudgets = get().bookBudgets;
     const prevBookGlobals = get().bookGlobals;
+    const prevLocks = get().budgetLocks;
+    const prevLockMaps = get().bookBudgetLocks;
     const bookBudgets = { ...prevBookBudgets, [prevId]: prevBudgets };
     const bookGlobals = { ...prevBookGlobals, [prevId]: prevGlobal };
+    const bookBudgetLocks = { ...prevLockMaps, [prevId]: prevLocks };
     const scoped = moneyForBook(id, bookBudgets, bookGlobals);
     set({
       activeBookId: id,
       selectedDay: null,
       bookBudgets,
       bookGlobals,
+      bookBudgetLocks,
       budgets: scoped.budgets,
       globalBudget: scoped.globalBudget,
+      budgetLocks: locksForBook(id, bookBudgetLocks),
     });
     pushSettings(get, {
       activeBookId: prevId,
@@ -829,6 +903,8 @@ export const useLedger = create<LedgerState>()((set, get) => ({
       globalBudget: prevGlobal,
       bookBudgets: prevBookBudgets,
       bookGlobals: prevBookGlobals,
+      budgetLocks: prevLocks,
+      bookBudgetLocks: prevLockMaps,
     }, set);
   },
   setViewMonth: (ym) => set({ viewMonth: ym, selectedDay: null }),
@@ -846,15 +922,18 @@ export const useLedger = create<LedgerState>()((set, get) => ({
     persistLocal(get);
     void get().flushOutbox();
   },
-  updateTx: (id, patch) => {
+  updateTx: (id, patch, opts) => {
     const current = get().transactions.find((t) => t.id === id);
     if (!current) return;
+    if (!opts?.force && current.date < todayISO()) return;
     const next = fillTx(get, { ...current, ...patch, id }, current);
     paint(set, get, { outbox: enqueue(get().outbox, { id, action: "update", row: next, at: Date.now(), tries: 0 }) });
     persistLocal(get);
     void get().flushOutbox();
   },
-  deleteTx: (id) => {
+  deleteTx: (id, opts) => {
+    const current = get().transactions.find((t) => t.id === id);
+    if (current && !opts?.force && current.date < todayISO()) return;
     paint(set, get, { outbox: enqueue(get().outbox, { id, action: "delete", at: Date.now(), tries: 0 }) });
     persistLocal(get);
     void get().flushOutbox();
@@ -904,10 +983,20 @@ export const useLedger = create<LedgerState>()((set, get) => ({
   setBudget: (categoryId, amount) => {
     const prev = get().budgets;
     const prevMaps = get().bookBudgets;
+    const prevLocks = get().budgetLocks;
+    const prevLockMaps = get().bookBudgetLocks;
     const bookId = get().activeBookId;
     const budgets = { ...prev, [categoryId]: amount };
-    set({ budgets, bookBudgets: { ...prevMaps, [bookId]: budgets } });
-    pushSettings(get, { budgets: prev, bookBudgets: prevMaps }, set);
+    const budgetLocks = { ...prevLocks };
+    if (amount > 0) budgetLocks[categoryId] = true;
+    else delete budgetLocks[categoryId];
+    set({
+      budgets,
+      budgetLocks,
+      bookBudgets: { ...prevMaps, [bookId]: budgets },
+      bookBudgetLocks: { ...prevLockMaps, [bookId]: budgetLocks },
+    });
+    pushSettings(get, { budgets: prev, bookBudgets: prevMaps, budgetLocks: prevLocks, bookBudgetLocks: prevLockMaps }, set);
   },
   replaceBudgets: (patch) => {
     const prev = get().budgets;
@@ -1216,9 +1305,9 @@ export const useLedger = create<LedgerState>()((set, get) => ({
     void get()
       .flushPurchases()
       .finally(() => {
-        for (const id of stale) get().deleteTx(id);
+        for (const id of stale) get().deleteTx(id, { force: true });
         for (const row of cuotas) {
-          if (get().transactions.some((t) => t.id === row.id)) get().updateTx(row.id, row);
+          if (get().transactions.some((t) => t.id === row.id)) get().updateTx(row.id, row, { force: true });
           else get().addTx(row);
         }
       });
@@ -1231,7 +1320,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
       purchases: s.purchases.filter((p) => p.id !== id),
       pendingPurchaseIds: [...new Set([...s.pendingPurchaseIds, id])],
     });
-    for (const txId of ids) get().deleteTx(txId);
+    for (const txId of ids) get().deleteTx(txId, { force: true });
     persistLocal(get);
     void get().flushPurchases();
   },
@@ -1273,12 +1362,73 @@ export const useLedger = create<LedgerState>()((set, get) => ({
     return saved;
   },
   pushChat: (msg) => {
-    set({ chat: [...get().chat, msg].slice(-24) });
+    const id = get().activeChatId || uid();
+    const messages = [...get().chat, msg].slice(-40);
+    const thread = threadFromMessages(id, messages, new Date().toISOString());
+    if (!thread) return;
+    const chatThreads = upsertThread(get().chatThreads, thread);
+    set({ chat: messages, activeChatId: id, chatThreads });
+    persistLocal(get);
+    pushSettings(get);
+  },
+  startChat: () => {
+    if (!get().chat.length) return;
+    set({ chat: [], activeChatId: uid() });
     persistLocal(get);
   },
-  clearChat: () => {
-    set({ chat: [] });
+  openChat: (id) => {
+    const thread = get().chatThreads.find((t) => t.id === id);
+    if (!thread) return;
+    set({ chat: thread.messages, activeChatId: thread.id });
     persistLocal(get);
+  },
+  deleteChat: (id) => {
+    const chatThreads = get().chatThreads.filter((t) => t.id !== id);
+    if (get().activeChatId !== id) {
+      set({ chatThreads });
+    } else {
+      const next = chatThreads[0];
+      set({ chatThreads, activeChatId: next?.id ?? "", chat: next?.messages ?? [] });
+    }
+    persistLocal(get);
+    pushSettings(get);
+  },
+  saveGoal: (input) => {
+    const now = new Date().toISOString();
+    const existing = input.id ? get().goals.find((g) => g.id === input.id) : undefined;
+    const currency = input.currency;
+    const goal: Goal = {
+      id: existing?.id ?? uid(),
+      bookId: existing?.bookId || get().activeBookId,
+      kind: input.kind,
+      name: input.name.trim().slice(0, 40) || "Meta",
+      currency,
+      target: roundGoal(input.target, currency),
+      saved: existing?.saved ?? 0,
+      deadline: /^\d{4}-\d{2}-\d{2}$/.test(input.deadline) ? input.deadline : "",
+      active: true,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    };
+    if (!(goal.target > 0)) return;
+    const goals = existing ? get().goals.map((g) => (g.id === goal.id ? goal : g)) : [goal, ...get().goals];
+    set({ goals });
+    pushSettings(get);
+  },
+  addToGoal: (id, amount) => {
+    const prev = get().goals.find((g) => g.id === id);
+    if (!prev || !(amount > 0)) return;
+    const goals = get().goals.map((g) =>
+      g.id === id
+        ? { ...g, saved: roundGoal(g.saved + amount, g.currency), updatedAt: new Date().toISOString() }
+        : g,
+    );
+    set({ goals });
+    pushSettings(get);
+  },
+  removeGoal: (id) => {
+    set({ goals: get().goals.filter((g) => g.id !== id) });
+    pushSettings(get);
   },
   loadDemo: () => {
     const { activeBookId, accounts, usdRate, usdtRate } = get();
@@ -1294,7 +1444,11 @@ export const useLedger = create<LedgerState>()((set, get) => ({
       globalBudget: DEFAULT_GLOBAL_BUDGET,
       bookBudgets: {},
       bookGlobals: {},
+      budgetLocks: {},
+      bookBudgetLocks: {},
       chat: [],
+      chatThreads: [],
+      activeChatId: "",
       viewMonth: monthISO(),
       onboarded: true,
     });
@@ -1314,7 +1468,6 @@ export const useLedger = create<LedgerState>()((set, get) => ({
     // Its cuotas just went with the movements: the purchases go too.
     const dropped = get().purchases.filter((p) => p.bookId === activeBookId).map((p) => p.id);
     set({
-      chat: [],
       purchases: get().purchases.filter((p) => p.bookId !== activeBookId),
       pendingPurchaseIds: [...new Set([...get().pendingPurchaseIds, ...dropped])],
     });
@@ -1340,6 +1493,10 @@ export function useBookCards() {
 
 export function useBookStatements() {
   return useLedger(useShallow((s) => s.statements.filter((x) => x.bookId === s.activeBookId)));
+}
+
+export function useBookGoals() {
+  return useLedger(useShallow((s) => s.goals.filter((g) => g.bookId === s.activeBookId && g.active)));
 }
 
 export function useBookPurchases() {

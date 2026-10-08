@@ -5,7 +5,7 @@ import { ChevronDown, Eye, EyeOff, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { BUILTIN_IDS, DEFAULT_BUDGETS } from "@/lib/categories";
 import { computeMonth } from "@/lib/analytics";
-import { effectiveCategoryBudget } from "@/lib/budget-math";
+import { effectiveCategoryBudget, fijoTopes } from "@/lib/budget-math";
 import { moneyARS, parseAmount, amountInput } from "@/lib/format";
 import { formatRate, USD_SOURCES } from "@/lib/fx";
 import { CatIcon } from "@/lib/icons";
@@ -18,6 +18,7 @@ import { signOutAndForget } from "@/lib/sign-out";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { Button } from "@/components/ui/button";
 import { CardSettings } from "@/components/card-settings";
+import { FijosPanel } from "@/components/fijos-panel";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -66,7 +67,9 @@ function Ajustes() {
     globalBudget,
     setGlobalBudget,
     budgets,
+    budgetLocks,
     setBudget,
+    recurrings,
     setCategoryName,
     setCategoryHidden,
     addCustomCategory,
@@ -98,8 +101,9 @@ function Ajustes() {
 
   // "Ajustes → Tarjetas" links land here with #tarjetas: open that block.
   useEffect(() => {
-    if (window.location.hash !== "#tarjetas") return;
-    const el = document.getElementById("tarjetas");
+    const id = window.location.hash.replace("#", "");
+    if (!id) return;
+    const el = document.getElementById(id);
     if (el instanceof HTMLDetailsElement) {
       el.open = true;
       el.scrollIntoView({ block: "start" });
@@ -109,12 +113,13 @@ function Ajustes() {
   const gastos = categories.filter((c) => c.kind === "expense");
   const ingresos = categories.filter((c) => c.kind === "income");
   const spentByCat = computeMonth(transactions, viewMonth, { usd: usdRate, usdt: usdtRate }).byCat;
+  const planned = fijoTopes(recurrings, activeBookId, { usd: usdRate, usdt: usdtRate });
 
   return (
     <div className="grid gap-5">
       <div>
         <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Configuración</p>
-        <h1 className="font-display text-4xl tracking-tight">Ajustes</h1>
+        <h1 data-tour="titulo" className="font-display text-4xl tracking-tight">Ajustes</h1>
         <p className="mt-1 text-sm text-muted">
           Cotizaciones, cajas, tarjetas y categorías del libro {book?.name ?? "activo"}.
         </p>
@@ -201,7 +206,7 @@ function Ajustes() {
         </div>
       </Section>
 
-      <Section title="Cotizaciones" hint="Dólar y USDT del día">
+      <Section tour="cotizacion" title="Cotizaciones" hint="Dólar y USDT del día">
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-xs text-subtle">
@@ -266,13 +271,17 @@ function Ajustes() {
         </div>
       </Section>
 
+      <Section id="fijos" tour="fijos" title={`Fijos · ${book?.name ?? ""}`} hint="Alquiler, servicios, sueldo">
+        <FijosPanel />
+      </Section>
+
       <Section id="tarjetas" title={`Tarjetas · ${book?.name ?? ""}`} hint="Crédito: cierre, vencimiento y resumen">
         <CardSettings />
       </Section>
 
       <Section title="Categorías" hint="Nombres, visibilidad y topes">
         <p className="mt-1 text-xs text-subtle">
-          Nombre, visibilidad y tope. Si no escribís tope, se usa el gasto de este mes. Oculta no sale en Nuevo.
+          Nombre, visibilidad y tope. Si no escribís tope, se usan los fijos de esa categoría. Oculta no sale en Nuevo.
         </p>
         <div className="mt-4">
           <Label htmlFor="gbudget">Tope de gasto del mes (ARS)</Label>
@@ -296,6 +305,8 @@ function Ajustes() {
           hidden={hidden}
           budgets={budgets}
           spentByCat={spentByCat}
+          planned={planned}
+          locks={budgetLocks}
           onName={setCategoryName}
           onHide={setCategoryHidden}
           onBudget={setBudget}
@@ -451,6 +462,8 @@ function CatGroup({
   hidden,
   budgets,
   spentByCat,
+  planned,
+  locks,
   hideBudget,
   onName,
   onHide,
@@ -462,6 +475,8 @@ function CatGroup({
   hidden: Set<string>;
   budgets: Record<string, number>;
   spentByCat: Record<string, number>;
+  planned?: Record<string, number>;
+  locks?: Record<string, boolean>;
   hideBudget?: boolean;
   onName: (id: string, name: string) => void;
   onHide: (id: string, hidden: boolean) => void;
@@ -487,7 +502,14 @@ function CatGroup({
         {rows.map((c) => {
           const off = hidden.has(c.id);
           const custom = !BUILTIN_IDS.has(c.id);
-          const tope = effectiveCategoryBudget(c.id, budgets[c.id] ?? 0, spentByCat[c.id] ?? 0, DEFAULT_BUDGETS);
+          const tope = effectiveCategoryBudget(
+            c.id,
+            budgets[c.id] ?? 0,
+            spentByCat[c.id] ?? 0,
+            DEFAULT_BUDGETS,
+            Boolean(locks?.[c.id]),
+            planned?.[c.id] ?? 0,
+          );
           return (
             <div
               key={c.id}
@@ -569,16 +591,18 @@ function Section({
   title,
   hint,
   defaultOpen = false,
+  tour,
   children,
 }: {
   id?: string;
   title: string;
   hint?: string;
   defaultOpen?: boolean;
+  tour?: string;
   children: ReactNode;
 }) {
   return (
-    <details id={id} open={defaultOpen} className="group rounded-3xl bg-surface shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
+    <details id={id} data-tour={tour} open={defaultOpen} className="group rounded-3xl bg-surface shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
       <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 rounded-3xl px-5 py-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
         <span className="min-w-0">
           <span className="block text-[11px] font-medium tracking-wide text-muted uppercase">{title}</span>

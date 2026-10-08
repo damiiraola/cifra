@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FxStrip } from "@/components/fx-strip";
 import { WalletStrip } from "@/components/wallet-strip";
+import { GoalStrip } from "@/components/goal-strip";
 
 export const Route = createFileRoute("/_app/")({
   component: Diario,
@@ -96,7 +97,7 @@ function Diario() {
   return (
     <div className="grid gap-4">
       <div className="flex items-center justify-between gap-3">
-        <MonthSwitcher value={viewMonth} onChange={setViewMonth} />
+        <MonthSwitcher tour="mes" value={viewMonth} onChange={setViewMonth} />
         <div className="flex items-center gap-2">
           <div className="text-right">
             <p className="font-display text-2xl tabular-nums tracking-tight">{moneyARS(stats.spent, true)}</p>
@@ -120,9 +121,10 @@ function Diario() {
 
       <FxStrip />
       <WalletStrip />
+      <GoalStrip />
 
       {fijosPendientes > 0 && !searching ? (
-        <Link to="/fijos" className="text-sm text-muted hover:text-fg">
+        <Link to="/ajustes" hash="fijos" className="text-sm text-muted hover:text-fg">
           {fijosPendientes} fijo{fijosPendientes === 1 ? "" : "s"} sin anotar este mes.
         </Link>
       ) : null}

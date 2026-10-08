@@ -76,12 +76,12 @@ function Analitica() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-[11px] font-medium tracking-wide text-muted uppercase">El mes</p>
-          <h1 className="font-display text-4xl tracking-tight capitalize">{monthLabel(viewMonth, "LLLL")}</h1>
+          <h1 data-tour="titulo" className="font-display text-4xl tracking-tight capitalize">{monthLabel(viewMonth, "LLLL")}</h1>
         </div>
         <MonthSwitcher value={viewMonth} onChange={setViewMonth} />
       </div>
 
-      <section>
+      <section data-tour="numeros">
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
           <div className="col-span-2 sm:col-span-1">
             <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Gastado</p>
@@ -141,7 +141,7 @@ function Analitica() {
         ) : null}
       </section>
 
-      <section>
+      <section data-tour="fijo">
         <div className="mb-2 flex items-baseline justify-between gap-3">
           <h2 className="text-sm font-medium">Fijo vs variable</h2>
           <p className="text-xs text-subtle">{splitHint}</p>
@@ -184,7 +184,7 @@ function Analitica() {
         </div>
       </section>
 
-      <section>
+      <section data-tour="categorias">
         <div className="mb-3 flex items-baseline justify-between">
           <h2 className="text-sm font-medium">Categorías</h2>
           <Link to="/presupuestos" className="-my-3 inline-flex min-h-11 items-center px-1 text-xs text-muted hover:text-fg">

@@ -19,9 +19,11 @@ import { Route as ResetRouteImport } from './routes/reset'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppAjustesRouteImport } from './routes/_app/ajustes'
 import { Route as AppAnaliticaRouteImport } from './routes/_app/analitica'
+import { Route as AppAprenderRouteImport } from './routes/_app/aprender'
 import { Route as AppDiarioRouteImport } from './routes/_app/diario'
 import { Route as AppFijosRouteImport } from './routes/_app/fijos'
 import { Route as AppIaRouteImport } from './routes/_app/ia'
+import { Route as AppMetasRouteImport } from './routes/_app/metas'
 import { Route as AppMovimientosRouteImport } from './routes/_app/movimientos'
 import { Route as AppPresupuestosRouteImport } from './routes/_app/presupuestos'
 import { Route as AppTarjetasRouteImport } from './routes/_app/tarjetas'
@@ -77,6 +79,11 @@ const AppAnaliticaRoute = AppAnaliticaRouteImport.update({
   path: '/analitica',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAprenderRoute = AppAprenderRouteImport.update({
+  id: '/aprender',
+  path: '/aprender',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppDiarioRoute = AppDiarioRouteImport.update({
   id: '/diario',
   path: '/diario',
@@ -90,6 +97,11 @@ const AppFijosRoute = AppFijosRouteImport.update({
 const AppIaRoute = AppIaRouteImport.update({
   id: '/ia',
   path: '/ia',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppMetasRoute = AppMetasRouteImport.update({
+  id: '/metas',
+  path: '/metas',
   getParentRoute: () => AppRoute,
 } as any)
 const AppMovimientosRoute = AppMovimientosRouteImport.update({
@@ -128,9 +140,11 @@ export interface FileRoutesByFullPath {
   '/reset': typeof ResetRoute
   '/ajustes': typeof AppAjustesRoute
   '/analitica': typeof AppAnaliticaRoute
+  '/aprender': typeof AppAprenderRoute
   '/diario': typeof AppDiarioRoute
   '/fijos': typeof AppFijosRoute
   '/ia': typeof AppIaRoute
+  '/metas': typeof AppMetasRoute
   '/movimientos': typeof AppMovimientosRoute
   '/presupuestos': typeof AppPresupuestosRoute
   '/tarjetas': typeof AppTarjetasRoute
@@ -146,9 +160,11 @@ export interface FileRoutesByTo {
   '/reset': typeof ResetRoute
   '/ajustes': typeof AppAjustesRoute
   '/analitica': typeof AppAnaliticaRoute
+  '/aprender': typeof AppAprenderRoute
   '/diario': typeof AppDiarioRoute
   '/fijos': typeof AppFijosRoute
   '/ia': typeof AppIaRoute
+  '/metas': typeof AppMetasRoute
   '/movimientos': typeof AppMovimientosRoute
   '/presupuestos': typeof AppPresupuestosRoute
   '/tarjetas': typeof AppTarjetasRoute
@@ -167,9 +183,11 @@ export interface FileRoutesById {
   '/reset': typeof ResetRoute
   '/_app/ajustes': typeof AppAjustesRoute
   '/_app/analitica': typeof AppAnaliticaRoute
+  '/_app/aprender': typeof AppAprenderRoute
   '/_app/diario': typeof AppDiarioRoute
   '/_app/fijos': typeof AppFijosRoute
   '/_app/ia': typeof AppIaRoute
+  '/_app/metas': typeof AppMetasRoute
   '/_app/movimientos': typeof AppMovimientosRoute
   '/_app/presupuestos': typeof AppPresupuestosRoute
   '/_app/tarjetas': typeof AppTarjetasRoute
@@ -189,9 +207,11 @@ export interface FileRouteTypes {
     | '/reset'
     | '/ajustes'
     | '/analitica'
+    | '/aprender'
     | '/diario'
     | '/fijos'
     | '/ia'
+    | '/metas'
     | '/movimientos'
     | '/presupuestos'
     | '/tarjetas'
@@ -207,9 +227,11 @@ export interface FileRouteTypes {
     | '/reset'
     | '/ajustes'
     | '/analitica'
+    | '/aprender'
     | '/diario'
     | '/fijos'
     | '/ia'
+    | '/metas'
     | '/movimientos'
     | '/presupuestos'
     | '/tarjetas'
@@ -227,9 +249,11 @@ export interface FileRouteTypes {
     | '/reset'
     | '/_app/ajustes'
     | '/_app/analitica'
+    | '/_app/aprender'
     | '/_app/diario'
     | '/_app/fijos'
     | '/_app/ia'
+    | '/_app/metas'
     | '/_app/movimientos'
     | '/_app/presupuestos'
     | '/_app/tarjetas'
@@ -322,6 +346,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAnaliticaRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/aprender': {
+      id: '/_app/aprender'
+      path: '/aprender'
+      fullPath: '/aprender'
+      preLoaderRoute: typeof AppAprenderRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/diario': {
       id: '/_app/diario'
       path: '/diario'
@@ -341,6 +372,13 @@ declare module '@tanstack/react-router' {
       path: '/ia'
       fullPath: '/ia'
       preLoaderRoute: typeof AppIaRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/metas': {
+      id: '/_app/metas'
+      path: '/metas'
+      fullPath: '/metas'
+      preLoaderRoute: typeof AppMetasRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/movimientos': {
@@ -384,9 +422,11 @@ declare module '@tanstack/react-router' {
 interface AppRouteChildren {
   AppAjustesRoute: typeof AppAjustesRoute
   AppAnaliticaRoute: typeof AppAnaliticaRoute
+  AppAprenderRoute: typeof AppAprenderRoute
   AppDiarioRoute: typeof AppDiarioRoute
   AppFijosRoute: typeof AppFijosRoute
   AppIaRoute: typeof AppIaRoute
+  AppMetasRoute: typeof AppMetasRoute
   AppMovimientosRoute: typeof AppMovimientosRoute
   AppPresupuestosRoute: typeof AppPresupuestosRoute
   AppTarjetasRoute: typeof AppTarjetasRoute
@@ -396,9 +436,11 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppAjustesRoute: AppAjustesRoute,
   AppAnaliticaRoute: AppAnaliticaRoute,
+  AppAprenderRoute: AppAprenderRoute,
   AppDiarioRoute: AppDiarioRoute,
   AppFijosRoute: AppFijosRoute,
   AppIaRoute: AppIaRoute,
+  AppMetasRoute: AppMetasRoute,
   AppMovimientosRoute: AppMovimientosRoute,
   AppPresupuestosRoute: AppPresupuestosRoute,
   AppTarjetasRoute: AppTarjetasRoute,

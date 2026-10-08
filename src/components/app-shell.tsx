@@ -4,9 +4,10 @@ import {
   BarChart3,
   Brain,
   CalendarDays,
+  Flag,
+  GraduationCap,
   Menu,
   Plus,
-  Repeat,
   Settings,
   Target, CreditCard } from "lucide-react";
 import { UserButton } from "@/lib/auth/gates";
@@ -21,6 +22,7 @@ import { QuotesTicker } from "@/components/quotes-ticker";
 import { OutboxFlusher } from "@/components/outbox-flusher";
 import { BudgetSeeder } from "@/components/budget-seeder";
 import { Onboarding } from "@/components/onboarding";
+import { PageTour } from "@/components/page-tour";
 import { BookEntryButton, BookMark, BookTheme, BookTransit, useActiveBook } from "@/components/book-mode";
 import { MoreSheet } from "@/components/more-sheet";
 import { Toaster } from "sonner";
@@ -28,13 +30,14 @@ import { Toaster } from "sonner";
 const NAV = [
   { to: "/", label: "Diario", icon: CalendarDays },
   { to: "/analitica", label: "Analítica", icon: BarChart3 },
-  { to: "/fijos", label: "Fijos", icon: Repeat },
 ] as const;
 
 const MORE = [
   { to: "/tarjetas", label: "Tarjetas", icon: CreditCard },
   { to: "/presupuestos", label: "Presupuestos", icon: Target },
+  { to: "/metas", label: "Metas", icon: Flag },
   { to: "/ia", label: "Asistente", icon: Brain },
+  { to: "/aprender", label: "Aprender", icon: GraduationCap },
   { to: "/ajustes", label: "Ajustes", icon: Settings },
 ] as const;
 
@@ -43,7 +46,7 @@ const TAB = [
   { to: "/analitica", label: "Analítica", icon: BarChart3 },
 ] as const;
 
-const MORE_PATHS = new Set(["/ia", "/ajustes", "/privacidad", "/presupuestos"]);
+const MORE_PATHS = new Set(["/ia", "/ajustes", "/privacidad", "/presupuestos", "/aprender", "/metas"]);
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -83,7 +86,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </p>
           </Link>
           <nav className="mt-8 flex flex-1 flex-col gap-1">
-            <Button className="mb-3 w-full" onClick={addOnDay}>
+            <Button className="mb-3 w-full" data-tour="nuevo" onClick={addOnDay}>
               <Plus className="size-4" />
               Nuevo
             </Button>
@@ -124,7 +127,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             })}
           </nav>
           <div className="grid gap-3 px-1">
-            <BookEntryButton className="h-11 px-2" />
+            <BookEntryButton className="h-11 px-2" tour="libro" />
             {/* Avatar + name on one line (name truncates with room to spare),
                 "Cerrar sesión" on its own line with a 44px tap area. */}
             <div className="min-w-0 [&>div]:flex-wrap [&>div]:gap-x-2 [&>div]:gap-y-0 [&>div>:first-child]:shrink-0 [&>div>span:last-of-type]:min-w-0 [&>div>span:last-of-type]:flex-1 [&>div>span:last-of-type]:truncate [&_button]:min-h-11 [&_button]:basis-full [&_button]:text-left [&_button]:whitespace-nowrap [&_button]:text-muted">
@@ -178,7 +181,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
 
         {chrome ? <nav className="cifra-tabbar fixed inset-x-0 bottom-0 z-40 border-t border-border bg-bg/95 px-1 pt-1 backdrop-blur-sm md:hidden">
-          <div className="grid grid-cols-5">
+          <div className="grid grid-cols-4">
             {TAB.map((item) => {
               const active = pathname === item.to;
               const Icon = item.icon;
@@ -201,21 +204,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               aria-label="Cargar movimiento"
               onClick={addOnDay}
               className="flex min-h-12 flex-col items-center justify-center"
+              data-tour="nuevo"
             >
               <span className="grid size-10 place-items-center rounded-full bg-accent text-accent-fg">
                 <Plus className="size-4" />
               </span>
             </button>
-            <Link
-              to="/fijos"
-              className={cn(
-                "flex min-h-12 flex-col items-center justify-center gap-0.5 text-[10px] font-medium leading-tight",
-                pathname === "/fijos" ? "text-fg" : "text-muted",
-              )}
-            >
-              <Repeat className="size-4" />
-              Fijos
-            </Link>
             <button
               type="button"
               onClick={() => setMoreOpen(true)}
@@ -239,6 +233,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {chrome ? <BookTheme /> : null}
         {chrome ? <BookTransit /> : null}
         <Toaster theme="dark" position="top-center" />
+        <PageTour />
       </div>
     </TooltipProvider>
   );
