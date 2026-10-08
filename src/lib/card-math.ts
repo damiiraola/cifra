@@ -70,16 +70,21 @@ export function cardForAccount(cards: Card[], accountId: string): Card | undefin
 }
 
 /**
- * `cardPeriod` to store on a movement: only expenses and refunds on a card
- * caja get one. Keeps a hand-set period when the date did not change.
+ * `cardPeriod` to store on a movement: expenses and refunds on a card caja
+ * get the statement they belong to; a payment into a card keeps the statement
+ * it paid. Keeps a hand-set period when the date did not change.
  */
 export function cardPeriodFor(
   cards: Card[],
-  tx: Pick<Transaction, "type" | "accountId" | "date"> & { cardPeriod?: string; purchaseId?: string },
+  tx: Pick<Transaction, "type" | "accountId" | "date"> & { cardPeriod?: string; purchaseId?: string; counterpartyId?: string },
   previous?: Pick<Transaction, "accountId" | "date" | "cardPeriod">,
   statements: BankStatement[] = [],
 ): string {
-  if (tx.type === "transfer") return "";
+  // A payment (Cambio into a card caja) remembers which statement it paid.
+  if (tx.type === "transfer") {
+    const paid = cardForAccount(cards, tx.counterpartyId ?? "");
+    return paid && /^\d{4}-\d{2}$/.test(tx.cardPeriod ?? "") ? tx.cardPeriod! : "";
+  }
   const card = cardForAccount(cards, tx.accountId);
   if (!card) return "";
   // Cuotas carry their own statement (cuota k = first + k − 1), set when derived.

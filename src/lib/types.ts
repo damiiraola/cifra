@@ -133,6 +133,8 @@ export type Card = {
   payAccountId: string;
   /** Perception on USD charges paid in pesos (RG 5617). Editable; default 30. */
   usdPerceptionPct: number;
+  /** Nominal yearly rate from the statement (TNA %), only to estimate interest. 0 = unknown. */
+  tna: number;
   archived: boolean;
 };
 

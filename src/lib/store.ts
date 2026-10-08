@@ -424,7 +424,14 @@ function fillTx(get: () => LedgerState, tx: TxInput, previous?: Transaction): Tr
     recurringId: tx.recurringId ?? "",
     cardPeriod: cardPeriodFor(
       cards,
-      { type: tx.type, accountId, date: tx.date, cardPeriod: tx.cardPeriod, purchaseId: tx.purchaseId },
+      {
+        type: tx.type,
+        accountId,
+        date: tx.date,
+        cardPeriod: tx.cardPeriod,
+        purchaseId: tx.purchaseId,
+        counterpartyId: tx.counterpartyId,
+      },
       previous,
       get().statements ?? [],
     ),
@@ -1206,6 +1213,7 @@ export const useLedger = create<LedgerState>()((set, get) => ({
       accountUsdId: existing?.accountUsdId ?? uid(),
       payAccountId: input.payAccountId,
       usdPerceptionPct: input.usdPerceptionPct,
+      tna: input.tna > 0 ? input.tna : 0,
       archived: false,
     };
     const names = cardAccountNames(card.name);

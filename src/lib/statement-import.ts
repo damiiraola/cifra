@@ -249,11 +249,28 @@ Reglas:
 - kind: "purchase" consumo; "refund" devolución, bonificación o crédito a favor; "charge" impuestos, sellos, IVA, percepciones, comisiones, intereses o cargos del banco.
 - Cuotas: "C.03/12", "CUOTA 03 DE 12", "3/12" = installmentNo 3, installmentCount 12. Sin cuotas = null y null.
 - description = el comercio, sin la cuota, sin el número de comprobante y sin el monto en dólares repetido.
-- categoryId de los cargos: impuestos. Para el resto elegí de: ${list}.
+- categoryId de los cargos: "intereses" para intereses (financiación, punitorios), IVA sobre intereses, comisiones y cargos por mantenimiento o renovación; "impuestos" para sellos, IVA de servicios digitales, percepciones e Ingresos Brutos. Para el resto elegí de: ${list}.
 - Si algo no figura, null. No inventes líneas ni montos. Lo que diga [titular], [tarjeta], [cuit] o [nro] es dato tapado: ignoralo.`;
 }
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+const FEE_WORDS = /inter[eé]s|financ|punitor|comisi[oó]n|mantenim|renovaci[oó]n|cargo por|seguro de vida|administraci[oó]n/i;
+
+/**
+ * Category of a bank charge: interest and fees go to "Intereses y comisiones",
+ * taxes (sellos, IVA de servicios digitales, percepciones) to "Impuestos".
+ * The words in the line win over the model, so the split is stable.
+ */
+export function chargeCategory(description: string, modelCat: string, ids: Set<string>): string {
+  const has = (id: string) => !ids.size || ids.has(id);
+  if (FEE_WORDS.test(description) && has("intereses")) return "intereses";
+  if (modelCat && has(modelCat) && modelCat !== "intereses") return modelCat;
+  if (modelCat === "intereses" && has("intereses") && !/sellos|percep|iibb|ingresos brutos|servicios? digital|rg ?\d/i.test(description)) {
+    return "intereses";
+  }
+  return has("impuestos") ? "impuestos" : "otros";
+}
 
 function day(v: unknown): string | null {
   if (typeof v !== "string" || !DAY.test(v)) return null;
@@ -298,15 +315,16 @@ export function parseModelStatement(raw: unknown, categoryIds: string[] = []): P
       of = null;
     }
     const cat = typeof l.categoryId === "string" ? l.categoryId : "";
+    const description = String(l.description ?? "").replace(/\s+/g, " ").trim().slice(0, 120) || "Consumo";
     lines.push({
       date: day(l.date),
-      description: String(l.description ?? "").replace(/\s+/g, " ").trim().slice(0, 120) || "Consumo",
+      description,
       installmentNo: no,
       installmentCount: of,
       currency: l.currency === "USD" ? "USD" : "ARS",
       amount: a,
       kind,
-      categoryId: ids.size && !ids.has(cat) ? (kind === "charge" ? "impuestos" : "otros") : cat || "otros",
+      categoryId: kind === "charge" ? chargeCategory(description, cat, ids) : ids.size && !ids.has(cat) ? "otros" : cat || "otros",
     });
   }
   return {
