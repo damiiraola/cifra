@@ -8,6 +8,7 @@ import { todayISO, uid } from "@/lib/utils";
 import { useLedger, useAllCategories, useBookCards } from "@/lib/store";
 import { cuotasFromText, draftFromModel } from "@/lib/movement-parse";
 import { AssistantProposals } from "@/components/assistant-proposals";
+import { AssistantText } from "@/components/assistant-text";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
 import { CATEGORY_MAP } from "@/lib/categories";
@@ -250,7 +251,11 @@ export function Asistente() {
                     Cifra
                   </p>
                 ) : null}
-                <div className="whitespace-pre-wrap text-sm leading-relaxed text-fg">{m.content}</div>
+                {m.role === "assistant" ? (
+                  <AssistantText text={m.content} />
+                ) : (
+                  <div className="whitespace-pre-wrap text-sm leading-relaxed text-fg">{m.content}</div>
+                )}
                 {m.role === "assistant" && m.extra?.proposals?.length ? (
                   <AssistantProposals proposals={m.extra.proposals} />
                 ) : null}

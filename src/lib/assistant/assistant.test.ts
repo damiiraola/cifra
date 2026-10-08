@@ -15,6 +15,7 @@ import {
   type ModelCall,
 } from "./run.ts";
 import { runTool, ToolRun, type AssistantData } from "./tools.ts";
+import { answerBlocks } from "./blocks.ts";
 
 const today = "2026-10-08";
 
@@ -309,7 +310,7 @@ describe("never a number the app did not compute", () => {
     runTool(r3, "tarjetas", {});
     const a = finalAnswer({ texto: "Pagás 45.000.", propuestas: [], seguir: [] }, r3, "x");
     assert.equal(a.source, "plantilla");
-    assert.match(a.text, /Visa: venció el 5 de octubre con \$\s?30\.000 a pagar/);
+    assert.match(a.text, /Visa: pagá \$\s?30\.000; venció el 5 de octubre\./);
     assert.equal(finalAnswer(null, r3, "x").reason, "esquema");
   });
 });
@@ -356,7 +357,7 @@ describe("tools", () => {
     const av = r.data.avalancha as Record<string, unknown>;
     assert.match(String(av.intereses_estimados), /^f\d+$/);
     assert.equal(r.data.las_dos_estrategias_son_iguales, true);
-    assert.match(r.summary, /avalancha salís en/);
+    assert.match(r.summary, /- Avalancha: salís en/);
   });
 
   it("metas and resumen_mes", () => {
@@ -699,5 +700,185 @@ describe("busy model", () => {
     n = 0;
     await retryWhenBusy(async () => (n++, busy), { deadline: 5_000, now: () => 0, sleep });
     assert.equal(n, 1);
+  });
+});
+
+describe("easy to read on the phone", () => {
+  // A month that does not close: Brasil asks for more than what is left.
+  const tight = (): AssistantData => {
+    const d = data();
+    d.goals = [{ ...goal, target: 9_000_000 }];
+    return d;
+  };
+
+  it("no tool hands the model a negative amount: the key says it ('faltan')", () => {
+    const run = new ToolRun(tight());
+    for (const [name, args] of [
+      ["resumen_mes", {}],
+      ["tarjetas", {}],
+      ["metas", {}],
+      ["plan_mes", {}],
+      ["simular", { tipo: "gasto", monto: 5_000_000 }],
+      ["simular", { tipo: "cuotas", monto: 3_000_000, cuotas: 3 }],
+      ["plan_deuda", {}],
+    ] as [string, Record<string, unknown>][]) {
+      const r = runTool(run, name, args);
+      for (const v of Object.values(r.valores)) assert.doesNotMatch(v, /^[−-]/, `${name}: ${v}`);
+      assert.doesNotMatch(r.summary, /[−-]\s?\$/, `${name} template: ${r.summary}`);
+    }
+    const plan = runTool(new ToolRun(tight()), "plan_mes", {});
+    assert.equal(plan.data.cierra, false);
+    assert.ok(plan.data.falta);
+  });
+
+  it("plan template: the conclusion first, then a list, the topes and what they free", () => {
+    const r = runTool(new ToolRun(tight()), "plan_mes", {});
+    const [first, ...rest] = r.summary.split("\n");
+    assert.match(first!, /^El mes no cierra: te faltan \$\s?[\d.]+ por mes\.$/);
+    assert.ok(
+      rest.some((l) => l.startsWith("- Entra: ")),
+      r.summary,
+    );
+    assert.ok(rest.some((l) => l.startsWith("- Fijos: ")));
+    assert.ok(rest.some((l) => l.startsWith("- Tarjetas: ")));
+    assert.ok(rest.some((l) => /^- Para el día a día: /.test(l)));
+    const blocks = answerBlocks(r.summary);
+    assert.equal(blocks[0]!.kind, "p");
+    assert.equal(blocks[1]!.kind, "list");
+    assert.equal(
+      r.valores[String(r.data.cuantas_metas)],
+      "1 meta",
+      "counts are facts, not digits to invent",
+    );
+    const topes = r.data.topes_sugeridos as unknown[];
+    if (topes.length) {
+      assert.ok(blocks.some((b) => b.kind === "lead" && b.text === "Topes sugeridos:"));
+      assert.equal(
+        r.valores[String(r.data.cuantos_topes)],
+        `${topes.length} tope${topes.length === 1 ? "" : "s"}`,
+      );
+    }
+  });
+
+  it("every template reads as conclusion + list", () => {
+    const run = new ToolRun(tight());
+    for (const name of ["tarjetas", "metas", "resumen_mes"]) {
+      const b = answerBlocks(runTool(run, name, {}).summary);
+      assert.equal(b[0]!.kind, "p", name);
+      assert.ok(
+        b.some((x) => x.kind === "list"),
+        name,
+      );
+    }
+    const sim = runTool(run, "simular", {
+      tipo: "cuotas",
+      monto: 600_000,
+      cuotas: 12,
+      que: "Tele",
+    });
+    assert.match(sim.summary, /- Cuotas: 12 de \$\s?50\.000, de /);
+    assert.match(sim.summary, /No se guardó nada\.$/);
+  });
+
+  it("blocks: paragraphs, a lead line, label/value rows, plain items", () => {
+    assert.deepEqual(
+      answerBlocks(
+        "El mes no cierra: te faltan $ 10.\n\n- Entra: $ 900.000\n- **Fijos**: $ 1\nTopes sugeridos:\n• Ocio: $ 5\n- recortá salidas\nListo.",
+      ),
+      [
+        { kind: "p", text: "El mes no cierra: te faltan $ 10." },
+        {
+          kind: "list",
+          items: [
+            { label: "Entra", value: "$ 900.000" },
+            { label: "Fijos", value: "$ 1" },
+          ],
+        },
+        { kind: "lead", text: "Topes sugeridos:" },
+        { kind: "list", items: [{ label: "Ocio", value: "$ 5" }, { text: "recortá salidas" }] },
+        { kind: "p", text: "Listo." },
+      ],
+    );
+    // A line that only ends in ":" without a list after it stays a paragraph.
+    assert.deepEqual(answerBlocks("Mirá esto:"), [{ kind: "p", text: "Mirá esto:" }]);
+  });
+
+  it("the model's repeated unit around a value goes ('1 meta meta', 'enero 15 de enero')", () => {
+    const r = new ToolRun(data());
+    const one = r.facts.count(1, "meta", "metas");
+    const day = r.facts.day("2027-01-15");
+    const days = r.facts.count(8, "día", "días");
+    const out = checkText(
+      `Cambia {${one}} meta. Bariloche es para enero {${day}}. En {${days}} días gastaste más.`,
+      r,
+      "x",
+    );
+    assert.equal(
+      out.ok && out.text,
+      "Cambia 1 meta. Bariloche es para 15 de enero de 2027. En 8 días gastaste más.",
+    );
+  });
+
+  it("chips say how to lay out the answer, without digits the model could copy", async () => {
+    for (const id of ["tarjeta", "plan", "metas", "informe"]) {
+      const c = chipById(id)!;
+      assert.ok(c.guide, id);
+      assert.doesNotMatch(c.guide!, /\d/, id);
+    }
+    const m = fake([responder({ texto: "Listo.", propuestas: [], seguir: [] })]);
+    await runAssistant({
+      data: data(),
+      message: "Armame el plan del mes",
+      chip: chipById("plan"),
+      history: [],
+      call: m.call,
+    });
+    const sys = (m.bodies[0]!.messages as { role: string; content: string }[])[0]!;
+    assert.match(sys.content, /Topes sugeridos:/);
+    assert.match(sys.content, /te faltan/);
+  });
+
+  it("resumen_mes: fijos and cuotas are not stretched to the whole month", () => {
+    const d = data();
+    d.plan.txs = [
+      // Oct 1: rent (fijo), Oct 2-8: 80.000 day to day. Today is Oct 8 of 31 days.
+      tx({
+        amount: 400_000,
+        categoryId: "compras",
+        recurringId: "alquiler",
+        accountId: "bank",
+        method: "debito",
+        date: "2026-10-01",
+      }),
+      tx({
+        amount: 80_000,
+        categoryId: "alimentos",
+        accountId: "bank",
+        method: "debito",
+        date: "2026-10-05",
+      }),
+    ];
+    const r = runTool(new ToolRun(d), "resumen_mes", {});
+    assert.equal(
+      r.valores[String(r.data.si_seguis_asi_gastas_en_el_mes)],
+      money(400_000 + (80_000 / 8) * 31, "ARS"),
+    );
+  });
+
+  it("tarjetas: the limit used counts the cuotas to come, like /tarjetas", () => {
+    const d = data();
+    d.plan.txs = [
+      ...txs,
+      tx({
+        amount: 500_000,
+        date: "2027-03-10",
+        purchaseId: "heladera",
+        installmentNo: 6,
+        installmentCount: 6,
+      }),
+    ];
+    const r = runTool(new ToolRun(d), "tarjetas", {});
+    const visa = (r.data.tarjetas as Record<string, unknown>[])[0]!;
+    assert.equal(r.valores[String(visa.limite_usado)], "27%");
   });
 });

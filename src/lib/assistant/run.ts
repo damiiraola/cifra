@@ -29,12 +29,35 @@ export type Chip = {
   /** Units of the daily cap (chat = 1, informe = 2). */
   units: number;
   maxTokens?: number;
+  /** How to lay out this answer (added to the system prompt). */
+  guide?: string;
 };
 
 export const CHIPS: Chip[] = [
-  { id: "tarjeta", text: "¿Cuánto pago de tarjeta este mes?", tools: [["tarjetas", {}]], units: 1 },
-  { id: "plan", text: "Armame el plan del mes", tools: [["plan_mes", {}]], units: 1 },
-  { id: "metas", text: "¿Llego con mis metas?", tools: [["metas", {}]], units: 1 },
+  {
+    id: "tarjeta",
+    text: "¿Cuánto pago de tarjeta este mes?",
+    tools: [["tarjetas", {}]],
+    units: 1,
+    guide:
+      "Formato: una frase por tarjeta con cuánto pagar y hasta cuándo. Después una lista con el mínimo y el próximo resumen.",
+  },
+  {
+    id: "plan",
+    text: "Armame el plan del mes",
+    tools: [["plan_mes", {}]],
+    units: 1,
+    guide:
+      'Formato: primero una frase con la conclusión: si el mes cierra y cuánto sobra, o si no cierra y cuánto falta. Después una lista con Entra, Fijos, Tarjetas, Metas y Día a día. Después la línea "Topes sugeridos:" y una línea por tope: "- " más la categoría, dos puntos y el id de su tope. Al final una frase con cuánto liberan los topes. Nada más.',
+  },
+  {
+    id: "metas",
+    text: "¿Llego con mis metas?",
+    tools: [["metas", {}]],
+    units: 1,
+    guide:
+      "Formato: una frase con la conclusión y cuánto sobra por mes. Después una línea por meta: si llega a tiempo o cuándo llegaría, y cuánto necesita por mes para llegar a tiempo.",
+  },
   {
     id: "gasto",
     text: "¿Dónde más estoy gastando este mes?",
@@ -63,6 +86,8 @@ export const CHIPS: Chip[] = [
     ],
     units: 2,
     maxTokens: 600,
+    guide:
+      'Formato: una frase con la conclusión del mes. Después tres bloques cortos, cada uno con una línea que termina en ":" y una lista: "Este mes:" (entró, gastaste, si seguís así), "Plan:" (si cierra, y cuánto sobra o falta) y "Tarjetas:" (a pagar y vencimiento). Breve.',
   },
 ];
 
@@ -125,8 +150,9 @@ export async function runAssistant(input: {
     usage.output += u.output;
   };
   const done = (a: Answer): AssistantReply => ({ ...a, modelCalls, usage });
+  const guide = input.chip?.guide ? `\n${input.chip.guide}` : "";
   const base: LlmMessage[] = [
-    { role: "system", content: systemPrompt(input.data.plan.today) },
+    { role: "system", content: systemPrompt(input.data.plan.today) + guide },
     ...historyMessages(input.history),
     { role: "user", content: input.message.slice(0, 600) },
   ];
