@@ -393,8 +393,11 @@ async function insertTx(
 
 export const loadLedger = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
-  .handler(async ({ context }): Promise<LedgerSnapshot> => {
-    const sql = await getSql();
+  .handler(async ({ context }): Promise<LedgerSnapshot> => readLedger(await getSql(), context.userId));
+
+/** The whole ledger of a user, as the app loads it. Also used by the alert mails cron. */
+export async function readLedger(sql: Awaited<ReturnType<typeof getSql>>, userId: string): Promise<LedgerSnapshot> {
+    const context = { userId };
     const settings = await ensureSettings(sql, context.userId);
     const rows = await sql<TxRow>`
       select id, type, amount, currency, category_id, note, merchant,
@@ -471,7 +474,7 @@ export const loadLedger = createServerFn({ method: "GET" })
       purchases,
       statements,
     };
-  });
+}
 
 export const saveTransaction = createServerFn({ method: "POST" })
   .validator((input: Transaction) => asTx(input))
@@ -1190,6 +1193,8 @@ export const deleteAccount = createServerFn({ method: "POST" })
       await tx`delete from ledger_books where user_id = ${context.userId}`;
       await tx`delete from ledger_settings where user_id = ${context.userId}`;
       await tx`delete from ledger_backups where user_id = ${context.userId}`;
+      await tx`delete from alert_mail_prefs where user_id = ${context.userId}`;
+      await tx`delete from alert_mail_sent where user_id = ${context.userId}`;
       await tx`delete from "session" where "userId" = ${context.userId}`;
       await tx`delete from "account" where "userId" = ${context.userId}`;
       await tx`delete from "verification" where "identifier" = ${actual}`;

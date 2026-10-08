@@ -97,7 +97,8 @@ function Privacidad() {
             </li>
             <li>
               <span className="text-fg">Resend</span>: manda los mails de confirmar cuenta, cambiar la clave y avisos de
-              la cuenta.
+              la cuenta. Si activás los avisos por mail en Ajustes, también un mail con los vencimientos de tus
+              tarjetas y las metas atrasadas; te podés dar de baja desde cualquiera de esos mails.
             </li>
             <li>
               <span className="text-fg">Vercel AI Gateway</span>, y a través de él {aiModel}: solo si usás el

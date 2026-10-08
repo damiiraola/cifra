@@ -28,7 +28,9 @@ import { Route as AppMovimientosRouteImport } from './routes/_app/movimientos'
 import { Route as AppPresupuestosRouteImport } from './routes/_app/presupuestos'
 import { Route as AppTarjetasRouteImport } from './routes/_app/tarjetas'
 import { Route as ApiMailDrillRouteImport } from './routes/api/mail-drill'
+import { Route as ApiAlertasBajaRouteImport } from './routes/api/alertas/baja'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiCronAlertasRouteImport } from './routes/api/cron/alertas'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -124,9 +126,19 @@ const ApiMailDrillRoute = ApiMailDrillRouteImport.update({
   path: '/api/mail-drill',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAlertasBajaRoute = ApiAlertasBajaRouteImport.update({
+  id: '/api/alertas/baja',
+  path: '/api/alertas/baja',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCronAlertasRoute = ApiCronAlertasRouteImport.update({
+  id: '/api/cron/alertas',
+  path: '/api/cron/alertas',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -149,7 +161,9 @@ export interface FileRoutesByFullPath {
   '/presupuestos': typeof AppPresupuestosRoute
   '/tarjetas': typeof AppTarjetasRoute
   '/api/mail-drill': typeof ApiMailDrillRoute
+  '/api/alertas/baja': typeof ApiAlertasBajaRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/cron/alertas': typeof ApiCronAlertasRoute
 }
 export interface FileRoutesByTo {
   '/beta': typeof BetaRoute
@@ -170,7 +184,9 @@ export interface FileRoutesByTo {
   '/tarjetas': typeof AppTarjetasRoute
   '/api/mail-drill': typeof ApiMailDrillRoute
   '/': typeof AppIndexRoute
+  '/api/alertas/baja': typeof ApiAlertasBajaRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/cron/alertas': typeof ApiCronAlertasRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -193,7 +209,9 @@ export interface FileRoutesById {
   '/_app/tarjetas': typeof AppTarjetasRoute
   '/api/mail-drill': typeof ApiMailDrillRoute
   '/_app/': typeof AppIndexRoute
+  '/api/alertas/baja': typeof ApiAlertasBajaRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/cron/alertas': typeof ApiCronAlertasRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -216,7 +234,9 @@ export interface FileRouteTypes {
     | '/presupuestos'
     | '/tarjetas'
     | '/api/mail-drill'
+    | '/api/alertas/baja'
     | '/api/auth/$'
+    | '/api/cron/alertas'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/beta'
@@ -237,7 +257,9 @@ export interface FileRouteTypes {
     | '/tarjetas'
     | '/api/mail-drill'
     | '/'
+    | '/api/alertas/baja'
     | '/api/auth/$'
+    | '/api/cron/alertas'
   id:
     | '__root__'
     | '/_app'
@@ -259,7 +281,9 @@ export interface FileRouteTypes {
     | '/_app/tarjetas'
     | '/api/mail-drill'
     | '/_app/'
+    | '/api/alertas/baja'
     | '/api/auth/$'
+    | '/api/cron/alertas'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -271,7 +295,9 @@ export interface RootRouteChildren {
   PrivacidadRoute: typeof PrivacidadRoute
   ResetRoute: typeof ResetRoute
   ApiMailDrillRoute: typeof ApiMailDrillRoute
+  ApiAlertasBajaRoute: typeof ApiAlertasBajaRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiCronAlertasRoute: typeof ApiCronAlertasRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -409,11 +435,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiMailDrillRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/alertas/baja': {
+      id: '/api/alertas/baja'
+      path: '/api/alertas/baja'
+      fullPath: '/api/alertas/baja'
+      preLoaderRoute: typeof ApiAlertasBajaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/auth/$': {
       id: '/api/auth/$'
       path: '/api/auth/$'
       fullPath: '/api/auth/$'
       preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cron/alertas': {
+      id: '/api/cron/alertas'
+      path: '/api/cron/alertas'
+      fullPath: '/api/cron/alertas'
+      preLoaderRoute: typeof ApiCronAlertasRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -458,7 +498,9 @@ const rootRouteChildren: RootRouteChildren = {
   PrivacidadRoute: PrivacidadRoute,
   ResetRoute: ResetRoute,
   ApiMailDrillRoute: ApiMailDrillRoute,
+  ApiAlertasBajaRoute: ApiAlertasBajaRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiCronAlertasRoute: ApiCronAlertasRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -37,6 +37,8 @@ El libro de Negocio no hereda categorías, topes ni analítica del personal. Los
 | `RESEND_API_KEY` | Empieza con `re_`. Sin comillas. |
 | `MAIL_FROM` | `Cifra <hola@cifra.lol>` |
 | `MAIL_DRILL_TOKEN` | Opcional. Prende `/api/mail-drill`. Sin ella, la ruta da 404 |
+| `ALERT_MAILS_ENABLED` | Opcional. `1` prende los avisos por mail. Hoy **no está** en prod: apagado |
+| `CRON_SECRET` | Opcional (hace falta con la anterior). Secreto del cron diario `/api/cron/alertas`. Hoy **no está** en prod |
 | `AI_GATEWAY_API_KEY` | Asistente (opcional en Vercel: usa OIDC) |
 
 DNS de Resend ya está en `send.cifra.lol` (SPF, DKIM). Falta DMARC; no bloquea el envío.
@@ -62,6 +64,7 @@ DNS de Resend ya está en `send.cifra.lol` (SPF, DKIM). Falta DMARC; no bloquea 
 - iOS no debe hacer zoom al enfocar un campo: inputs y selects en 16px (`src/styles.css`, `src/components/ui/input.tsx`).
 - Ícono de inicio: `public/icon-192.png`, `public/icon-512.png`, `public/__grok/icon-180.png`. El nombre en `cifra.lol` sale de `appNameFromHost` en `scripts/grok-pwa-shared.mjs`. No lo vuelvas a “Grok App”.
 - Mails: fondo `#09090B`, tarjeta `#121214`, wordmark Instrument Serif + barras, etiqueta con acento por mail, botón pastilla, versión texto. `MAIL` + `renderMailHtml` / `renderMailText` en `src/lib/mail.ts`. Todo en tablas con estilos inline y `bgcolor` en cada celda (si no, Apple Mail lo invierte); `color-scheme: dark`. Íconos: PNG en `public/mail/` servidos siempre desde `https://cifra.lol` (Gmail no muestra SVG).
+- Avisos por mail (fase 8): opt-in en Ajustes → "Avisos por mail" (la sección solo aparece si el deploy tiene `ALERT_MAILS_ENABLED=1`, `CRON_SECRET` y Resend). Vercel Cron diario a las 12:00 UTC (9:00 AR, declarado en `vite.config.ts` → `vercel.config.crons`) llama `GET /api/cron/alertas` con `Authorization: Bearer $CRON_SECRET`; sin la flag o el secreto la ruta da 404. `src/lib/alert-mail.server.ts` → `runAlertMails`: para cada usuario con `alert_mail_prefs.enabled` y mail confirmado, arma los avisos de cada libro con `ledgerAlerts` (los mismos de la app, desde `readLedger`), se queda con los importantes (`vence`, `vencido`, `meta`) que no estén en `alert_mail_sent`, manda un solo mail por día y anota lo enviado (cada id de aviso incluye la tarjeta/meta y el período, así que no se repite). Mail con la plantilla negra de siempre (`items` con punto de color, ícono PNG, sin SVG) y `List-Unsubscribe` + `List-Unsubscribe-Post` (one-click). Baja sin login en `/api/alertas/baja?t=<token>`: GET muestra un botón (los scanners abren links), POST da de baja. Migración `0016_alert_mail` (`alert_mail_prefs`, `alert_mail_sent`), borradas en `deleteAccount`. Lógica pura y tests en `src/lib/alert-mail.ts` / `alert-mail.test.ts`.
 - Referencia visual de los mails (no es el HTML que se envía): diseño Canva `DAHW-z99ex4` (rediseño oct 2026). El anterior era `DAHW-pSiQxA`.
 
 ## Auth, en corto

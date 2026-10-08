@@ -18,6 +18,7 @@ import { signOutAndForget } from "@/lib/sign-out";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { Button } from "@/components/ui/button";
 import { CardSettings } from "@/components/card-settings";
+import { AlertMailSettings } from "@/components/alert-mail-settings";
 import { FijosPanel } from "@/components/fijos-panel";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -278,6 +279,14 @@ function Ajustes() {
       <Section id="tarjetas" title={`Tarjetas · ${book?.name ?? ""}`} hint="Crédito: cierre, vencimiento y resumen">
         <CardSettings />
       </Section>
+
+      <AlertMailSettings>
+        {(body) => (
+          <Section id="avisos-mail" title="Avisos por mail" hint="Vencimientos y metas atrasadas, opcional">
+            {body}
+          </Section>
+        )}
+      </AlertMailSettings>
 
       <Section title="Categorías" hint="Nombres, visibilidad y topes">
         <p className="mt-1 text-xs text-subtle">
