@@ -7,6 +7,7 @@ import {
   Flag,
   GraduationCap,
   Menu,
+  MessageCircle,
   Plus,
   Settings,
   Target, CreditCard } from "lucide-react";
@@ -26,6 +27,8 @@ import { PageTour } from "@/components/page-tour";
 import { BookEntryButton, BookMark, BookTheme, BookTransit } from "@/components/book-mode";
 import { useActiveBook } from "@/components/book-hooks";
 import { MoreSheet } from "@/components/more-sheet";
+import { FeedbackSheet } from "@/components/feedback-sheet";
+import { openFeedback } from "@/lib/feedback-events";
 import { Toaster } from "sonner";
 
 const NAV = [
@@ -126,6 +129,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </Link>
               );
             })}
+            <button
+              type="button"
+              onClick={openFeedback}
+              className="flex h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium text-muted transition-colors duration-150 hover:bg-elevated hover:text-fg"
+            >
+              <MessageCircle className="size-4" />
+              Contanos
+            </button>
           </nav>
           <div className="grid gap-3 px-1">
             <BookEntryButton className="h-11 px-2" tour="libro" />
@@ -233,6 +244,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {chrome ? <BudgetSeeder /> : null}
         {chrome ? <BookTheme /> : null}
         {chrome ? <BookTransit /> : null}
+        {chrome ? <FeedbackSheet /> : null}
         <Toaster theme="dark" position="top-center" />
         <PageTour />
       </div>

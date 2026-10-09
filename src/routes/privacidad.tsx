@@ -83,6 +83,11 @@ function Privacidad() {
             Lista de espera: si dejás tu mail sin tener cuenta, guardamos solo el mail y la fecha, para avisarte cuando
             haya lugar en la beta. Se borra cuando te invitamos o cuando nos lo pidas.
           </p>
+          <p>
+            Comentarios: si usás "Contanos", guardamos lo que escribís, la pantalla desde donde lo mandaste y si aceptás
+            que te respondamos. Nos llega un aviso por mail (por Resend) con tu mensaje y, solo si aceptaste, tu mail para
+            responderte. Se borra si borrás la cuenta.
+          </p>
           <p>Los usamos solo para que Cifra funcione. No los usamos para publicidad ni para armar perfiles.</p>
           <p>
             Al crear la cuenta aceptás este tratamiento. Podés retirar ese consentimiento cuando quieras borrando la

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
   betaInvitesReport,
@@ -9,6 +9,7 @@ import {
   type BetaInvitesReport,
 } from "@/lib/beta-api";
 import { inviteLink, type InviteRow } from "@/lib/beta-invites";
+import { betaPanelMetrics, type PanelMetrics } from "@/lib/beta-feedback-api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,6 +44,7 @@ function Panel() {
             : "Cerrada: solo se puede crear una cuenta con invitación. Para abrirla, SIGNUP_MODE=abierto en Vercel."}
         </p>
       </div>
+      <Metrics />
       <NewInvites onDone={load} />
       <Invites invites={r.invites} onChange={load} />
       <Waitlist rows={r.waitlist} onChange={load} />
@@ -212,5 +214,125 @@ function Waitlist({
         cuando lo invites.
       </p>
     </section>
+  );
+}
+
+const usd = (n: number) => `US$ ${n < 0.01 && n > 0 ? n.toFixed(5) : n.toFixed(n < 1 ? 4 : 2)}`;
+const FEATURE: Record<string, { label: string; uses: string }> = {
+  tarjetas: { label: "Tarjetas", uses: "" },
+  pdf: { label: "Resumen PDF", uses: "lecturas" },
+  asistente: { label: "Asistente", uses: "consultas" },
+  metas: { label: "Metas", uses: "" },
+};
+const KIND: Record<string, string> = {
+  problema: "Problema",
+  idea: "Idea",
+  comentario: "Comentario",
+};
+const people = (n: number) => `${n} ${n === 1 ? "persona" : "personas"}`;
+
+function Stat({ label, value }: { label: string; value: string | number }) {
+  return (
+    <p className="grid gap-0.5">
+      <span className="text-[11px] tracking-wide text-muted uppercase">{label}</span>
+      <span className="font-display text-2xl tabular-nums">{value}</span>
+    </p>
+  );
+}
+
+/** How the beta is going: aggregates only, plus the comments people sent. */
+function Metrics() {
+  const [m, setM] = useState<PanelMetrics | null>(null);
+  useEffect(() => {
+    void betaPanelMetrics()
+      .then(setM)
+      .catch(() => setM({ ok: false }));
+  }, []);
+  if (!m) return <p className="text-sm text-muted">Cargando números…</p>;
+  if (!m.ok) return null;
+  const { invites, users, features, feedback } = m.metrics;
+  return (
+    <>
+      <section className="grid gap-2">
+        <h2 className="text-sm font-medium">Cómo viene</h2>
+        <div className={`${card} grid grid-cols-2 gap-4`}>
+          <Stat label="Cuentas" value={users.total} />
+          <Stat label="Activas 7 días" value={users.active7} />
+          <Stat label="Nuevas 7 días" value={users.new7} />
+          <Stat label="Confirmadas" value={users.verified} />
+          <Stat label="Invitaciones usadas" value={invites.used} />
+          <Stat label="Códigos disponibles" value={invites.usable} />
+          <Stat label="Lista de espera" value={invites.waitlist} />
+          <Stat label="Comentarios 7 días" value={feedback.last7} />
+        </div>
+      </section>
+      <section className="grid gap-2">
+        <h2 className="text-sm font-medium">Qué usan</h2>
+        <div className={card}>
+          {features.map((f) => (
+            <div key={f.key} className="flex justify-between gap-3 py-1 text-sm">
+              <span className="text-muted">{FEATURE[f.key]!.label}</span>
+              <span className="text-right tabular-nums">
+                {people(f.users)}
+                {f.uses30 != null ? ` · ${f.uses30} ${FEATURE[f.key]!.uses} en 30 días` : ""}
+              </span>
+            </div>
+          ))}
+        </div>
+      </section>
+      <section className="grid gap-2">
+        <h2 className="text-sm font-medium">Costo de la IA</h2>
+        <div className={card}>
+          <div className="flex justify-between gap-3 py-1 text-sm">
+            <span className="text-muted">Hoy ({m.day})</span>
+            <span className="tabular-nums">
+              {usd(m.ai.today.usd)} · {m.ai.today.calls} llamadas
+            </span>
+          </div>
+          <div className="flex justify-between gap-3 py-1 text-sm">
+            <span className="text-muted">Este mes</span>
+            <span className="tabular-nums">
+              {usd(m.ai.month.usd)} · {m.ai.month.calls} llamadas
+            </span>
+          </div>
+          <Link
+            to="/costos"
+            className="mt-1 inline-flex min-h-11 items-center text-sm text-muted underline-offset-4 hover:underline"
+          >
+            Ver el detalle en Costos
+          </Link>
+        </div>
+      </section>
+      <section className="grid gap-2">
+        <h2 className="text-sm font-medium">Comentarios · {feedback.total}</h2>
+        <div className={`${card} grid divide-y divide-border`}>
+          {feedback.recent.length === 0 ? (
+            <p className="py-1 text-sm text-muted">Todavía no llegó ninguno.</p>
+          ) : null}
+          {feedback.recent.map((f, i) => (
+            <div key={i} className="grid gap-1 py-3 text-sm">
+              <p className="flex justify-between gap-3 text-xs text-muted">
+                <span>
+                  {KIND[f.kind] ?? f.kind}
+                  {f.page ? ` · ${f.page}` : ""}
+                </span>
+                <span>
+                  {new Date(f.createdAt).toLocaleDateString("es-AR", {
+                    day: "numeric",
+                    month: "short",
+                  })}
+                </span>
+              </p>
+              <p className="whitespace-pre-wrap">{f.message}</p>
+              {f.contactOk ? (
+                <p className="text-xs text-subtle">
+                  Se le puede escribir (el mail está en el aviso).
+                </p>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      </section>
+    </>
   );
 }
