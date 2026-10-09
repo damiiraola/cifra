@@ -17,6 +17,7 @@ import {
 } from "./run.ts";
 import { goalsVerdict, runTool, ToolRun, type AssistantData } from "./tools.ts";
 import { answerBlocks } from "./blocks.ts";
+import { periodForCard, shiftPeriod } from "../card-math.ts";
 
 const today = "2026-10-08";
 
@@ -359,6 +360,32 @@ describe("tools", () => {
     assert.match(String(av.intereses_estimados), /^f\d+$/);
     assert.equal(r.data.las_dos_estrategias_son_iguales, true);
     assert.match(r.summary, /- Avalancha: salís en/);
+  });
+
+  it("plan_deuda with only new cuotas: no expensive debt, no strategies", () => {
+    const open = periodForCard(today, card, []);
+    const cuotas = [1, 2, 3].map((i) =>
+      tx({
+        amount: 50_000,
+        purchaseId: "zapas",
+        installmentNo: i,
+        installmentCount: 3,
+        cardPeriod: shiftPeriod(open, i - 1),
+      }),
+    );
+    const run = new ToolRun({
+      ...data(),
+      plan: { ...data().plan, txs: [...txs.slice(1), ...cuotas] },
+    });
+    const r = runTool(run, "plan_deuda", {});
+    assert.equal(r.data.deuda_cara, false);
+    assert.equal(r.data.avalancha, undefined);
+    assert.equal(r.valores[String(r.data.cuotas_que_siguen)], money(150_000, "ARS"));
+    assert.equal(r.valores[String(r.data.mes_con_mas_cuotas)], money(50_000, "ARS"));
+    assert.match(r.summary, /^No tenés deuda cara/);
+    assert.match(r.summary, /no suman intereses/);
+    const text = JSON.stringify(r.data).replace(/"[fp]\d+"/g, '""');
+    assert.ok(!/\d/.test(text), text);
   });
 
   it("metas and resumen_mes", () => {
