@@ -134,6 +134,23 @@ describe("cron handler", () => {
     assert.equal(broken.status, 200);
     assert.equal((await broken.json()).aiLogPurged, -1);
   });
+
+  it("also purges rows of deleted accounts, only with the secret, and a failure does not stop the mails", async () => {
+    let runs = 0;
+    const deps = { enabled: true, secret: "s3cret", mailConfigured: () => true, run, purgeOrphans: async () => (runs++, 3) };
+    assert.equal((await handleAlertCron(req("Bearer nope"), deps)).status, 401);
+    assert.equal(runs, 0);
+    const ok = await handleAlertCron(req("Bearer s3cret"), deps);
+    assert.equal((await ok.json()).orphansPurged, 3);
+    const broken = await handleAlertCron(req("Bearer s3cret"), {
+      ...deps,
+      purgeOrphans: async () => {
+        throw new Error("db");
+      },
+    });
+    assert.equal(broken.status, 200);
+    assert.equal((await broken.json()).orphansPurged, -1);
+  });
 });
 
 describe("unsubscribe handler", () => {

@@ -11,6 +11,13 @@ const handle = async ({ request }: { request: Request }) =>
     mailConfigured,
     run: async () => (await import("@/lib/alert-mail.server")).runAlertMails(),
     purge: async () => (await import("@/lib/ai-call")).purgeAiCallLog(),
+    purgeOrphans: async () => {
+      const [{ purgeOrphans }, { getSql, withTransaction }] = await Promise.all([
+        import("@/lib/orphan-purge"),
+        import("@/lib/db"),
+      ]);
+      return (await purgeOrphans(await getSql(), withTransaction)).total;
+    },
   });
 
 export const Route = createFileRoute("/api/cron/alertas")({
