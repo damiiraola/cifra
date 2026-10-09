@@ -51,6 +51,12 @@ export function inferAccount(
   );
 }
 
+/** The pesos caja a new fijo uses for that method, falling back to any caja. */
+export function fijoAccount(accounts: Account[], bookId: string, method: PayMethod): Account | undefined {
+  const id = inferAccount(accounts, bookId, method, "ARS");
+  return accounts.find((a) => a.id === id) ?? accounts.find((a) => a.bookId === bookId && !a.archived);
+}
+
 /** "Banco · ARS", or just the name when it already says the currency ("Visa USD"). */
 export function accountLabel(a: Pick<Account, "name" | "currency">): string {
   return a.name.endsWith(` ${a.currency}`) ? a.name : `${a.name} · ${a.currency}`;

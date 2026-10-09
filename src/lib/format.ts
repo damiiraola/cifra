@@ -2,13 +2,19 @@ import { es } from "date-fns/locale";
 import { format, parseISO } from "date-fns";
 import type { Currency } from "./types";
 
+/**
+ * Short amounts keep one decimal: "$ 1,8 M", not "$ 2 M". With no decimal a
+ * caja with $ 1.800.000 read "$ 2 M" and kept reading "$ 2 M" after spending.
+ */
+const SHORT_DIGITS = { maximumFractionDigits: 1, minimumFractionDigits: 0 };
+
 export function money(amount: number, currency: Currency = "ARS", compact = false) {
   const abs = Math.abs(amount);
+  const short = compact && abs >= 100_000;
   if (currency === "USDT") {
     const formatted = new Intl.NumberFormat("es-AR", {
-      maximumFractionDigits: 2,
-      minimumFractionDigits: 2,
-      notation: compact && abs >= 100_000 ? "compact" : "standard",
+      ...(short ? SHORT_DIGITS : { maximumFractionDigits: 2, minimumFractionDigits: 2 }),
+      notation: short ? "compact" : "standard",
       compactDisplay: "short",
     }).format(abs);
     return amount < 0 ? `−USDT ${formatted}` : `USDT ${formatted}`;
@@ -16,9 +22,13 @@ export function money(amount: number, currency: Currency = "ARS", compact = fals
   const formatted = new Intl.NumberFormat("es-AR", {
     style: "currency",
     currency,
-    maximumFractionDigits: currency === "ARS" ? 0 : 2,
-    minimumFractionDigits: currency === "ARS" ? 0 : 2,
-    notation: compact && abs >= 100_000 ? "compact" : "standard",
+    ...(short
+      ? SHORT_DIGITS
+      : {
+          maximumFractionDigits: currency === "ARS" ? 0 : 2,
+          minimumFractionDigits: currency === "ARS" ? 0 : 2,
+        }),
+    notation: short ? "compact" : "standard",
     compactDisplay: "short",
   }).format(abs);
   return amount < 0 ? `−${formatted}` : formatted;
