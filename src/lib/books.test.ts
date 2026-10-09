@@ -1,6 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { legsMatch, otherLeg, rateFarFromMarket } from "./books.ts";
+import { ACCOUNT_TEMPLATES, fijoAccount, legsMatch, otherLeg, rateFarFromMarket } from "./books.ts";
+import { FIJO_TEMPLATES } from "./recurring.ts";
+import type { Account } from "./types.ts";
 
 describe("cambio", () => {
   it("descuenta los USDT a partir de los pesos y la cotización", () => {
@@ -24,5 +26,32 @@ describe("cambio", () => {
   it("no deja pasar un monto que no cierra", () => {
     assert.equal(legsMatch(681.54, 1_100_000, "USDT", "ARS", 1614), true);
     assert.equal(legsMatch(1_100_000, 1_100_000, "USDT", "ARS", 1614), false);
+  });
+});
+
+describe("caja de los fijos", () => {
+  const cajas: Account[] = ACCOUNT_TEMPLATES.map((t, i) => ({
+    id: `a${i}`,
+    bookId: "p",
+    name: t.name,
+    kind: t.kind,
+    currency: t.currency,
+    opening: 0,
+    archived: false,
+  }));
+
+  it("con las cajas de siempre, ningún fijo del onboarding cae en Efectivo", () => {
+    for (const t of FIJO_TEMPLATES) {
+      assert.equal(
+        fijoAccount(cajas, "p", t.method)?.name,
+        t.method === "efectivo" ? "Efectivo" : "Banco",
+        t.name,
+      );
+    }
+  });
+
+  it("sin Banco usa otra caja en pesos", () => {
+    const sinBanco = cajas.filter((a) => a.kind !== "bank");
+    assert.equal(fijoAccount(sinBanco, "p", "transferencia")?.currency, "ARS");
   });
 });
