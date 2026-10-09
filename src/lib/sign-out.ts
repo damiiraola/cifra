@@ -1,4 +1,5 @@
 import { signOut } from "@/lib/auth/client";
+import { clearAllDrafts, draftStorage } from "@/lib/statement-draft";
 import { forgetLocalLedger, useLedger } from "@/lib/store";
 
 /**
@@ -31,5 +32,7 @@ export async function signOutAndForget(redirectTo = "/login"): Promise<boolean> 
   }
   await signOut(redirectTo);
   forgetLocalLedger();
+  const drafts = draftStorage();
+  if (drafts) clearAllDrafts(drafts);
   return true;
 }
