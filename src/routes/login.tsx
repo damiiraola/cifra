@@ -25,7 +25,9 @@ function Login() {
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
-    const linkError = new URLSearchParams(window.location.search).get("error");
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("cuenta") === "borrada") setNotice("Borramos tu cuenta y todos tus datos. Te mandamos un mail de confirmación.");
+    const linkError = params.get("error");
     if (linkError && isExpiredLinkError(linkError.toUpperCase())) {
       setError("El enlace para confirmar la cuenta venció o ya se usó. Entrá con tu mail y clave y te mandamos otro.");
     }
@@ -151,6 +153,11 @@ function Login() {
 
   return (
     <AuthScreen kicker="Entrá para guardar tu libro en tu cuenta. Cada usuario ve solo lo suyo.">
+      {notice ? (
+        <p role="status" className="mt-6 rounded-xl bg-elevated p-3 text-sm text-fg">
+          {notice}
+        </p>
+      ) : null}
       <div className="mt-6 grid grid-cols-2 gap-1 rounded-xl bg-elevated p-1">
         <button
           type="button"
