@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { PurchaseForm } from "@/components/purchase-form";
 import { StatementImport } from "@/components/statement-import";
+import { draftStorage, loadDraft } from "@/lib/statement-draft";
 import { PayStatement } from "@/components/pay-statement";
 import { DebtPlanCard } from "@/components/debt-plan-card";
 
@@ -102,7 +103,11 @@ function CardBlock({ card, today, tour = false }: { card: Card; today: string; t
   const removePurchase = useLedger((s) => s.removePurchase);
   const statements = useBookStatements();
   const [adding, setAdding] = useState(false);
-  const [importing, setImporting] = useState(false);
+  // Reopen a PDF review that was left open before a reload.
+  const [importing, setImporting] = useState(() => {
+    const st = draftStorage();
+    return st ? loadDraft(st, card.id) !== null : false;
+  });
   const [paying, setPaying] = useState(false);
   const addTx = useLedger((s) => s.addTx);
   const [editingId, setEditingId] = useState("");
