@@ -2,6 +2,19 @@ import type { Transaction } from "./types";
 
 export const OUTBOX_MAX_TRIES = 3;
 
+/** A normal save takes 1–3 s; only warn about unsaved rows after this. */
+export const UNSAVED_GRACE_MS = 5000;
+
+/**
+ * Whether to show the "N sin guardar · Reintentar" pill. Right after the
+ * onboarding the fijos take 2–3 s to save, and the yellow pill scared people
+ * for no reason. Offline it shows at once, since nothing will save.
+ */
+export function showUnsaved(pending: number, pendingForMs: number, online: boolean): boolean {
+  if (pending <= 0) return false;
+  return !online || pendingForMs >= UNSAVED_GRACE_MS;
+}
+
 export type OutboxAction = "add" | "update" | "delete";
 
 export type OutboxOp = {

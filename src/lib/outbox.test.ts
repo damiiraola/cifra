@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { applyOutbox, enqueue, parseOutbox, pruneOutbox } from "./outbox.ts";
+import { applyOutbox, enqueue, parseOutbox, pruneOutbox, showUnsaved } from "./outbox.ts";
 import type { Transaction } from "./types.ts";
 
 function tx(id: string, amount = 100, extra: Partial<Transaction> = {}): Transaction {
@@ -101,5 +101,17 @@ describe("outbox", () => {
     assert.equal(parsed.length, 2);
     assert.equal(parsed[0]?.id, "ok");
     assert.equal(parsed[1]?.action, "delete");
+  });
+});
+
+describe("aviso de sin guardar", () => {
+  it("no aparece durante un guardado normal", () => {
+    assert.equal(showUnsaved(4, 2500, true), false);
+    assert.equal(showUnsaved(0, 60_000, true), false);
+  });
+
+  it("aparece si tarda más de 5 s o si no hay conexión", () => {
+    assert.equal(showUnsaved(4, 5000, true), true);
+    assert.equal(showUnsaved(1, 0, false), true);
   });
 });
