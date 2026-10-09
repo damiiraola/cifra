@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input, PasswordInput } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AUTH_MESSAGES, authErrorMessage, isExpiredLinkError } from "@/lib/auth/errors";
+import { joinBetaWaitlist, signupStatus } from "@/lib/beta-api";
 
 export const Route = createFileRoute("/login")({
   component: Login,
@@ -23,11 +24,19 @@ function Login() {
   const [busy, setBusy] = useState(false);
   const [checkEmail, setCheckEmail] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  // Closed beta: the invitation code from the link (?invitacion=) or typed in.
+  const [invitation, setInvitation] = useState("");
+  const [signup, setSignup] = useState<{ mode: "invitacion" | "abierto"; codeOk: boolean | null } | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     // "Crear cuenta" on the front page links here with ?modo=crear.
     if (params.get("modo") === "crear") setMode("up");
+    const code = params.get("invitacion") ?? "";
+    if (code) setInvitation(code);
+    void signupStatus({ data: { code } })
+      .then(setSignup)
+      .catch(() => setSignup(null));
     if (params.get("cuenta") === "borrada") setNotice("Borramos tu cuenta y todos tus datos. Te mandamos un mail de confirmación.");
     const linkError = params.get("error");
     if (linkError && isExpiredLinkError(linkError.toUpperCase())) {
@@ -41,6 +50,9 @@ function Login() {
     // Only when the signed-in user changes, not on every new user object.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPending, user?.id]);
+
+  const closedBeta = signup?.mode !== "abierto";
+  const initialCode = typeof window === "undefined" ? "" : (new URLSearchParams(window.location.search).get("invitacion") ?? "");
 
   if (isPending && timedOut) {
     return (
@@ -65,12 +77,14 @@ function Login() {
     setBusy(true);
     try {
       if (mode === "up") {
+        // `invitation` rides in the body; the server checks it (auth/invite-gate).
         const { error: err } = await authClient.signUp.email({
           name: name.trim() || email.split("@")[0] || "Cifra",
           email: email.trim(),
           password,
           callbackURL: "/",
-        });
+          invitation: invitation.trim(),
+        } as Parameters<typeof authClient.signUp.email>[0]);
         if (err) {
           setError(authErrorMessage(err, "No pude crear la cuenta. Probá de nuevo."));
           return;
@@ -184,6 +198,24 @@ function Login() {
       </div>
 
       <form className="mt-5 grid gap-3" onSubmit={(e) => void onSubmit(e)}>
+        {mode === "up" && closedBeta ? (
+          <div className="grid gap-1.5">
+            <Label htmlFor="invitation">Código de invitación</Label>
+            <Input
+              id="invitation"
+              autoComplete="off"
+              autoCapitalize="characters"
+              value={invitation}
+              onChange={(e) => setInvitation(e.target.value)}
+              placeholder="Lo tenés en el link que te mandaron"
+            />
+            {signup?.codeOk === false && invitation === initialCode ? (
+              <p className="text-xs text-warn">
+                Esa invitación ya se usó o venció. Pedile otra a quien te invitó.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         {mode === "up" ? (
           <div className="grid gap-1.5">
             <Label htmlFor="name">Nombre</Label>
@@ -246,6 +278,58 @@ function Login() {
           </p>
         ) : null}
       </form>
+      {mode === "up" && closedBeta && !invitation.trim() ? <WaitlistBox /> : null}
     </AuthScreen>
+  );
+}
+
+/** Without an invitation: say so kindly and offer the waiting list. */
+function WaitlistBox() {
+  const [email, setEmail] = useState("");
+  const [state, setState] = useState<"idle" | "busy" | "ok" | "invalido" | "error">("idle");
+  return (
+    <section className="mt-6 rounded-xl bg-elevated p-4 text-sm">
+      <p className="font-medium">¿No tenés invitación?</p>
+      <p className="mt-1 text-muted">
+        Cifra está en beta cerrada, con un grupo chico. Dejanos tu mail y te avisamos cuando abramos.
+      </p>
+      {state === "ok" ? (
+        <p role="status" className="mt-3 text-fg">
+          Listo, te anotamos. Te escribimos cuando haya lugar.
+        </p>
+      ) : (
+        <form
+          className="mt-3 flex gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setState("busy");
+            void joinBetaWaitlist({ data: { email } })
+              .then(({ result }) => setState(result === "ok" ? "ok" : result === "invalido" ? "invalido" : "error"))
+              .catch(() => setState("error"));
+          }}
+        >
+          <Label htmlFor="waitlist-email" className="sr-only">
+            Tu mail para la lista de espera
+          </Label>
+          <Input
+            id="waitlist-email"
+            type="email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="vos@mail.com"
+            className="min-w-0 flex-1"
+          />
+          <Button type="submit" variant="secondary" disabled={state === "busy"}>
+            Avisame
+          </Button>
+        </form>
+      )}
+      {state === "invalido" ? <p className="mt-2 text-xs text-warn">Ese mail no parece válido. Revisalo.</p> : null}
+      {state === "error" ? (
+        <p className="mt-2 text-xs text-warn">No pude anotarte ahora. Probá de nuevo en un rato.</p>
+      ) : null}
+    </section>
   );
 }

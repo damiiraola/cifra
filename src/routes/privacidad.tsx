@@ -79,6 +79,10 @@ function Privacidad() {
             para no pedirte la contraseña cada vez. Datos técnicos mínimos (fecha de inicio de sesión, dirección IP y
             navegador) por seguridad y para frenar abusos.
           </p>
+          <p>
+            Lista de espera: si dejás tu mail sin tener cuenta, guardamos solo el mail y la fecha, para avisarte cuando
+            haya lugar en la beta. Se borra cuando te invitamos o cuando nos lo pidas.
+          </p>
           <p>Los usamos solo para que Cifra funcione. No los usamos para publicidad ni para armar perfiles.</p>
           <p>
             Al crear la cuenta aceptás este tratamiento. Podés retirar ese consentimiento cuando quieras borrando la

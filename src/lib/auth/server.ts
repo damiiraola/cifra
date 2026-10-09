@@ -32,6 +32,11 @@ import { ensureDbReady, getPglite } from "../db";
 import { emailAndPasswordEnabled, emailPasswordOptions, emailVerificationOptions } from "./email-password";
 import { pgliteDialect } from "./pglite-dialect";
 import { authOrigins } from "./origins";
+import { APIError, createAuthMiddleware, isAPIError } from "better-auth/api";
+import { getSql } from "../db";
+import { signupMode } from "../beta-invites";
+import { isBetaOwner } from "../beta-owner";
+import { INVITE_REQUIRED, gateSignUp, settleSignUp, userCreateAllowed, type Grants } from "./invite-gate";
 
 // Kick (and share) PGLite bootstrap as soon as the auth server module loads.
 void ensureDbReady();
@@ -100,6 +105,9 @@ const database = databaseUrl
 /** Session token cookie name. */
 export const SESSION_TOKEN_COOKIE = "__Host-grok-auth.session_token";
 
+/** Invitation slots granted by the sign-up hook, for the rest of that request. */
+const inviteGrants: Grants = new Map();
+
 export const auth = betterAuth({
   baseURL,
   // Deployed apps inject BETTER_AUTH_SECRET. Preview: process-stable secret on
@@ -134,6 +142,36 @@ export const auth = betterAuth({
       "/send-verification-email": { window: 600, max: 3 },
       // Read-only and called on every screen; not worth a DB write each time.
       "/get-session": false,
+    },
+  },
+
+  // Closed beta: sign-up only with an invitation code, checked here on the
+  // server (see `./invite-gate`). `SIGNUP_MODE=abierto` opens it.
+  hooks: {
+    before: createAuthMiddleware(async (ctx) => {
+      if (ctx.path !== "/sign-up/email") return;
+      const verdict = await gateSignUp({ sql: await getSql(), mode: signupMode(), body: ctx.body, grants: inviteGrants, isOwnerEmail: (email) => isBetaOwner(email, true) });
+      if (verdict === "denied") {
+        throw new APIError("FORBIDDEN", { code: INVITE_REQUIRED, message: "An invitation code is required to sign up" });
+      }
+    }),
+    after: createAuthMiddleware(async (ctx) => {
+      if (ctx.path !== "/sign-up/email") return;
+      await settleSignUp({
+        sql: await getSql(),
+        body: ctx.body,
+        failed: isAPIError(ctx.context.returned) || ctx.context.returned instanceof Error,
+        grants: inviteGrants,
+      });
+    }),
+  },
+  databaseHooks: {
+    user: {
+      create: {
+        before: async (user) => {
+          if (!userCreateAllowed({ mode: signupMode(), email: user.email, grants: inviteGrants })) return false;
+        },
+      },
     },
   },
 
