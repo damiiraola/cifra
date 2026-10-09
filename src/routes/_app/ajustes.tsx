@@ -14,6 +14,7 @@ import { autoBackupHint, downloadLocalVault, shareVaultToIcloud } from "@/lib/lo
 import { deleteAccount } from "@/lib/ledger-api";
 import { forgetLocalLedger, useAllCategories, useBookAccounts, useBookTxs, useLedger } from "@/lib/store";
 import { signOut } from "@/lib/auth/client";
+import { markLeaving } from "@/lib/auth/leaving";
 import { forgetDevice, signOutAndForget } from "@/lib/sign-out";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { Button } from "@/components/ui/button";
@@ -194,11 +195,13 @@ function Ajustes() {
                   forgetDevice(expected);
                   resetClient();
                   const to = "/login?cuenta=borrada";
+                  markLeaving();
                   // Clearing the cookies needs the server; never wait for it more than 3 s.
                   await Promise.race([
                     signOut(to).catch(() => {}),
                     new Promise((r) => setTimeout(r, 3000)),
                   ]);
+                  markLeaving();
                   window.location.replace(to);
                 })
                 .catch((err) => {
