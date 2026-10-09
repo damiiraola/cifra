@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Outlet, createFileRoute, useLocation } from "@tanstack/react-router";
 import { useSessionWait } from "@/lib/auth/use-current-user";
+import { isLeaving } from "@/lib/auth/leaving";
 import { sessionHint } from "@/lib/auth/session-hint";
 import { signedOutView } from "@/lib/auth/signed-out-view";
 import { Landing } from "@/components/landing";
@@ -26,6 +27,8 @@ function AppLayout() {
 
   useEffect(() => {
     if (isPending || timedOut) return;
+    // A sign-out or account deletion is already taking this tab to its own page.
+    if (isLeaving()) return;
     if (!userId && (view !== "landing" || linkError)) {
       const error = new URLSearchParams(window.location.search).get("error");
       window.location.replace(error ? `/login?error=${encodeURIComponent(error)}` : "/login");

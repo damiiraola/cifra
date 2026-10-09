@@ -1,5 +1,6 @@
 import { createAuthClient } from "better-auth/react";
 import { runSignOut } from "../../../scripts/sign-out-plan.mjs";
+import { clearLeaving, markLeaving } from "./leaving";
 
 /**
  * Better Auth client for this React SPA (browser-side). Cifra only signs in
@@ -68,10 +69,7 @@ function setBearerToken(token: string | null): void {
 
 /** The sandbox live preview runs this app inside an iframe on a `*.grok-sandbox.com` host. */
 function inLivePreview(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    window.location.hostname.endsWith(".grok-sandbox.com")
-  );
+  return typeof window !== "undefined" && window.location.hostname.endsWith(".grok-sandbox.com");
 }
 
 /**
@@ -87,6 +85,17 @@ function inLivePreview(): boolean {
  * preview the local clear is sufficient, so it always resolves.
  */
 export async function signOut(redirectTo = "/"): Promise<void> {
+  // Our redirect below must win over the layout's own "no session -> /login".
+  markLeaving();
+  try {
+    await doSignOut(redirectTo);
+  } catch (err) {
+    clearLeaving();
+    throw err;
+  }
+}
+
+async function doSignOut(redirectTo: string): Promise<void> {
   await runSignOut({
     livePreview: inLivePreview(),
     hasBearer: Boolean(getBearerToken()),
