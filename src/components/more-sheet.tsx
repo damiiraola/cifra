@@ -1,9 +1,10 @@
 import { Link } from "@tanstack/react-router";
-import { Brain, Flag, GraduationCap, LogOut, Settings, Shield, Target, CreditCard } from "lucide-react";
+import { Brain, Flag, GraduationCap, LogOut, MessageCircle, Settings, Shield, Target, CreditCard } from "lucide-react";
 import { toast } from "sonner";
 import { signOutAndForget } from "@/lib/sign-out";
 import { cn } from "@/lib/utils";
 import { BookEntryButton } from "@/components/book-mode";
+import { openFeedback } from "@/lib/feedback-events";
 import {
   Drawer,
   DrawerContent,
@@ -66,6 +67,17 @@ export function MoreSheet({
               <Shield className="size-4" />
               Privacidad
             </Link>
+            <button
+              type="button"
+              className="flex h-12 items-center gap-3 rounded-xl px-3 text-sm font-medium text-muted hover:bg-elevated hover:text-fg"
+              onClick={() => {
+                onOpenChange(false);
+                openFeedback();
+              }}
+            >
+              <MessageCircle className="size-4" />
+              Contanos
+            </button>
             <button
               type="button"
               className="mt-2 flex h-12 items-center gap-3 rounded-xl px-3 text-sm font-medium text-muted hover:bg-elevated hover:text-fg"
