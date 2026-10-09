@@ -31,7 +31,7 @@ function Login() {
     if (params.get("cuenta") === "borrada") setNotice("Borramos tu cuenta y todos tus datos. Te mandamos un mail de confirmación.");
     const linkError = params.get("error");
     if (linkError && isExpiredLinkError(linkError.toUpperCase())) {
-      setError("El enlace para confirmar la cuenta venció o ya se usó. Entrá con tu mail y clave y te mandamos otro.");
+      setError("El enlace para confirmar la cuenta venció o ya se usó. Entrá con tu mail y contraseña y te mandamos otro.");
     }
   }, []);
 

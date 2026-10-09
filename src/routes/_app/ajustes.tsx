@@ -157,7 +157,7 @@ function Ajustes() {
         <div className="mt-6 grid gap-2 sm:max-w-sm">
           <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Borrar cuenta</p>
           <p className="text-xs text-subtle">
-            Escribí tu mail para confirmar. Se van movimientos, fijos, respaldos y el login. No hay
+            Escribí tu mail para confirmar. Se van movimientos, fijos, respaldos y tu acceso. No hay
             vuelta atrás.
           </p>
           <Input

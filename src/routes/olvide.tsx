@@ -40,7 +40,7 @@ function Forgot() {
   }
 
   return (
-    <AuthScreen kicker="Te mandamos un enlace para elegir una clave nueva. Si el mail no existe, no avisamos nada.">
+    <AuthScreen kicker="Te mandamos un enlace para elegir una contraseña nueva. Si el mail no existe, no avisamos nada.">
       {sent ? (
         <div className="mt-8">
           <p className="text-sm text-fg">Si ese mail tiene cuenta en Cifra, te mandamos el enlace. Si no llega en unos minutos, mirá en spam.</p>
