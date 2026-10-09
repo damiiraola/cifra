@@ -215,7 +215,7 @@ function Ajustes() {
         </div>
       </Section>
 
-      <Section tour="cotizacion" title="Cotizaciones" hint="Dólar y USDT del día">
+      <Section id="cotizaciones" tour="cotizacion" title="Cotizaciones" hint="Dólar y USDT del día">
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-xs text-subtle">
@@ -260,7 +260,7 @@ function Ajustes() {
         <p className="mt-3 text-xs tabular-nums text-subtle">USDT ${formatRate(usdtRate)}</p>
       </Section>
 
-      <Section title={`Cajas · ${book?.name ?? ""}`} hint="Saldo inicial de cada caja">
+      <Section id="cajas" title={`Cajas · ${book?.name ?? ""}`} hint="Saldo inicial de cada caja">
         <p className="text-xs text-subtle">Saldo inicial. El de hoy se calcula encima de los movimientos.</p>
         <div className="mt-4 grid gap-2">
           {accounts.filter((a) => a.kind !== "card").map((a) => (
@@ -296,7 +296,7 @@ function Ajustes() {
         )}
       </AlertMailSettings>
 
-      <Section title="Categorías" hint="Nombres, visibilidad y topes">
+      <Section id="categorias" title="Categorías" hint="Nombres, visibilidad y topes">
         <p className="mt-1 text-xs text-subtle">
           Nombre, visibilidad y tope. Si no escribís tope, se usan los fijos de esa categoría. Oculta no sale en Nuevo.
         </p>
@@ -373,7 +373,7 @@ function Ajustes() {
         </form>
       </Section>
 
-      <Section title="Atajos de iPhone" hint="Cargar desde Siri o un atajo">
+      <Section id="atajos" title="Atajos de iPhone" hint="Cargar desde Siri o un atajo">
         <p className="mt-1 text-xs text-subtle">
           Apple Atajos abre Cifra con un link. Tenés que estar logueado. La sesión de Safari vale.
         </p>
@@ -422,7 +422,7 @@ function Ajustes() {
         </ol>
       </Section>
 
-      <Section title="Datos" hint="Respaldo, exportar e importar">
+      <Section id="datos" title="Datos" hint="Respaldo, exportar e importar">
         <p className="mt-1 text-xs text-subtle">
           Se respalda solo, todos los días, en tu cuenta. No tenés que tocar nada. Quedan 30 días.
           {auto ? ` Último automático: ${auto.day.slice(8, 10)}/${auto.day.slice(5, 7)}.` : " Hoy se copia al abrir el libro."}

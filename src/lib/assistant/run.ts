@@ -21,6 +21,14 @@ import {
   type LlmMessage,
 } from "./llm.ts";
 import { runTool, TOOL_NAMES, ToolRun, type AssistantData } from "./tools.ts";
+import {
+  deniesFeature,
+  guideAnswer,
+  isAppQuestion,
+  UNSURE_LINKS,
+  UNSURE_TEXT,
+  type GuideLink,
+} from "./app-guide.ts";
 
 export type Chip = {
   id: string;
@@ -96,6 +104,8 @@ export const CHIPS: Chip[] = [
  * call gets the layout for that tool (the same as its chip, or its own).
  */
 const TOOL_GUIDES: Record<string, string> = {
+  funciones_app:
+    'Formato: una frase con dónde está, con la ruta tal cual ("Más → Tarjetas → «Importar resumen PDF»"), y después los pasos en frases cortas. Si funciones_app no tiene lo que preguntan, decí que no estás seguro y mandá a Más → Contanos. Nunca digas que no existe.',
   simular:
     'Formato: una frase corta con la conclusión (si entra en el plan o no, en palabras simples). Después una lista, una línea por dato con "- Etiqueta: " y el id: la cuota, la primera, la última, el total, lo que queda libre en la tarjeta, lo que sobra por mes (antes y después), cada meta que cambia y el mes más justo. Nada más.',
 };
@@ -164,15 +174,42 @@ export async function runAssistant(input: {
   const run = new ToolRun(input.data);
   const usage = { input: 0, output: 0 };
   let modelCalls = 0;
+  // "¿Cómo subo el resumen?": Cifra knows where everything is; no model.
+  const guide = input.chip ? null : guideAnswer(input.message);
+  if (guide) {
+    return {
+      text: guide.text,
+      proposals: [],
+      followUps: guide.followUps,
+      links: guide.links,
+      source: "guia",
+      modelCalls: 0,
+      usage,
+    };
+  }
   const add = (body: unknown) => {
     const u = usageOf(body);
     usage.input += u.input;
     usage.output += u.output;
   };
   const done = (a: Answer): AssistantReply => ({ ...a, modelCalls, usage });
-  const guide = input.chip?.guide ? `\n${input.chip.guide}` : "";
+  /** Free text: carry the app links, and never let the model deny a feature. */
+  const checked = (a: Answer): AssistantReply => {
+    if (a.source === "ia" && isAppQuestion(input.message) && deniesFeature(a.text)) {
+      return done({
+        text: UNSURE_TEXT,
+        proposals: [],
+        followUps: [],
+        links: UNSURE_LINKS,
+        source: "guia",
+        reason: "negó una función",
+      });
+    }
+    return done({ ...a, links: uniqueLinks(run.links) });
+  };
+  const layoutGuide = input.chip?.guide ? `\n${input.chip.guide}` : "";
   const base: LlmMessage[] = [
-    { role: "system", content: systemPrompt(input.data.plan.today) + guide },
+    { role: "system", content: systemPrompt(input.data.plan.today) + layoutGuide },
     // A chip is a fixed question with fixed tools: earlier turns (a simulated
     // purchase, say) only confuse it ("sobran $ X después de la tele").
     ...(input.chip ? [] : historyMessages(input.history)),
@@ -214,7 +251,7 @@ export async function runAssistant(input: {
     .slice(0, MAX_TOOLS_PER_TURN);
   const direct = calls.find((c) => c.name === "responder");
   if (!wanted.length) {
-    if (direct) return done(finalAnswer(direct.args, run, input.message));
+    if (direct) return checked(finalAnswer(direct.args, run, input.message));
     return done(templateAnswer(run, "sin herramientas"));
   }
   const ran = wanted.map((c) => {
@@ -229,10 +266,22 @@ export async function runAssistant(input: {
   const second = await input.call((p) =>
     toolBody(p, { messages: [...withLayout, ...toolTurn(ran)], force: "responder" }),
   );
-  if (!second.ok) return done(templateAnswer(run, `modelo: ${second.failure}`));
+  if (!second.ok) return checked(templateAnswer(run, `modelo: ${second.failure}`));
   add(second.body);
   const reply = toolCalls(second.body).find((c) => c.name === "responder");
-  return done(finalAnswer(reply?.args, run, input.message));
+  return checked(finalAnswer(reply?.args, run, input.message));
+}
+
+function uniqueLinks(links: GuideLink[]): GuideLink[] {
+  const seen = new Set<string>();
+  return links
+    .filter((l) => {
+      const key = "to" in l ? l.to : l.action;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 3);
 }
 
 const str = (v: unknown, max: number) => (typeof v === "string" ? v.slice(0, max) : "");

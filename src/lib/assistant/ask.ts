@@ -16,6 +16,7 @@ import { argentinaDay } from "@/lib/market-hours";
 import { assistantData, cleanPending } from "./context";
 import { chipById, cleanAssistantInput, retryWhenBusy, runAssistant, type ModelCall } from "./run";
 import type { Proposal } from "./tools";
+import { guideAnswer, type GuideLink } from "./app-guide";
 
 /** Whole question, both model calls included (the browser gives up at 22 s). */
 const ASK_MS = 20_000;
@@ -26,7 +27,8 @@ export type AssistantResponse =
       text: string;
       proposals: Proposal[];
       followUps: string[];
-      source: "ia" | "plantilla";
+      links: GuideLink[];
+      source: "ia" | "plantilla" | "guia";
     }
   | { ok: false; error: string };
 
@@ -42,6 +44,18 @@ export const askAssistant = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .handler(async ({ data, context }): Promise<AssistantResponse> => {
     const chip = chipById(data.chip);
+    // How to do something in the app: Cifra's own list, no model, no daily use.
+    const guide = chip ? null : guideAnswer(data.message);
+    if (guide) {
+      return {
+        ok: true,
+        text: guide.text,
+        proposals: [],
+        followUps: guide.followUps,
+        links: guide.links,
+        source: "guia",
+      };
+    }
     const providers = await providersForRequest();
     const track: AiTrack = { kind: chip?.id === "informe" ? "informe" : "asistente", logs: [] };
     let note = "";
@@ -111,6 +125,7 @@ export const askAssistant = createServerFn({ method: "POST" })
       text: reply.text,
       proposals: reply.proposals,
       followUps: reply.followUps,
+      links: reply.links ?? [],
       source: reply.source,
     };
   });

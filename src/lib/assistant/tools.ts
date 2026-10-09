@@ -5,6 +5,7 @@
  * Cifra can show if the model fails. Tools never write: changes are returned
  * as proposals the user confirms with a button. Pure, sin IA.
  */
+import { featuresAbout, UNSURE_TEXT, type GuideLink } from "./app-guide.ts";
 import type { Goal, GoalPriority } from "../goals.ts";
 import type { Account, Category, Currency } from "../types.ts";
 import { accountBalance, accountLabel } from "../books.ts";
@@ -95,6 +96,8 @@ export class ToolRun {
   readonly facts: Facts;
   readonly proposals: Proposal[] = [];
   readonly summaries: string[] = [];
+  /** Links into the app the answer should carry (from `funciones_app`). */
+  readonly links: GuideLink[] = [];
   readonly data: AssistantData;
   constructor(data: AssistantData) {
     this.data = data;
@@ -820,6 +823,27 @@ type ToolDef = {
 
 const NO_ARGS = { type: "object", properties: {}, additionalProperties: false };
 
+/** How to do something in the app: where it is and the steps (never invented). */
+function funcionesApp(run: ToolRun, args: Record<string, unknown>): ToolResult {
+  const tema = typeof args.tema === "string" ? args.tema.slice(0, 200) : "";
+  const list = featuresAbout(tema);
+  const found = list.length <= 3;
+  if (found) for (const f of list) run.links.push(...f.links);
+  else run.links.push({ label: "Abrir Contanos", action: "contanos" });
+  return {
+    data: {
+      funciones: list.map((f) =>
+        found
+          ? { nombre: f.name, donde: f.where, como: f.how }
+          : { nombre: f.name, donde: f.where },
+      ),
+      regla:
+        "Usá estas rutas tal cual. Si lo que preguntan no está en la lista, no digas que no existe ni que no se puede: decí que no estás seguro y que lo pueden pedir en Más → Contanos.",
+    },
+    summary: found ? list.map((f) => f.how).join("\n\n") : UNSURE_TEXT,
+  };
+}
+
 export const TOOLS: ToolDef[] = [
   {
     name: "resumen_mes",
@@ -908,6 +932,18 @@ export const TOOLS: ToolDef[] = [
       additionalProperties: false,
     },
     run: planDeuda,
+  },
+  {
+    name: "funciones_app",
+    description:
+      "Cómo hacer algo en Cifra: dónde está cada función (importar el resumen PDF, tarjetas, cuotas, fijos, metas, presupuestos, simulador, plan de deudas, avisos por mail, Contanos, copia de seguridad…) y los pasos. Usala siempre que pregunten cómo, dónde o si la app tiene algo.",
+    parameters: {
+      type: "object",
+      properties: { tema: { type: "string", description: "Qué quieren hacer, en pocas palabras" } },
+      required: ["tema"],
+      additionalProperties: false,
+    },
+    run: funcionesApp,
   },
 ];
 

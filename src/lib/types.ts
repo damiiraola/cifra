@@ -165,7 +165,8 @@ export type ChatMessage = {
   extra?: {
     proposals?: import("./assistant/tools.ts").Proposal[];
     followUps?: string[];
-    source?: "ia" | "plantilla";
+    links?: import("./assistant/app-guide.ts").GuideLink[];
+    source?: "ia" | "plantilla" | "guia";
   };
 };
 
