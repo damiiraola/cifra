@@ -14,7 +14,7 @@ import { autoBackupHint, downloadLocalVault, shareVaultToIcloud } from "@/lib/lo
 import { deleteAccount } from "@/lib/ledger-api";
 import { forgetLocalLedger, useAllCategories, useBookAccounts, useBookTxs, useLedger } from "@/lib/store";
 import { signOut } from "@/lib/auth/client";
-import { signOutAndForget } from "@/lib/sign-out";
+import { forgetDevice, signOutAndForget } from "@/lib/sign-out";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { Button } from "@/components/ui/button";
 import { CardSettings } from "@/components/card-settings";
@@ -188,13 +188,18 @@ function Ajustes() {
               setDeleting(true);
               void deleteAccount({ data: { email: deleteEmail.trim() } })
                 .then(async () => {
+                  // The account is gone: say so now, clear this device and leave.
+                  toast.success("Cuenta borrada. Te mandamos un mail de confirmación.");
                   forgetLocalLedger();
+                  forgetDevice(expected);
                   resetClient();
-                  try {
-                    await signOut("/login");
-                  } catch {
-                    window.location.replace("/login");
-                  }
+                  const to = "/login?cuenta=borrada";
+                  // Clearing the cookies needs the server; never wait for it more than 3 s.
+                  await Promise.race([
+                    signOut(to).catch(() => {}),
+                    new Promise((r) => setTimeout(r, 3000)),
+                  ]);
+                  window.location.replace(to);
                 })
                 .catch((err) => {
                   setDeleting(false);

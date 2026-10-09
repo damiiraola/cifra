@@ -16,6 +16,7 @@ import { money, monthLabel } from "@/lib/format";
 import { argentinaDay } from "@/lib/market-hours";
 import { useBookTxs, useLedger, useVisibleCategories } from "@/lib/store";
 import type { Card } from "@/lib/types";
+import { clearDraft, draftStorage, loadDraft, saveDraft } from "@/lib/statement-draft";
 import { userMessage } from "@/lib/user-error";
 import { cn, uid } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -46,7 +47,24 @@ export function StatementImport({ card, onClose }: { card: Card; onClose: () => 
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [read, setRead] = useState<Read | null>(null);
+  // A review left open survives a reload (reading the PDF again costs uses).
+  const [read, setReadState] = useState<Read | null>(() => {
+    const st = draftStorage();
+    return st ? loadDraft<Read>(st, card.id) : null;
+  });
+  const setRead = (r: Read | null) => {
+    const st = draftStorage();
+    if (st) {
+      if (r) saveDraft(st, card.id, r);
+      else clearDraft(st, card.id);
+    }
+    setReadState(r);
+  };
+  const close = () => {
+    const st = draftStorage();
+    if (st) clearDraft(st, card.id);
+    onClose();
+  };
   const cats = useVisibleCategories();
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -75,7 +93,7 @@ export function StatementImport({ card, onClose }: { card: Card; onClose: () => 
     }
   }
 
-  if (read) return <Review card={card} read={read} onClose={onClose} onRetry={() => setRead(null)} />;
+  if (read) return <Review card={card} read={read} onClose={close} onRetry={() => setRead(null)} />;
 
   return (
     <div className="mt-3 grid gap-3 rounded-xl bg-elevated p-3" aria-label="Importar resumen">
@@ -364,6 +382,10 @@ function Review({ card, read, onClose, onRetry }: { card: Card; read: Read; onCl
       <p className="text-xs text-subtle">
         Las cuotas nuevas se cargan como compra en cuotas desde la cuota del resumen. Los pagos no se importan: el pago
         del resumen es un Cambio de tu banco a la tarjeta.
+      </p>
+      <p className="text-xs text-subtle">
+        Si recargás la página, esta revisión sigue acá sin volver a gastar usos: queda en este dispositivo hasta que la
+        importes o la canceles (como mucho un día).
       </p>
 
       <div className="flex flex-wrap gap-2">
