@@ -25,7 +25,14 @@ import {
 import { goalPlan } from "../plan/goal-plan.ts";
 import { committedByCategory, suggestBudgets } from "../plan/budgets.ts";
 import { monthPlan, planLevers } from "../plan/month-plan.ts";
-import { cardDebts, compareDebtPlans, minimumFor, suggestedDebtBudget } from "../plan/debt.ts";
+import {
+  cardDebts,
+  compareDebtPlans,
+  minimumFor,
+  onlyCuotas,
+  peakCuotas,
+  suggestedDebtBudget,
+} from "../plan/debt.ts";
 import { simulate, type Scenario } from "../plan/simulate.ts";
 import { Facts, dayLabel, monthLabel } from "./facts.ts";
 
@@ -738,6 +745,33 @@ function planDeuda(run: ToolRun, args: Record<string, unknown>): ToolResult {
     };
   const surplus = monthlySurplus(projectCashflow(p, 6));
   const asked = Math.round(Number(args.presupuesto) || 0);
+  if (onlyCuotas(debts) && asked <= 0) {
+    // Nothing accrues interest: no plan to pick, the cuotas are paid with each statement.
+    const total = debts.reduce((s, dd) => s + dd.cuotasTotal, 0);
+    const end =
+      debts
+        .map((dd) => dd.cuotasEnd)
+        .filter(Boolean)
+        .sort()
+        .at(-1) ?? "";
+    const peak = peakCuotas(debts, p.today);
+    return {
+      data: {
+        deuda_cara: false,
+        conclusion: f.label("no tenés deuda cara: solo cuotas que se pagan con cada resumen"),
+        cuotas_que_siguen: f.ars(total),
+        ...(end ? { ultima_cuota: f.month(end) } : {}),
+        mes_con_mas_cuotas: f.ars(peak),
+        sobra_por_mes_despues_de_cuotas: f.ars(Math.max(0, surplus)),
+      },
+      summary: textLines([
+        "No tenés deuda cara: no quedan saldos de resúmenes sin pagar.",
+        `- Cuotas que siguen: ${ars(total)}${end ? `, hasta ${monthLabel(end)}` : ""}`,
+        `- Mes con más cuotas: ${ars(peak)}`,
+        "Mientras pagues el total de cada resumen, las cuotas no suman intereses.",
+      ]),
+    };
+  }
   const budget = asked > 0 ? asked : suggestedDebtBudget(debts, p.today, surplus);
   const c = compareDebtPlans(debts, budget, p.today);
   const plan = (x: typeof c.avalancha) => ({

@@ -25,6 +25,8 @@ function Login() {
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
+    // "Crear cuenta" on the front page links here with ?modo=crear.
+    if (new URLSearchParams(window.location.search).get("modo") === "crear") setMode("up");
     const linkError = new URLSearchParams(window.location.search).get("error");
     if (linkError && isExpiredLinkError(linkError.toUpperCase())) {
       setError("El enlace para confirmar la cuenta venció o ya se usó. Entrá con tu mail y clave y te mandamos otro.");
