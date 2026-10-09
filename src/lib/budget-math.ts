@@ -112,44 +112,68 @@ export function recurringArs(
   return recurringLines(rows, bookId, rates, type).reduce((s, r) => s + r.amount, 0);
 }
 
-const PLAN_WEIGHT: Record<string, number> = {
-  alimentos: 0.4,
-  transporte: 0.12,
-  compras: 0.12,
-  ocio: 0.1,
-  educacion: 0.06,
-  suscripciones: 0.05,
-  impuestos: 0.05,
-};
+export type PlanSuggestion = { id: string; name: string; amount: number; spent: number; avg: number };
 
-export type PlanSuggestion = { id: string; name: string; amount: number };
+export type PlanCategory = { id: string; name: string; spent: number; avg: number };
 
+/** Average spend per category over the previous months that had any expense at all. */
+export function previousMonthsAverage(months: Record<string, number>[]): Record<string, number> {
+  const active = months.filter((m) => Object.values(m).some((v) => v > 0));
+  if (!active.length) return {};
+  const sum: Record<string, number> = {};
+  for (const m of active) {
+    for (const [id, v] of Object.entries(m)) {
+      if (v > 0) sum[id] = (sum[id] ?? 0) + v;
+    }
+  }
+  const out: Record<string, number> = {};
+  for (const [id, v] of Object.entries(sum)) out[id] = Math.round(v / active.length);
+  return out;
+}
+
+/**
+ * "Te quedan" = what came in this month minus what was already spent.
+ * Pending fijos (not written down yet) are reserved first; the rest is split
+ * among categories with real spending, weighted by this month's spend plus the
+ * average of previous months. Categories with no spending get nothing.
+ */
 export function buildMonthPlan(input: {
-  cap: number;
-  assigned: number;
+  income: number;
+  spent: number;
+  pendingFijos: number;
   daysLeft: number;
-  openCategories: { id: string; name: string }[];
+  categories: PlanCategory[];
+  margin?: number;
 }) {
-  const over = Math.max(0, Math.round(input.assigned - input.cap));
-  const left = Math.max(0, Math.round(input.cap - input.assigned));
-  const perDay = input.daysLeft > 0 ? Math.round(left / input.daysLeft) : 0;
-  const share = input.cap > 0 ? input.assigned / input.cap : 0;
-  const tone: "over" | "tight" | "ok" = over > 0 ? "over" : share >= 0.65 ? "tight" : "ok";
-  const open = input.openCategories.filter((c) => PLAN_WEIGHT[c.id]);
-  const weight = open.reduce((s, c) => s + (PLAN_WEIGHT[c.id] ?? 0), 0);
-  const pool = Math.round(left * 0.85);
+  const income = Math.max(0, Math.round(input.income));
+  const spent = Math.max(0, Math.round(input.spent));
+  const reserved = Math.max(0, Math.round(input.pendingFijos));
+  const over = Math.max(0, spent - income);
+  const left = Math.max(0, income - spent);
+  const free = Math.max(0, left - reserved);
+  const perDay = input.daysLeft > 0 ? Math.round(free / input.daysLeft) : 0;
+  const share = income > 0 ? (spent + reserved) / income : 0;
+  const tone: "over" | "tight" | "ok" = over > 0 || (income > 0 && reserved > left) ? "over" : share >= 0.65 ? "tight" : "ok";
+  const open = input.categories
+    .map((c) => ({ ...c, weight: Math.max(0, c.spent) + Math.max(0, c.avg) }))
+    .filter((c) => c.weight > 0);
+  const weight = open.reduce((s, c) => s + c.weight, 0);
+  const pool = Math.round(free * (1 - (input.margin ?? 0.1)));
   const suggestions: PlanSuggestion[] =
-    left > 0 && weight > 0
+    pool > 0 && weight > 0
       ? open
           .map((c) => ({
             id: c.id,
             name: c.name,
-            amount: Math.round((pool * (PLAN_WEIGHT[c.id] ?? 0)) / weight / 1000) * 1000,
+            spent: Math.round(c.spent),
+            avg: Math.round(c.avg),
+            amount: Math.floor((pool * c.weight) / weight / 1000) * 1000,
           }))
           .filter((s) => s.amount > 0)
+          .sort((a, b) => b.amount - a.amount)
       : [];
-  const cushion = Math.max(0, left - suggestions.reduce((s, x) => s + x.amount, 0));
-  return { over, left, perDay, share, tone, suggestions, cushion };
+  const cushion = Math.max(0, free - suggestions.reduce((s, x) => s + x.amount, 0));
+  return { income, spent, over, left, reserved, free, perDay, share, tone, suggestions, cushion };
 }
 
 export function budgetsFromSpend(byCat: Record<string, number>): Record<string, number> {

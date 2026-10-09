@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   buildMonthPlan,
+  previousMonthsAverage,
   budgetAllocation,
   recurringLines,
   budgetsFromSpend,
@@ -98,33 +99,96 @@ describe("recurringLines", () => {
     );
     const income = lines.reduce((s, l) => s + l.amount, 0);
     const plan = buildMonthPlan({
-      cap: income,
-      assigned: 4_230_000,
+      income,
+      spent: 4_230_000,
+      pendingFijos: 0,
       daysLeft: 28,
-      openCategories: [{ id: "alimentos", name: "Alimentación" }],
+      categories: [{ id: "alimentos", name: "Alimentación", spent: 0, avg: 300_000 }],
     });
     assert.equal(plan.left, 1_570_000);
   });
 });
 
 describe("buildMonthPlan", () => {
-  it("says the month is tight when fijos already take most of the cap", () => {
+  const cats = [
+    { id: "alimentos", name: "Alimentación", spent: 200_000, avg: 400_000 },
+    { id: "transporte", name: "Transporte", spent: 50_000, avg: 50_000 },
+    { id: "ocio", name: "Ocio", spent: 0, avg: 0 },
+    { id: "compras", name: "Compras", spent: 0, avg: 0 },
+  ];
+
+  it("leads with income minus what was already spent", () => {
+    const plan = buildMonthPlan({ income: 2_000_000, spent: 800_000, pendingFijos: 0, daysLeft: 20, categories: cats });
+    assert.equal(plan.left, 1_200_000);
+    assert.equal(plan.free, 1_200_000);
+    assert.equal(plan.perDay, 60_000);
+    assert.equal(plan.tone, "ok");
+  });
+
+  it("splits by this month's spend plus the previous average and skips categories with no spending", () => {
+    const plan = buildMonthPlan({ income: 2_000_000, spent: 800_000, pendingFijos: 0, daysLeft: 20, categories: cats });
+    const ids = plan.suggestions.map((s) => s.id);
+    assert.deepEqual(ids, ["alimentos", "transporte"]);
+    const food = plan.suggestions[0]!;
+    const transport = plan.suggestions[1]!;
+    // weights 600k vs 100k over a pool of 90% of 1.2M
+    assert.equal(food.amount, 925_000);
+    assert.equal(transport.amount, 154_000);
+    assert.equal(food.spent, 200_000);
+    assert.equal(food.avg, 400_000);
+    const total = plan.suggestions.reduce((s, x) => s + x.amount, 0);
+    assert.equal(total + plan.cushion, plan.free);
+  });
+
+  it("includes Alimentación from history even when nothing was spent there this month", () => {
     const plan = buildMonthPlan({
-      cap: 5_830_000,
-      assigned: 4_230_000,
-      daysLeft: 28,
-      openCategories: [
-        { id: "alimentos", name: "Alimentación" },
-        { id: "compras", name: "Compras" },
-        { id: "ocio", name: "Ocio" },
-      ],
+      income: 1_000_000,
+      spent: 0,
+      pendingFijos: 0,
+      daysLeft: 30,
+      categories: [{ id: "alimentos", name: "Alimentación", spent: 0, avg: 300_000 }],
     });
+    assert.equal(plan.suggestions.length, 1);
+    assert.equal(plan.suggestions[0]!.id, "alimentos");
+  });
+
+  it("gives nothing when there is no spending history at all", () => {
+    const plan = buildMonthPlan({
+      income: 1_000_000,
+      spent: 0,
+      pendingFijos: 0,
+      daysLeft: 30,
+      categories: [{ id: "ocio", name: "Ocio", spent: 0, avg: 0 }],
+    });
+    assert.deepEqual(plan.suggestions, []);
+    assert.equal(plan.cushion, 1_000_000);
+  });
+
+  it("reserves pending fijos before splitting", () => {
+    const plan = buildMonthPlan({ income: 2_000_000, spent: 800_000, pendingFijos: 700_000, daysLeft: 20, categories: cats });
+    assert.equal(plan.left, 1_200_000);
+    assert.equal(plan.reserved, 700_000);
+    assert.equal(plan.free, 500_000);
     assert.equal(plan.tone, "tight");
-    assert.equal(plan.left, 1_600_000);
-    assert.equal(plan.perDay, 57_143);
-    assert.ok(plan.suggestions.find((s) => s.id === "alimentos")!.amount > 0);
-    assert.ok(plan.cushion > 0);
-    assert.ok(plan.suggestions.reduce((s, x) => s + x.amount, 0) + plan.cushion <= 1_600_000);
+    assert.ok(plan.suggestions.reduce((s, x) => s + x.amount, 0) <= 450_000);
+  });
+
+  it("flags the month when spending already passed income", () => {
+    const plan = buildMonthPlan({ income: 500_000, spent: 650_000, pendingFijos: 0, daysLeft: 10, categories: cats });
+    assert.equal(plan.over, 150_000);
+    assert.equal(plan.left, 0);
+    assert.equal(plan.tone, "over");
+    assert.deepEqual(plan.suggestions, []);
+  });
+});
+
+describe("previousMonthsAverage", () => {
+  it("averages over months with activity only", () => {
+    assert.deepEqual(previousMonthsAverage([{ alimentos: 300_000, ocio: 60_000 }, { alimentos: 500_000 }, {}]), {
+      alimentos: 400_000,
+      ocio: 30_000,
+    });
+    assert.deepEqual(previousMonthsAverage([{}, {}]), {});
   });
 });
 
