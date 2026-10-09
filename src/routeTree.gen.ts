@@ -26,6 +26,7 @@ import { Route as AppFijosRouteImport } from './routes/_app/fijos'
 import { Route as AppIaRouteImport } from './routes/_app/ia'
 import { Route as AppMetasRouteImport } from './routes/_app/metas'
 import { Route as AppMovimientosRouteImport } from './routes/_app/movimientos'
+import { Route as AppPanelRouteImport } from './routes/_app/panel'
 import { Route as AppPresupuestosRouteImport } from './routes/_app/presupuestos'
 import { Route as AppTarjetasRouteImport } from './routes/_app/tarjetas'
 import { Route as ApiMailDrillRouteImport } from './routes/api/mail-drill'
@@ -117,6 +118,11 @@ const AppMovimientosRoute = AppMovimientosRouteImport.update({
   path: '/movimientos',
   getParentRoute: () => AppRoute,
 } as any)
+const AppPanelRoute = AppPanelRouteImport.update({
+  id: '/panel',
+  path: '/panel',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppPresupuestosRoute = AppPresupuestosRouteImport.update({
   id: '/presupuestos',
   path: '/presupuestos',
@@ -165,6 +171,7 @@ export interface FileRoutesByFullPath {
   '/ia': typeof AppIaRoute
   '/metas': typeof AppMetasRoute
   '/movimientos': typeof AppMovimientosRoute
+  '/panel': typeof AppPanelRoute
   '/presupuestos': typeof AppPresupuestosRoute
   '/tarjetas': typeof AppTarjetasRoute
   '/api/mail-drill': typeof ApiMailDrillRoute
@@ -188,6 +195,7 @@ export interface FileRoutesByTo {
   '/ia': typeof AppIaRoute
   '/metas': typeof AppMetasRoute
   '/movimientos': typeof AppMovimientosRoute
+  '/panel': typeof AppPanelRoute
   '/presupuestos': typeof AppPresupuestosRoute
   '/tarjetas': typeof AppTarjetasRoute
   '/api/mail-drill': typeof ApiMailDrillRoute
@@ -214,6 +222,7 @@ export interface FileRoutesById {
   '/_app/ia': typeof AppIaRoute
   '/_app/metas': typeof AppMetasRoute
   '/_app/movimientos': typeof AppMovimientosRoute
+  '/_app/panel': typeof AppPanelRoute
   '/_app/presupuestos': typeof AppPresupuestosRoute
   '/_app/tarjetas': typeof AppTarjetasRoute
   '/api/mail-drill': typeof ApiMailDrillRoute
@@ -241,6 +250,7 @@ export interface FileRouteTypes {
     | '/ia'
     | '/metas'
     | '/movimientos'
+    | '/panel'
     | '/presupuestos'
     | '/tarjetas'
     | '/api/mail-drill'
@@ -264,6 +274,7 @@ export interface FileRouteTypes {
     | '/ia'
     | '/metas'
     | '/movimientos'
+    | '/panel'
     | '/presupuestos'
     | '/tarjetas'
     | '/api/mail-drill'
@@ -289,6 +300,7 @@ export interface FileRouteTypes {
     | '/_app/ia'
     | '/_app/metas'
     | '/_app/movimientos'
+    | '/_app/panel'
     | '/_app/presupuestos'
     | '/_app/tarjetas'
     | '/api/mail-drill'
@@ -433,6 +445,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppMovimientosRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/panel': {
+      id: '/_app/panel'
+      path: '/panel'
+      fullPath: '/panel'
+      preLoaderRoute: typeof AppPanelRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/presupuestos': {
       id: '/_app/presupuestos'
       path: '/presupuestos'
@@ -488,6 +507,7 @@ interface AppRouteChildren {
   AppIaRoute: typeof AppIaRoute
   AppMetasRoute: typeof AppMetasRoute
   AppMovimientosRoute: typeof AppMovimientosRoute
+  AppPanelRoute: typeof AppPanelRoute
   AppPresupuestosRoute: typeof AppPresupuestosRoute
   AppTarjetasRoute: typeof AppTarjetasRoute
   AppIndexRoute: typeof AppIndexRoute
@@ -503,6 +523,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppIaRoute: AppIaRoute,
   AppMetasRoute: AppMetasRoute,
   AppMovimientosRoute: AppMovimientosRoute,
+  AppPanelRoute: AppPanelRoute,
   AppPresupuestosRoute: AppPresupuestosRoute,
   AppTarjetasRoute: AppTarjetasRoute,
   AppIndexRoute: AppIndexRoute,

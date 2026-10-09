@@ -20,6 +20,8 @@ export const AUTH_MESSAGES = {
   sessionExpired: "Tu sesión venció. Entrá de nuevo.",
   network: "No hay conexión con Cifra. Revisá internet y probá de nuevo.",
   server: "Cifra tuvo un problema. Probá de nuevo en un rato.",
+  inviteRequired:
+    "Para crear una cuenta necesitás una invitación válida. Revisá el código o pedile otro a quien te invitó.",
 } as const;
 
 const BY_CODE: Record<string, string> = {
@@ -36,6 +38,7 @@ const BY_CODE: Record<string, string> = {
   INVALID_TOKEN: AUTH_MESSAGES.linkExpired,
   TOKEN_EXPIRED: AUTH_MESSAGES.linkExpired,
   SESSION_EXPIRED: AUTH_MESSAGES.sessionExpired,
+  INVITE_REQUIRED: AUTH_MESSAGES.inviteRequired,
 };
 
 /** Message patterns for errors that arrive without a usable `code`. */
