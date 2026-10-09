@@ -146,7 +146,7 @@ export function useDebtPlan(budget: number | null) {
     const comparison = debts.length
       ? compareDebtPlans(debts, budget != null && budget > 0 ? budget : suggested, data.today)
       : null;
-    return { debts, suggested, comparison, today: data.today };
+    return { debts, suggested, comparison, today: data.today, surplus };
   }, [debts, data.today, surplus, budget]);
 }
 
