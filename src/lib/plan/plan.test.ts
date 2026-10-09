@@ -491,6 +491,19 @@ describe("alerts", () => {
     );
   });
 
+  it("budgets: no 80 % warning when the category only has fijos or cuotas", () => {
+    const rows = [
+      { id: "vivienda", name: "Vivienda", spent: 420_000, budget: 420_000, committed: 420_000 },
+      { id: "servicios", name: "Servicios", spent: 40_000, budget: 40_000, committed: 25_000 },
+      { id: "salud", name: "Salud", spent: 120_000, budget: 95_000, committed: 120_000 },
+    ];
+    const a = budgetAlerts(alertInput({ budgetRows: rows }));
+    assert.deepEqual(
+      a.map((x) => x.id),
+      ["tope:salud:2026-10", "tope80:servicios:2026-10"],
+    );
+  });
+
   it("goal behind and order: worst first", () => {
     const lines = goalPlan([goal({ deadline: "2026-12-08" })], 100_000, "2026-10-08", {
       usd: 1500,

@@ -330,14 +330,32 @@ export function compareDebtPlans(debts: CardDebt[], budget: number, today: strin
   };
 }
 
+/** Highest month of cuotas still to come (this month or later), ARS. */
+export function peakCuotas(debts: CardDebt[], today: string) {
+  const ym = today.slice(0, 7);
+  const byMonth = new Map<string, number>();
+  for (const d of debts) {
+    for (const [k, v] of Object.entries(d.cuotas)) if (k >= ym && v > 0) byMonth.set(k, (byMonth.get(k) ?? 0) + v);
+  }
+  return round0(Math.max(0, ...byMonth.values()));
+}
+
+/** True when nothing accrues interest: no unpaid statement balance, only cuotas paid with each statement. */
+export function onlyCuotas(debts: CardDebt[]) {
+  return debts.length > 0 && debts.every((d) => d.balance < 1);
+}
+
 /**
- * A sensible starting budget: this month's cuotas and minimums plus what is
- * left over each month (from the cash-flow plan), never more than the debt.
+ * A sensible starting budget: the cuotas and minimums, plus what is left over
+ * each month (from the cash-flow plan, the same "te sobran" of Metas), never
+ * more than the debt. The cuotas count at their highest month, not just this
+ * month's: with a new purchase whose first cuota is due next month, this
+ * month has no cuotas, and capping at 0 made the plan "pay" nothing and
+ * finance interest-free cuotas with interest.
  */
 export function suggestedDebtBudget(debts: CardDebt[], today: string, surplus: number) {
-  const ym = today.slice(0, 7);
-  const cuotasNow = debts.reduce((s, d) => s + (d.cuotas[ym] ?? 0), 0);
+  const peak = peakCuotas(debts, today);
   const balances = debts.reduce((s, d) => s + d.balance, 0);
-  const mandatory = mandatoryNow(debts, today);
-  return round0(Math.max(mandatory, Math.min(cuotasNow + balances, mandatory + Math.max(0, surplus))));
+  const mandatory = Math.max(mandatoryNow(debts, today), peak);
+  return round0(Math.max(mandatory, Math.min(peak + balances, mandatory + Math.max(0, surplus))));
 }
