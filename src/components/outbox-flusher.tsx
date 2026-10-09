@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { showUnsaved, UNSAVED_GRACE_MS } from "@/lib/outbox";
 import { useLedger } from "@/lib/store";
 
 export function OutboxFlusher() {
@@ -7,6 +8,35 @@ export function OutboxFlusher() {
   const txPending = useLedger((s) => s.outbox.length);
   const recPending = useLedger((s) => s.pendingRecurringIds.length);
   const pending = txPending + recPending;
+  const hasPending = pending > 0;
+  const [pendingSince, setPendingSince] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const [online, setOnline] = useState(true);
+
+  // Start the clock when something is waiting, and re-render once the grace
+  // period is over, so a normal 2–3 s save never shows the yellow pill.
+  useEffect(() => {
+    if (!hasPending) {
+      setPendingSince(null);
+      return;
+    }
+    const since = Date.now();
+    setPendingSince(since);
+    setNow(since);
+    const t = window.setTimeout(() => setNow(Date.now()), UNSAVED_GRACE_MS);
+    return () => window.clearTimeout(t);
+  }, [hasPending]);
+
+  useEffect(() => {
+    const sync = () => setOnline(navigator.onLine);
+    sync();
+    window.addEventListener("online", sync);
+    window.addEventListener("offline", sync);
+    return () => {
+      window.removeEventListener("online", sync);
+      window.removeEventListener("offline", sync);
+    };
+  }, []);
 
   useEffect(() => {
     const run = () => {
@@ -23,7 +53,7 @@ export function OutboxFlusher() {
     };
   }, [flushOutbox, flushRecurrings]);
 
-  if (!pending) return null;
+  if (!showUnsaved(pending, pendingSince === null ? 0 : now - pendingSince, online)) return null;
 
   const label = (() => {
     if (txPending && recPending) return `${pending} sin guardar · Reintentar`;

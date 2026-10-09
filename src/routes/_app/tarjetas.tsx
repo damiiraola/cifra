@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { PurchaseForm } from "@/components/purchase-form";
 import { StatementImport } from "@/components/statement-import";
+import { draftStorage, loadDraft } from "@/lib/statement-draft";
 import { PayStatement } from "@/components/pay-statement";
 import { DebtPlanCard } from "@/components/debt-plan-card";
 
@@ -102,7 +103,11 @@ function CardBlock({ card, today, tour = false }: { card: Card; today: string; t
   const removePurchase = useLedger((s) => s.removePurchase);
   const statements = useBookStatements();
   const [adding, setAdding] = useState(false);
-  const [importing, setImporting] = useState(false);
+  // Reopen a PDF review that was left open before a reload.
+  const [importing, setImporting] = useState(() => {
+    const st = draftStorage();
+    return st ? loadDraft(st, card.id) !== null : false;
+  });
   const [paying, setPaying] = useState(false);
   const addTx = useLedger((s) => s.addTx);
   const [editingId, setEditingId] = useState("");
@@ -208,20 +213,18 @@ function CardBlock({ card, today, tour = false }: { card: Card; today: string; t
           <dd className="text-right tabular-nums">{both(debtArs, debtUsd)}</dd>
         </div>
         {limit ? (
-          <div>
-            <div className="flex justify-between gap-3">
-              <dt className="text-muted">Uso del límite</dt>
-              <dd className={cn("text-right tabular-nums", limit.pct > 0.8 && "text-expense")}>
-                {Math.round(limit.pct * 100)} % · libre {money(Math.max(0, limit.free), "ARS")}
-              </dd>
-            </div>
-            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-elevated">
+          <div className="grid grid-cols-[1fr_auto] gap-x-3">
+            <dt className="text-muted">Uso del límite</dt>
+            <dd className={cn("text-right tabular-nums", limit.pct > 0.8 && "text-expense")}>
+              {Math.round(limit.pct * 100)} % · libre {money(Math.max(0, limit.free), "ARS")}
+            </dd>
+            <dd className="col-span-2 mt-1.5 h-1.5 overflow-hidden rounded-full bg-elevated" aria-hidden>
               <span
                 className={cn("block h-full rounded-full", limit.pct > 0.8 ? "bg-expense" : "bg-accent")}
                 style={{ width: `${Math.min(100, limit.pct * 100)}%` }}
               />
-            </div>
-            <p className="mt-1 text-xs text-subtle">Las cuotas ocupan el límite completo hasta que las pagás.</p>
+            </dd>
+            <dd className="col-span-2 mt-1 text-xs text-subtle">Las cuotas ocupan el límite completo hasta que las pagás.</dd>
           </div>
         ) : null}
       </dl>

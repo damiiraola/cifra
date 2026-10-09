@@ -171,8 +171,50 @@ export function tourFor(path: string) {
   return TOURS.find((t) => t.path === path);
 }
 
+const SEEN_V2 = "cifra-seen-tours:v2:";
+const SEEN_V3 = "cifra-seen-tours:v3:";
+
+/**
+ * A short hash of the mail (two FNV-1a passes), so the key does not show who
+ * used Cifra on a shared phone. Not a secret, just not the mail in clear.
+ */
+export function mailHash(email: string) {
+  const s = email.trim().toLowerCase();
+  const pass = (seed: number) => {
+    let h = seed >>> 0;
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return h.toString(16).padStart(8, "0");
+  };
+  return pass(0x811c9dc5) + pass(0x050c5d1f);
+}
+
 function seenKey(email: string) {
-  return `cifra-seen-tours:v2:${email.trim().toLowerCase()}`;
+  return `${SEEN_V3}${mailHash(email)}`;
+}
+
+/** The old key had the mail in clear; it is only read once to keep the pages already seen. */
+function legacyKey(email: string) {
+  return `${SEEN_V2}${email.trim().toLowerCase()}`;
+}
+
+/**
+ * Remove every old key with a mail in clear, and with `email` (account
+ * deleted) also that account's hashed key.
+ */
+export function forgetSeenTours(
+  storage: Pick<Storage, "key" | "length" | "removeItem">,
+  email?: string,
+) {
+  const drop: string[] = [];
+  for (let i = 0; i < storage.length; i++) {
+    const k = storage.key(i);
+    if (k?.startsWith(SEEN_V2)) drop.push(k);
+  }
+  if (email?.trim()) drop.push(seenKey(email));
+  for (const k of drop) storage.removeItem(k);
 }
 
 export function placeBubble(
@@ -208,7 +250,7 @@ export function placeBubble(
 export function readSeen(email: string, storage: Pick<Storage, "getItem">) {
   if (!email.trim()) return [];
   try {
-    const raw = storage.getItem(seenKey(email));
+    const raw = storage.getItem(seenKey(email)) ?? storage.getItem(legacyKey(email));
     const parsed = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === "string") : [];
   } catch {

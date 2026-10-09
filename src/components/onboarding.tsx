@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { money, amountInput } from "@/lib/format";
 import { parseAmount } from "@/lib/format";
 import { FIJO_TEMPLATES } from "@/lib/recurring";
+import { fijoAccount } from "@/lib/books";
 import { useLedger } from "@/lib/store";
 import { uid } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -99,11 +100,14 @@ export function Onboarding() {
       })),
     });
     const bookId = personal?.id;
-    const acc = personalAccounts.find((a) => a.currency === "ARS") ?? personalAccounts[0];
-    if (!bookId || !acc) return;
+    if (!bookId || personalAccounts.length === 0) return;
     for (const t of FIJO_TEMPLATES) {
       const amount = parseAmount(fijoAmounts[t.name] ?? "");
       if (!amount) continue;
+      // Same caja the Fijos page picks for the template (the Banco for
+      // transferencia/débito), not the first ARS caja, which is Efectivo.
+      const acc = fijoAccount(personalAccounts, bookId, t.method);
+      if (!acc) continue;
       upsertRecurring({
         id: uid(),
         bookId,
@@ -300,7 +304,7 @@ export function Onboarding() {
           </button>
         ))}
       </div>
-      <button type="button" className="mt-4 text-xs text-subtle underline-offset-4 hover:underline" onClick={() => setStep(4)}>
+      <button type="button" className="mt-2 inline-flex min-h-11 items-center self-start px-1 text-sm text-muted underline-offset-4 hover:underline" onClick={() => setStep(4)}>
         Atrás
       </button>
     </Frame>

@@ -8,6 +8,8 @@ test("CSP blocks framing and third-party scripts by default", () => {
   assert.match(csp, /object-src 'none'/);
   assert.doesNotMatch(csp, /grok\.com/);
   assert.match(csp, /font-src [^;]*https:\/\/fonts\.gstatic\.com/);
+  assert.match(csp, /connect-src [^;]*https:\/\/fonts\.googleapis\.com/);
+  assert.match(csp, /connect-src [^;]*https:\/\/fonts\.gstatic\.com/);
 });
 
 test("CSP allows the grok.com script only when extensions are on", () => {

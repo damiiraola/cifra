@@ -37,6 +37,8 @@ export function dayLabel(iso: string, thisYear = "") {
 
 export class Facts {
   private values = new Map<string, string>();
+  private notMin = new Set<string>();
+  private leading = new Set<string>();
   private next = 1;
   private readonly thisYear: string;
   constructor(thisYear = "") {
@@ -74,6 +76,29 @@ export class Facts {
   /** Fixed text with a number Cifra decided ("más de 10 años"). */
   label(text: string) {
     return this.put(text);
+  }
+  /**
+   * A money value that is NOT a card minimum (what the open statement has so
+   * far): the answer is rejected if it calls it "mínimo".
+   */
+  notMinimum(id: string) {
+    this.notMin.add(id);
+    return id;
+  }
+  isNotMinimum(id: string) {
+    return this.notMin.has(id);
+  }
+  /**
+   * A full sentence Cifra decided (the goals verdict) that must open the
+   * answer as is: whatever the model wrote before it on that line is dropped,
+   * so it does not say the same thing twice.
+   */
+  lead(id: string) {
+    this.leading.add(id);
+    return id;
+  }
+  leadIds() {
+    return [...this.leading];
   }
   /** Every [id, value] registered so far (the validator accepts values written out). */
   entries(): [string, string][] {

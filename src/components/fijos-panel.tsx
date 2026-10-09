@@ -4,7 +4,7 @@ import { money, parseAmount, amountInput } from "@/lib/format";
 import { FIJO_TEMPLATES, dueUnposted, isDue, isPosted, likelyDuplicate } from "@/lib/recurring";
 import { PAY_METHODS, type AccountKind, type Currency, type PayMethod, type Recurring, type TxType } from "@/lib/types";
 import { methodForAccount } from "@/lib/quick-defaults";
-import { accountLabel, inferAccount } from "@/lib/books";
+import { accountLabel, fijoAccount } from "@/lib/books";
 import { cn, uid } from "@/lib/utils";
 import { useAllCategories, useVisibleCategories, useBookAccounts, useBookTxs, useLedger } from "@/lib/store";
 import { MonthSwitcher } from "@/components/month-switcher";
@@ -119,8 +119,7 @@ export function FijosPanel() {
                 key={t.name}
                 type="button"
                 onClick={() => {
-                  const accId = inferAccount(accounts, activeBookId, t.method, "ARS");
-                  const acc = accounts.find((a) => a.id === accId) ?? accounts[0];
+                  const acc = fijoAccount(accounts, activeBookId, t.method);
                   setEditing({
                     id: uid(),
                     bookId: activeBookId,
@@ -148,7 +147,7 @@ export function FijosPanel() {
       <Button
         variant="secondary"
         onClick={() => {
-          const acc = accounts.find((a) => a.currency === "ARS") ?? accounts[0];
+          const acc = fijoAccount(accounts, activeBookId, "debito");
           setEditing({
             id: uid(),
             bookId: activeBookId,

@@ -76,7 +76,7 @@ function Privacidad() {
             importes, las fechas de cierre y vencimiento, los totales, el pago mínimo y los cargos del banco; nunca el PDF.
             Un pago de resumen es un movimiento más (un Cambio de tu caja a la tarjeta); no nos conectamos a tu banco.
             La sesión,
-            para no pedirte la clave cada vez. Datos técnicos mínimos (fecha de inicio de sesión, dirección IP y
+            para no pedirte la contraseña cada vez. Datos técnicos mínimos (fecha de inicio de sesión, dirección IP y
             navegador) por seguridad y para frenar abusos.
           </p>
           <p>Los usamos solo para que Cifra funcione. No los usamos para publicidad ni para armar perfiles.</p>
@@ -96,7 +96,7 @@ function Privacidad() {
               <span className="text-fg">Neon</span>: la base de datos (Postgres) donde vive tu libro.
             </li>
             <li>
-              <span className="text-fg">Resend</span>: manda los mails de confirmar cuenta, cambiar la clave y avisos de
+              <span className="text-fg">Resend</span>: manda los mails de confirmar cuenta, cambiar la contraseña y avisos de
               la cuenta. Si activás los avisos por mail en Ajustes, también un mail con los vencimientos de tus
               tarjetas y las metas atrasadas; te podés dar de baja desde cualquiera de esos mails.
             </li>
@@ -155,7 +155,7 @@ function Privacidad() {
         <Section title="Cuánto tiempo">
           <p>
             Mientras tengas la cuenta. Hay un respaldo diario de tu libro que dura 30 días. Si borrás la cuenta, se
-            borran tu libro, tus respaldos y tu login en el momento. Los proveedores pueden guardar registros técnicos
+            borran tu libro, tus respaldos y tu acceso en el momento. Los proveedores pueden guardar registros técnicos
             por un tiempo corto antes de descartarlos.
           </p>
           <p>
