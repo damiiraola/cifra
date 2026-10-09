@@ -11,7 +11,7 @@ export type AuthErrorLike =
 export const AUTH_MESSAGES = {
   wrongCredentials: "Mail o contraseña incorrectos.",
   notVerified: "Confirmá el mail primero. Si no te llegó, te lo reenviamos.",
-  alreadyExists: "Ese mail ya tiene cuenta. Entrá o recuperá la clave.",
+  alreadyExists: "Ese mail ya tiene cuenta. Entrá o recuperá la contraseña.",
   passwordShort: "La contraseña tiene que tener al menos 8 caracteres.",
   passwordLong: "La contraseña es demasiado larga. Probá con una más corta.",
   invalidEmail: "Ese mail no parece válido. Revisalo.",

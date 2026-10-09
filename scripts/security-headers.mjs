@@ -19,7 +19,9 @@ export function contentSecurityPolicy({ grokExtensions = false } = {}) {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "img-src 'self' data: blob:",
     "font-src 'self' data: https://fonts.gstatic.com",
-    `connect-src 'self' https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://*.ingest.de.sentry.io${grok}`,
+    // Fonts too: something fetches the Google Fonts CSS (not only <link>),
+    // and without them every page logged a CSP error.
+    `connect-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://*.ingest.de.sentry.io${grok}`,
     "worker-src 'self' blob:",
     "manifest-src 'self'",
     "frame-ancestors 'none'",

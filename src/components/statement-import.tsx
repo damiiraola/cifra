@@ -278,7 +278,7 @@ function Review({ card, read, onClose, onRetry }: { card: Card; read: Read; onCl
               . Puede faltar o sobrar una línea.
             </p>
             <label className="mt-2 flex min-h-11 items-center gap-2 text-fg">
-              <input type="checkbox" className="size-4" checked={force} onChange={(e) => setForce(e.target.checked)} />
+              <input type="checkbox" className="size-5" checked={force} onChange={(e) => setForce(e.target.checked)} />
               Ya lo revisé, importar igual
             </label>
           </>
@@ -295,7 +295,7 @@ function Review({ card, read, onClose, onRetry }: { card: Card; read: Read; onCl
             <label className="flex min-h-11 items-center gap-2">
               <input
                 type="checkbox"
-                className="size-4"
+                className="size-5"
                 aria-label={`Cargar ${r.line.description}`}
                 checked={Boolean(choices[r.key]?.include)}
                 onChange={(e) => set(r.key, { include: e.target.checked })}
@@ -333,7 +333,7 @@ function Review({ card, read, onClose, onRetry }: { card: Card; read: Read; onCl
                 <label className="flex min-h-11 items-center gap-2 text-xs">
                   <input
                     type="checkbox"
-                    className="size-4"
+                    className="size-5"
                     checked={Boolean(choices[r.key]?.include)}
                     onChange={(e) => set(r.key, { include: e.target.checked })}
                   />

@@ -148,14 +148,14 @@ function CardRow({
         </div>
       </div>
       <dl className="mt-3 grid gap-1 text-sm">
-        <div className="flex justify-between gap-3">
+        <div className="grid grid-cols-[1fr_auto] gap-x-3">
           <dt className="text-muted">Próximo resumen</dt>
           <dd className="text-right tabular-nums">{both(open.ars, open.usd)}</dd>
+          <dd className="col-span-2 text-xs text-subtle">
+            Cierra el {dm(open.closing)} y vence el {dm(open.due)}. Lo que compres después del {dm(open.closing)} va al
+            siguiente.
+          </dd>
         </div>
-        <p className="text-xs text-subtle">
-          Cierra el {dm(open.closing)} y vence el {dm(open.due)}. Lo que compres después del {dm(open.closing)} va al
-          siguiente.
-        </p>
         {closed.ars > 0 || closed.usd > 0 ? (
           <div className="flex justify-between gap-3">
             <dt className="text-muted">Resumen cerrado (vence {dm(closed.due)})</dt>

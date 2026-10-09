@@ -55,7 +55,10 @@ export function PlanAlerts({ limit = 3, title = false }: { limit?: number; title
           className="flex items-start gap-3 rounded-2xl bg-surface px-4 py-2.5 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]"
         >
           <span aria-hidden className={cn("mt-1.5 size-2 shrink-0 rounded-full", DOT[a.tone])} />
-          <Link to={a.to} className="min-w-0 flex-1 text-[13px] leading-snug hover:text-fg">
+          <Link
+            to={a.to}
+            className="-my-2.5 min-w-0 flex-1 py-2.5 text-[13px] leading-snug hover:text-fg"
+          >
             {a.text}
           </Link>
           <button
@@ -69,7 +72,11 @@ export function PlanAlerts({ limit = 3, title = false }: { limit?: number; title
         </div>
       ))}
       {visible.length > shown.length ? (
-        <Link to="/metas" hash="avisos" className="text-xs text-muted hover:text-fg">
+        <Link
+          to="/metas"
+          hash="avisos"
+          className="inline-flex min-h-11 items-center text-xs text-muted hover:text-fg"
+        >
           Ver los {visible.length} avisos
         </Link>
       ) : null}

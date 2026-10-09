@@ -99,7 +99,7 @@ export function UserButton() {
               })
               .catch(() => setSigningOut(false));
           }}
-          className="cursor-pointer text-sm underline-offset-4 opacity-70 hover:underline disabled:cursor-wait disabled:no-underline"
+          className="cursor-pointer text-sm underline-offset-4 hover:underline disabled:cursor-wait disabled:no-underline"
         >
           {signingOut ? "Cerrando…" : "Cerrar sesión"}
         </button>

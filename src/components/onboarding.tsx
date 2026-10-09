@@ -300,7 +300,7 @@ export function Onboarding() {
           </button>
         ))}
       </div>
-      <button type="button" className="mt-4 text-xs text-subtle underline-offset-4 hover:underline" onClick={() => setStep(4)}>
+      <button type="button" className="mt-2 inline-flex min-h-11 items-center self-start px-1 text-sm text-muted underline-offset-4 hover:underline" onClick={() => setStep(4)}>
         Atrás
       </button>
     </Frame>

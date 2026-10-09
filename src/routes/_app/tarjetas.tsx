@@ -208,20 +208,18 @@ function CardBlock({ card, today, tour = false }: { card: Card; today: string; t
           <dd className="text-right tabular-nums">{both(debtArs, debtUsd)}</dd>
         </div>
         {limit ? (
-          <div>
-            <div className="flex justify-between gap-3">
-              <dt className="text-muted">Uso del límite</dt>
-              <dd className={cn("text-right tabular-nums", limit.pct > 0.8 && "text-expense")}>
-                {Math.round(limit.pct * 100)} % · libre {money(Math.max(0, limit.free), "ARS")}
-              </dd>
-            </div>
-            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-elevated">
+          <div className="grid grid-cols-[1fr_auto] gap-x-3">
+            <dt className="text-muted">Uso del límite</dt>
+            <dd className={cn("text-right tabular-nums", limit.pct > 0.8 && "text-expense")}>
+              {Math.round(limit.pct * 100)} % · libre {money(Math.max(0, limit.free), "ARS")}
+            </dd>
+            <dd className="col-span-2 mt-1.5 h-1.5 overflow-hidden rounded-full bg-elevated" aria-hidden>
               <span
                 className={cn("block h-full rounded-full", limit.pct > 0.8 ? "bg-expense" : "bg-accent")}
                 style={{ width: `${Math.min(100, limit.pct * 100)}%` }}
               />
-            </div>
-            <p className="mt-1 text-xs text-subtle">Las cuotas ocupan el límite completo hasta que las pagás.</p>
+            </dd>
+            <dd className="col-span-2 mt-1 text-xs text-subtle">Las cuotas ocupan el límite completo hasta que las pagás.</dd>
           </div>
         ) : null}
       </dl>

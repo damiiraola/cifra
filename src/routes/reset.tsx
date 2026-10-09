@@ -22,7 +22,7 @@ export const Route = createFileRoute("/reset")({
 function ExpiredLink() {
   return (
     <AuthScreen kicker={AUTH_MESSAGES.linkExpired}>
-      <p className="mt-6 text-sm text-muted">Los enlaces para cambiar la clave duran un rato y sirven una sola vez.</p>
+      <p className="mt-6 text-sm text-muted">Los enlaces para cambiar la contraseña duran un rato y sirven una sola vez.</p>
       <Link
         to="/olvide"
         className="mt-6 flex h-11 w-full items-center justify-center rounded-lg bg-accent text-sm font-medium text-accent-fg"
@@ -56,12 +56,12 @@ function Reset() {
       });
       if (err) {
         if (isExpiredLinkError(err)) setExpired(true);
-        else setError(authErrorMessage(err, "No pude cambiar la clave. Probá de nuevo."));
+        else setError(authErrorMessage(err, "No pude cambiar la contraseña. Probá de nuevo."));
         return;
       }
       setDone(true);
     } catch (err) {
-      setError(authErrorMessage(err, "No pude cambiar la clave. Probá de nuevo."));
+      setError(authErrorMessage(err, "No pude cambiar la contraseña. Probá de nuevo."));
     } finally {
       setBusy(false);
     }
@@ -84,11 +84,11 @@ function Reset() {
   }
 
   return (
-    <AuthScreen kicker="Elegí una clave nueva. Mínimo 8 caracteres.">
+    <AuthScreen kicker="Elegí una contraseña nueva. Mínimo 8 caracteres.">
       {done ? (
         <div className="mt-8">
           <p role="status" className="text-sm">
-            Listo. Ya podés entrar con la clave nueva.
+            Listo. Ya podés entrar con la contraseña nueva.
           </p>
           <Link
             to="/login"
@@ -116,7 +116,7 @@ function Reset() {
             </p>
           ) : null}
           <Button type="submit" disabled={busy}>
-            {busy ? "Guardando…" : "Guardar clave"}
+            {busy ? "Guardando…" : "Guardar contraseña"}
           </Button>
         </form>
       )}
