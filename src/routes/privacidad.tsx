@@ -158,6 +158,10 @@ function Privacidad() {
             borran tu libro, tus respaldos y tu acceso en el momento. Los proveedores pueden guardar registros técnicos
             por un tiempo corto antes de descartarlos.
           </p>
+          <p>
+            Si después de borrar la cuenta un dispositivo que había quedado abierto llega a subir algo, un proceso diario
+            borra esos datos sin dueño.
+          </p>
         </Section>
 
         <Section title="Tus derechos (Ley 25.326)">

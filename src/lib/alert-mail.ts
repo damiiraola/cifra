@@ -121,6 +121,8 @@ export type AlertCronDeps = {
   run: () => Promise<CronSummary>;
   /** Daily housekeeping on the same cron: AI call log older than 90 days. */
   purge?: () => Promise<number>;
+  /** And rows of deleted accounts (src/lib/orphan-purge.ts): how many went. */
+  purgeOrphans?: () => Promise<number>;
 };
 
 /**
@@ -137,12 +139,20 @@ export async function handleAlertCron(request: Request, deps: AlertCronDeps): Pr
   if (!m || !(await tokensMatch(m[1]!.trim(), secret))) {
     return json({ ok: false, error: "No autorizado." }, 401, { "WWW-Authenticate": "Bearer" });
   }
-  let purged: { aiLogPurged: number } | Record<string, never> = {};
+  const purged: { aiLogPurged?: number; orphansPurged?: number } = {};
   if (deps.purge) {
     try {
-      purged = { aiLogPurged: await deps.purge() };
+      purged.aiLogPurged = await deps.purge();
     } catch {
-      purged = { aiLogPurged: -1 };
+      purged.aiLogPurged = -1;
+    }
+  }
+  if (deps.purgeOrphans) {
+    try {
+      purged.orphansPurged = await deps.purgeOrphans();
+    } catch (err) {
+      console.error("[purga] falló:", err instanceof Error ? err.message : "error");
+      purged.orphansPurged = -1;
     }
   }
   if (!deps.mailConfigured()) return json({ ok: false, error: "Falta RESEND_API_KEY.", ...purged }, 500);
