@@ -311,9 +311,12 @@ function tarjetas(run: ToolRun): ToolResult {
         ...(leftArs >= 1 ? { minimo: f.ars(minimo), minimo_es_del_banco: st.minimumArs > 0 } : {}),
       },
       proximo_cierre: f.day(closingOf(card, open, p.statements)),
-      proximo_resumen: next
-        ? { cargado_hasta_hoy: f.ars(next.totalArs), vence: f.day(next.due) }
-        : { cargado_hasta_hoy: f.ars(0), vence: f.day(dueOf(card, open, p.statements)) },
+      // What the open statement has so far: not a minimum (the model once
+      // wrote "Mínimo próximo resumen" for it).
+      proximo_resumen: {
+        total_cargado_hasta_hoy: f.notMinimum(f.ars(next?.totalArs ?? 0)),
+        vence: f.day(next ? next.due : dueOf(card, open, p.statements)),
+      },
       ...(card.tna > 0 ? { tna: f.rate(card.tna) } : {}),
       ...(lim ? { limite: f.ars(lim.limit), limite_usado: f.pct(lim.pct) } : {}),
     });
@@ -455,7 +458,7 @@ function metas(run: ToolRun): ToolResult {
   return {
     data: {
       // The model must not decide "sí llegás" on its own: Cifra says it.
-      conclusion: f.label(verdict),
+      conclusion: f.lead(f.label(verdict)),
       ...signed(f, surplus, "sobrante_por_mes", "falta_por_mes"),
       metas: out,
     },

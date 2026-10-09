@@ -40,7 +40,7 @@ export const CHIPS: Chip[] = [
     tools: [["tarjetas", {}]],
     units: 1,
     guide:
-      "Formato: una frase por tarjeta con cuánto pagar y hasta cuándo. Después una lista con el mínimo y el próximo resumen.",
+      'Formato: una frase por tarjeta con cuánto pagar y hasta cuándo. Después una lista: "- Mínimo:" con el id de minimo, solo si esa tarjeta tiene minimo, y "- Próximo resumen, cargado hasta hoy:" con el id de total_cargado_hasta_hoy. Ese total no es un mínimo: nunca lo llames así.',
   },
   {
     id: "plan",
@@ -56,7 +56,7 @@ export const CHIPS: Chip[] = [
     tools: [["metas", {}]],
     units: 1,
     guide:
-      'Formato: arrancá con el id de conclusion tal cual (no digas otra cosa sobre si llega o no) y cuánto sobra por mes, sin mezclar compras que se simularon antes. Después una línea por meta, "- " más el nombre y dos puntos: "llega a tiempo", o "llegaría en" más el mes en que llegaría con lo que sobra y "; a tiempo necesita" más el id y "por mes". Si no le toca nada de lo que sobra, decilo así. Sin "no;" ni fechas sueltas.',
+      'Formato: arrancá con el id de conclusion tal cual, sin nada antes y sin decirlo con otras palabras y cuánto sobra por mes, sin mezclar compras que se simularon antes. Después una línea por meta, "- " más el nombre y dos puntos: "llega a tiempo", o "llegaría en" más el mes en que llegaría con lo que sobra y "; a tiempo necesita" más el id y "por mes". Si no le toca nada de lo que sobra, decilo así. Sin "no;" ni fechas sueltas.',
   },
   {
     id: "gasto",
