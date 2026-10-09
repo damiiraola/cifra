@@ -132,6 +132,17 @@ export function checkText(
     if (!run.facts.has(m[1]!)) return { ok: false, reason: `dato desconocido ${m[1]}` };
   }
   text = adoptWrittenValues(text, run.facts);
+  // "No llegás a tiempo con una meta: {f1}" with f1 = "no llegás a tiempo
+  // con 1 de tus 2 metas": the verdict opens the answer, said once.
+  for (const id of run.facts.leadIds()) {
+    const m = text.match(new RegExp(`^([^\\n{]*?)\\{${id}\\}`));
+    if (m && m[1]!.trim()) text = text.slice(m[1]!.length);
+  }
+  // "Mínimo: {f2}" with f2 = what the open statement has so far.
+  // The first value after "mínimo" in the same clause is the one it names.
+  for (const m of text.matchAll(/m[ií]nim[oa][^{\n.;]{0,60}\{(f\d+)\}/gi)) {
+    if (run.facts.isNotMinimum(m[1]!)) return { ok: false, reason: "mínimo mal puesto" };
+  }
   // "$ {f1}" or "{f2} %" when the value already carries the sign.
   text = text
     .replace(/(?:US)?\$\s*(\{f\d+\})/g, (all, mk: string) =>
@@ -162,7 +173,8 @@ export function checkText(
     if (!words.has(w.toLowerCase())) return { ok: false, reason: `número en palabras ${w}` };
   }
   if (bare.split(/\s+/).length > 220) return { ok: false, reason: "muy largo" };
-  return { ok: true, text: fill(text, run.facts) };
+  const filled = fill(text, run.facts);
+  return { ok: true, text: filled.charAt(0).toUpperCase() + filled.slice(1) };
 }
 
 const MONTH =

@@ -17,6 +17,7 @@ import {
 } from "./run.ts";
 import { goalsVerdict, runTool, ToolRun, type AssistantData } from "./tools.ts";
 import { answerBlocks } from "./blocks.ts";
+import { periodForCard, shiftPeriod } from "../card-math.ts";
 
 const today = "2026-10-08";
 
@@ -329,6 +330,27 @@ describe("tools", () => {
     assert.ok(!JSON.stringify(r.data).match(/\d{3,}/), "no raw amounts in the data");
   });
 
+  it("tarjetas: lo cargado del próximo resumen nunca se puede llamar mínimo", () => {
+    const run = new ToolRun(data());
+    const r = runTool(run, "tarjetas", {});
+    const visa = (r.data.tarjetas as Record<string, Record<string, unknown>>[])[0]!;
+    const prox = visa.proximo_resumen as Record<string, unknown>;
+    const cerrado = visa.resumen_cerrado as Record<string, unknown>;
+    const total = String(prox.total_cargado_hasta_hoy);
+    assert.match(total, /^f\d+$/);
+    assert.equal(prox.cargado_hasta_hoy, undefined);
+    assert.deepEqual(checkText(`- Mínimo próximo resumen: {${total}}`, run, "x"), {
+      ok: false,
+      reason: "mínimo mal puesto",
+    });
+    const fine = checkText(
+      `- Mínimo: {${String(cerrado.minimo)}}\n- Próximo resumen, cargado hasta hoy: {${total}}`,
+      run,
+      "x",
+    );
+    assert.equal(fine.ok, true, JSON.stringify(fine));
+  });
+
   it("simular cuotas: the plan with and without, a proposal and nothing saved", () => {
     const run = new ToolRun(data());
     const r = runTool(run, "simular", {
@@ -359,6 +381,45 @@ describe("tools", () => {
     assert.match(String(av.intereses_estimados), /^f\d+$/);
     assert.equal(r.data.las_dos_estrategias_son_iguales, true);
     assert.match(r.summary, /- Avalancha: salís en/);
+  });
+
+  it("metas: la conclusión abre la respuesta una sola vez", () => {
+    const run = new ToolRun(data());
+    const m = runTool(run, "metas", {});
+    const c = String(m.data.conclusion);
+    const verdict = m.valores[c]!;
+    const out = checkText(`No llegás a tiempo con una de tus metas: {${c}}.`, run, "x");
+    assert.equal(out.ok, true, JSON.stringify(out));
+    assert.equal(out.ok && out.text, `${verdict.charAt(0).toUpperCase()}${verdict.slice(1)}.`);
+    // Later in the answer it is left alone.
+    const later = checkText(`Hola.\nEn resumen, {${c}}.`, run, "x");
+    assert.equal(later.ok && later.text.includes(`En resumen, ${verdict}`), true);
+  });
+
+  it("plan_deuda with only new cuotas: no expensive debt, no strategies", () => {
+    const open = periodForCard(today, card, []);
+    const cuotas = [1, 2, 3].map((i) =>
+      tx({
+        amount: 50_000,
+        purchaseId: "zapas",
+        installmentNo: i,
+        installmentCount: 3,
+        cardPeriod: shiftPeriod(open, i - 1),
+      }),
+    );
+    const run = new ToolRun({
+      ...data(),
+      plan: { ...data().plan, txs: [...txs.slice(1), ...cuotas] },
+    });
+    const r = runTool(run, "plan_deuda", {});
+    assert.equal(r.data.deuda_cara, false);
+    assert.equal(r.data.avalancha, undefined);
+    assert.equal(r.valores[String(r.data.cuotas_que_siguen)], money(150_000, "ARS"));
+    assert.equal(r.valores[String(r.data.mes_con_mas_cuotas)], money(50_000, "ARS"));
+    assert.match(r.summary, /^No tenés deuda cara/);
+    assert.match(r.summary, /no suman intereses/);
+    const text = JSON.stringify(r.data).replace(/"[fp]\d+"/g, '""');
+    assert.ok(!/\d/.test(text), text);
   });
 
   it("metas and resumen_mes", () => {

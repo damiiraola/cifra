@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { computeMonth } from "@/lib/analytics";
+import { computeMonth, isCommittedExpense } from "@/lib/analytics";
 import { isUserSetTope } from "@/lib/budget-math";
 import { argentinaDay } from "@/lib/market-hours";
 import {
@@ -64,6 +64,7 @@ export function usePlanAlerts() {
   return useMemo(() => {
     const ym = data.today.slice(0, 7);
     const stats = computeMonth(data.txs, ym, data.rates);
+    const committed = computeMonth(data.txs.filter(isCommittedExpense), ym, data.rates).byCat;
     const budgetRows = cats
       .filter(
         (c) =>
@@ -74,6 +75,7 @@ export function usePlanAlerts() {
         name: c.name,
         spent: stats.byCat[c.id] ?? 0,
         budget: budgets[c.id] ?? 0,
+        committed: committed[c.id] ?? 0,
       }));
     return planAlerts({
       ...data,
@@ -146,7 +148,7 @@ export function useDebtPlan(budget: number | null) {
     const comparison = debts.length
       ? compareDebtPlans(debts, budget != null && budget > 0 ? budget : suggested, data.today)
       : null;
-    return { debts, suggested, comparison, today: data.today };
+    return { debts, suggested, comparison, today: data.today, surplus };
   }, [debts, data.today, surplus, budget]);
 }
 

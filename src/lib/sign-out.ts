@@ -1,4 +1,5 @@
 import { signOut } from "@/lib/auth/client";
+import { clearAllDrafts } from "@/lib/statement-draft";
 import { forgetLocalLedger, useLedger } from "@/lib/store";
 import { forgetSeenTours } from "@/lib/tours";
 
@@ -11,12 +12,7 @@ export function forgetDevice(email?: string) {
   try {
     const s = window.localStorage;
     forgetSeenTours(s, email);
-    const drafts: string[] = [];
-    for (let i = 0; i < s.length; i++) {
-      const k = s.key(i);
-      if (k?.startsWith("cifra-pdf-review:")) drafts.push(k);
-    }
-    for (const k of drafts) s.removeItem(k);
+    clearAllDrafts(s);
   } catch {
     /* storage blocked: nothing to forget */
   }

@@ -26,6 +26,8 @@ function Login() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    // "Crear cuenta" on the front page links here with ?modo=crear.
+    if (params.get("modo") === "crear") setMode("up");
     if (params.get("cuenta") === "borrada") setNotice("Borramos tu cuenta y todos tus datos. Te mandamos un mail de confirmación.");
     const linkError = params.get("error");
     if (linkError && isExpiredLinkError(linkError.toUpperCase())) {

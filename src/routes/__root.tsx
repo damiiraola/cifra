@@ -13,7 +13,12 @@ export const Route = createRootRoute({
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
       { title: APP_NAME },
-      { name: "description", content: "Registro diario, control mensual e inteligencia de gastos." },
+      {
+        name: "description",
+        content:
+          "Finanzas personales en pesos y dólares: cajas, tarjetas con cuotas, metas y un asistente que te ayuda a planificar.",
+      },
+      { property: "og:locale", content: "es_AR" },
       { name: "theme-color", content: "#09090B" },
     ],
     links: [

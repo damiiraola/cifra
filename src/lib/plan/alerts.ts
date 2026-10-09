@@ -28,7 +28,8 @@ export type PlanAlert = {
 
 export type AlertInput = PlanData & {
   /** Categories with a tope the user set (current month). */
-  budgetRows: { id: string; name: string; spent: number; budget: number }[];
+  /** `committed`: the part of `spent` that is fijos or cuotas already posted. */
+  budgetRows: { id: string; name: string; spent: number; budget: number; committed?: number }[];
   /** Tope of the month, 0 = none. */
   globalBudget: number;
   /** Spent this month and the pace projection (lib/analytics computeMonth). */
@@ -203,7 +204,9 @@ export function budgetAlerts(input: AlertInput): PlanAlert[] {
         text: `Pasaste el tope de ${r.name}: ${money(round0(r.spent), "ARS")} de ${money(r.budget, "ARS")}.`,
         to: "/presupuestos",
       });
-    } else if (day < 20) {
+    } else if (day < 20 && r.spent - (r.committed ?? 0) >= 1) {
+      // Only fijos/cuotas so far: they were known when the tope was set
+      // ("Aplicar topes" makes it equal to them), so 100 % is not news.
       const last = new Date(
         Date.UTC(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0),
       ).getUTCDate();
