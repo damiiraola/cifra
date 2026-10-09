@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { budgetAllocation, buildMonthPlan, fijoTopes, liveCategoryRows, recurringLines } from "@/lib/budget-math";
+import {
+  budgetAllocation,
+  buildMonthPlan,
+  fijoTopes,
+  liveCategoryRows,
+  previousMonthsAverage,
+  recurringLines,
+} from "@/lib/budget-math";
 import { DEFAULT_BUDGETS } from "@/lib/categories";
 import { computeMonth } from "@/lib/analytics";
 import { money, moneyARS, monthLabel, parseAmount, amountInput } from "@/lib/format";
@@ -9,7 +16,7 @@ import { toGoalCurrency } from "@/lib/goals";
 import { CatIcon } from "@/lib/icons";
 import { useAllCategories, useBookGoals, useBookTxs, useLedger } from "@/lib/store";
 import { committedForMonth } from "@/lib/card-math";
-import { cn, daysInMonth, monthISO, todayISO } from "@/lib/utils";
+import { cn, daysInMonth, monthISO, shiftMonth, todayISO } from "@/lib/utils";
 import { MonthSwitcher } from "@/components/month-switcher";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,13 +50,27 @@ function Presupuestos() {
   const days = daysLeft(viewMonth);
   const incomeLines = recurringLines(recurrings, activeBookId, { usd: usdRate, usdt: usdtRate }, "income");
   const income = incomeLines.reduce((s, r) => s + r.amount, 0);
+  // What came in this month: the income fijos, or what was written down if it's more.
+  // Without income, the plan falls back to the month's tope.
+  const monthIncome = Math.max(income, Math.round(stats.earned));
+  const planBase = monthIncome > 0 ? monthIncome : globalBudget;
+  const avgPrev = previousMonthsAverage(
+    [1, 2, 3].map((n) => computeMonth(transactions, shiftMonth(viewMonth, -n), { usd: usdRate, usdt: usdtRate }).byCat),
+  );
+  const pending = live.filter((c) => (planned[c.id] ?? 0) > c.spent);
+  const pendingTotal = pending.reduce((s, c) => s + (planned[c.id] ?? 0) - c.spent, 0);
   const plan = buildMonthPlan({
-    cap: income > 0 ? income : globalBudget,
-    assigned,
+    income: planBase,
+    spent: stats.spent,
+    pendingFijos: pendingTotal,
     daysLeft: days,
-    openCategories: idle.map((c) => ({ id: c.id, name: c.name })),
+    // Fijos and topes the user wrote keep their own number; the split only
+    // goes to categories with real spending, this month or in previous months.
+    categories: rows
+      .filter((c) => !(planned[c.id] > 0) && !budgetLocks[c.id])
+      .map((c) => ({ id: c.id, name: c.name, spent: c.spent, avg: avgPrev[c.id] ?? 0 })),
   });
-  const pendingFijos = live.filter((c) => (planned[c.id] ?? 0) > 0 && c.spent <= 0).map((c) => c.name);
+  const pendingFijos = pending.map((c) => c.name);
   const used = globalBudget ? (stats.spent / globalBudget) * 100 : 0;
   const assignedPct = globalBudget ? Math.min(100, (assigned / globalBudget) * 100) : 0;
   const future = viewMonth > monthISO();
@@ -96,21 +117,23 @@ function Presupuestos() {
           <p className="mt-1 text-sm text-subtle">
             Para {monthLabel(viewMonth, "LLLL")} ya tenés {moneyARS(committed.cuotas)} en cuotas
             {committed.fijos > 0 ? ` y ${moneyARS(committed.fijos)} de fijos sin anotar` : ""}
-            {globalBudget ? `. Te quedan ${moneyARS(Math.max(0, globalBudget - committed.fijos - stats.spent))} antes de gastar.` : "."}
+            {globalBudget
+              ? `. Contra el tope, quedan ${moneyARS(Math.max(0, globalBudget - committed.fijos - stats.spent))}.`
+              : "."}
           </p>
         ) : null}
       </section>
 
       <PlanCard
         plan={plan}
-        income={income}
+        income={monthIncome}
         incomeLines={incomeLines}
-        assigned={assigned}
         cap={globalBudget}
         days={days}
         pendingFijos={pendingFijos}
         onApply={(rows) => {
-          for (const s of rows) setBudget(s.id, s.amount);
+          // The tope is what was already spent plus what the plan leaves for the rest of the month.
+          for (const s of rows) setBudget(s.id, s.spent + s.amount);
         }}
       />
 
@@ -120,7 +143,9 @@ function Presupuestos() {
           <p className="text-xs text-subtle">
             {overAssigned
               ? `Las categorías superan el tope por ${moneyARS(overAssigned)}`
-              : `Sin repartir ${moneyARS(unassigned)}`}
+              : globalBudget
+                ? `Sin repartir del tope ${moneyARS(unassigned)}`
+                : ""}
           </p>
         </div>
         <div className="flex h-2 overflow-hidden rounded-full bg-elevated">
@@ -131,20 +156,10 @@ function Presupuestos() {
             </>
           ) : null}
         </div>
-        <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-          <p>
-            <span className="block text-[11px] uppercase text-muted">Asignado</span>
-            <span className="font-display text-2xl tabular-nums">{moneyARS(assigned)}</span>
-          </p>
-          <p>
-            <span className="block text-[11px] uppercase text-muted">
-              {overAssigned ? "De más" : "Libre"}
-            </span>
-            <span className="font-display text-2xl tabular-nums">
-              {moneyARS(overAssigned || unassigned)}
-            </span>
-          </p>
-        </div>
+        <p className="mt-2 text-sm text-muted">
+          Asignado {moneyARS(assigned)}
+          {globalBudget ? ` de ${moneyARS(globalBudget)}` : ""}
+        </p>
         <p className="mt-3 text-xs text-subtle">
           Si no escribís un tope, Cifra usa los fijos de esa categoría. Si no hay fijos, usa lo que ya gastaste.
         </p>
@@ -279,7 +294,6 @@ function PlanCard({
   plan,
   income,
   incomeLines,
-  assigned,
   cap,
   days,
   pendingFijos,
@@ -288,11 +302,10 @@ function PlanCard({
   plan: ReturnType<typeof buildMonthPlan>;
   income: number;
   incomeLines: { id: string; name: string; amount: number }[];
-  assigned: number;
   cap: number;
   days: number;
   pendingFijos: string[];
-  onApply: (rows: { id: string; amount: number }[]) => void;
+  onApply: (rows: { id: string; amount: number; spent: number }[]) => void;
 }) {
   const pct = Math.round(plan.share * 100);
   const sig = plan.suggestions.map((s) => `${s.id}:${s.amount}`).join("|");
@@ -307,10 +320,11 @@ function PlanCard({
   const rows = plan.suggestions.map((s) => ({
     id: s.id,
     name: s.name,
+    spent: s.spent,
     amount: Math.max(0, Math.round(parseAmount(drafts[s.id] ?? "") ?? 0)),
   }));
   const used = rows.reduce((s, r) => s + r.amount, 0);
-  const cushion = plan.left - used;
+  const cushion = plan.free - used;
   const goals = useBookGoals();
   const addToGoal = useLedger((s) => s.addToGoal);
   const usdRate = useLedger((s) => s.usdRate);
@@ -318,16 +332,22 @@ function PlanCard({
   const [sendTo, setSendTo] = useState("");
   const [sent, setSent] = useState("");
   const headline =
-    plan.tone === "over"
+    plan.income <= 0
+      ? "Cargá lo que entra"
+      : plan.over > 0
       ? `Te pasás ${moneyARS(plan.over)}`
       : days > 0
         ? `Te quedan ${moneyARS(plan.left)}`
         : "Este mes ya cerró";
   const detail =
-    plan.tone === "over"
-      ? "Los fijos y lo ya asignado superan el tope. Bajá un tope o subí el del mes."
+    plan.income <= 0
+      ? "Con un ingreso fijo o un tope del mes, Cifra te dice cuánto te queda y cómo repartirlo."
+      : plan.tone === "over"
+      ? plan.over > 0
+        ? `Gastaste ${moneyARS(plan.spent)} y entraron ${moneyARS(plan.income)}.`
+        : `Los fijos que faltan anotar (${moneyARS(plan.reserved)}) superan lo que te queda.`
       : plan.tone === "tight"
-        ? `El ${pct}% del mes ya está comprometido. ${days ? `Para ${days} días son ${moneyARS(plan.perDay)} por día. No lo sueltes en la primera semana.` : ""}`
+        ? `El ${pct}% de lo que entra ya está gastado o reservado para fijos. ${days ? `Para ${days} días son ${moneyARS(plan.perDay)} por día.` : ""}`
         : days
           ? `Unos ${moneyARS(plan.perDay)} por día hasta fin de mes.`
           : "";
@@ -335,7 +355,13 @@ function PlanCard({
   return (
     <section data-tour="plan" className="rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
       <p className="text-[11px] font-medium tracking-wide text-muted uppercase">
-        {plan.tone === "over" ? "No cierra" : plan.tone === "tight" ? "Estás justo" : "Hay margen"}
+        {plan.income <= 0
+          ? "Lo que queda"
+          : plan.tone === "over"
+            ? "No cierra"
+            : plan.tone === "tight"
+              ? "Estás justo"
+              : "Hay margen"}
       </p>
       <p className="mt-1 font-display text-4xl tracking-tight">{headline}</p>
       {detail ? <p className="mt-2 max-w-xl text-sm text-muted">{detail}</p> : null}
@@ -350,33 +376,45 @@ function PlanCard({
           ))}
         </div>
       ) : null}
-      {income > 0 && cap > 0 && cap !== income ? (
-        <p className="mt-2 max-w-xl text-sm text-muted">
-          {cap > income
-            ? `El tope del mes es ${moneyARS(cap)}, más alto que lo que entra. El plan usa lo que entra.`
-            : `El tope del mes es ${moneyARS(cap)}. Entra más que eso: el plan usa el ingreso, no el tope.`}
+      <div className="mt-2 grid gap-1.5 text-sm">
+        {incomeLines.length === 0 || plan.income !== incomeLines.reduce((s, l) => s + l.amount, 0) ? (
+          <p className="flex justify-between gap-3">
+            <span className="text-muted">{income > 0 ? "Entró este mes" : "Tope del mes"}</span>
+            <span className="tabular-nums">{moneyARS(plan.income)}</span>
+          </p>
+        ) : null}
+        <p className="flex justify-between gap-3">
+          <span className="text-muted">Gastado</span>
+          <span className="tabular-nums">−{moneyARS(plan.spent)}</span>
         </p>
-      ) : null}
-      {income > 0 ? (
-        <p className="mt-2 max-w-xl text-sm text-muted">
-          {income < assigned
-            ? `Esos ingresos no cubren los fijos: faltan ${moneyARS(assigned - income)}.`
-            : `Después de los fijos quedan ${moneyARS(income - assigned)}.`}
-        </p>
-      ) : null}
-      {pendingFijos.length > 0 ? (
+      </div>
+      {income <= 0 && cap > 0 ? (
         <p className="mt-2 max-w-xl text-sm text-subtle">
-          Todavía no anotaste {pendingFijos.join(", ")}. Cuando los cargues, el gastado sube. El plan ya los descontó.
+          No hay ingresos cargados este mes, así que la cuenta usa el tope.
+        </p>
+      ) : null}
+      {pendingFijos.length > 0 && plan.reserved > 0 ? (
+        <p className="mt-2 max-w-xl text-sm text-subtle">
+          De lo que te queda, {moneyARS(plan.reserved)} van a fijos que todavía no anotaste ({pendingFijos.join(", ")}).
+          El reparto los deja aparte.
         </p>
       ) : null}
       {plan.suggestions.length > 0 ? (
         <div className="mt-5">
-          <p className="text-sm font-medium">Así repartiría lo que queda</p>
-          <p className="mt-1 text-xs text-muted">Cambialos si querés. Lo que no asignás queda sin tocar.</p>
+          <p className="text-sm font-medium">Así repartiría lo que te queda</p>
+          <p className="mt-1 text-xs text-muted">
+            Según lo que gastaste este mes y lo que solés gastar. Es lo que le queda a cada categoría hasta fin de mes.
+          </p>
           <div className="mt-3 grid gap-2">
             {plan.suggestions.map((s) => (
               <label key={s.id} className="flex items-center justify-between gap-3 text-sm">
-                <span>{s.name}</span>
+                <span className="min-w-0">
+                  <span className="block">{s.name}</span>
+                  <span className="block text-xs text-subtle tabular-nums">
+                    {s.spent > 0 ? `Llevás ${moneyARS(s.spent)}` : "Nada este mes"}
+                    {s.avg > 0 ? ` · solés ${moneyARS(s.avg)}` : ""}
+                  </span>
+                </span>
                 <Input
                   inputMode="decimal"
                   value={drafts[s.id] ?? ""}
@@ -391,7 +429,7 @@ function PlanCard({
               </label>
             ))}
             <p className="flex justify-between gap-3 text-sm">
-              <span>Sin tocar, por si aparece algo</span>
+              <span>Margen dentro de lo que te queda</span>
               <span className={cn("tabular-nums", cushion < 0 ? "text-expense" : "text-muted")}>
                 {cushion < 0 ? `Te pasás ${moneyARS(-cushion)}` : moneyARS(cushion)}
               </span>
