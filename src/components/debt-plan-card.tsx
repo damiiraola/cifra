@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { amountInput, moneyARS, parseAmount } from "@/lib/format";
 import { periodName } from "@/lib/card-pay";
-import { MAX_MONTHS, type DebtStrategy, type Payoff } from "@/lib/plan/debt";
+import { MAX_MONTHS, onlyCuotas, peakCuotas, type CardDebt, type DebtStrategy, type Payoff } from "@/lib/plan/debt";
 import { useDebtPlan } from "@/lib/plan/use-plan";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -29,9 +29,10 @@ function exit(p: Payoff, current: string) {
 export function DebtPlanCard() {
   const [text, setText] = useState("");
   const typed = parseAmount(text);
-  const { debts, suggested, comparison: c, today } = useDebtPlan(typed && typed > 0 ? typed : null);
+  const { debts, suggested, comparison: c, today, surplus } = useDebtPlan(typed && typed > 0 ? typed : null);
   const [pick, setPick] = useState<DebtStrategy>("avalancha");
   if (!c || !debts.length) return null;
+  if (onlyCuotas(debts)) return <OnlyCuotas debts={debts} today={today} surplus={surplus} />;
   const current = today.slice(0, 7);
   const balances = debts.filter((d) => d.balance >= 1);
   const balanceTotal = balances.reduce((s, d) => s + d.balance, 0);
@@ -173,6 +174,50 @@ export function DebtPlanCard() {
           estimado: intereses del mes más el 5 % del saldo (el primer mes, el del banco si lo importaste).
         </p>
       </div>
+    </section>
+  );
+}
+
+/**
+ * No statement balance left: nothing accrues interest. The cuotas are paid with
+ * each statement, so there is no "plan" to pick, just when they end and whether
+ * what is left over each month (the same number as Metas) covers them.
+ */
+function OnlyCuotas({ debts, today, surplus }: { debts: CardDebt[]; today: string; surplus: number }) {
+  const current = today.slice(0, 7);
+  const total = debts.reduce((s, d) => s + d.cuotasTotal, 0);
+  const end = debts.map((d) => d.cuotasEnd).filter(Boolean).sort().at(-1) ?? "";
+  const peak = peakCuotas(debts, today);
+  const months = new Map<string, number>();
+  for (const d of debts) {
+    for (const [k, v] of Object.entries(d.cuotas)) if (k >= current && v > 0) months.set(k, (months.get(k) ?? 0) + v);
+  }
+  const rows = [...months.entries()].sort(([a], [b]) => a.localeCompare(b)).slice(0, 12);
+  return (
+    <section
+      id="deudas"
+      className="scroll-mt-24 rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]"
+    >
+      <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Plan para bajar deudas</p>
+      <p className="mt-1 font-display text-3xl tracking-tight">No tenés deuda cara</p>
+      <p className="mt-2 max-w-xl text-sm text-muted">
+        No quedan saldos de resúmenes sin pagar. Solo hay {moneyARS(total)} en cuotas que se pagan solas con cada
+        resumen, hasta {periodName(end)}. Mientras pagues el total de cada resumen, las cuotas no suman intereses.
+      </p>
+      <p className={cn("mt-3 text-sm", surplus >= 0 ? "text-muted" : "text-warn")}>
+        {surplus >= 0
+          ? `El mes con más cuotas suma ${moneyARS(peak)}. Las cuotas ya están descontadas de lo que te sobra por mes (${moneyARS(surplus)}, lo mismo que dice Metas).`
+          : `El mes con más cuotas suma ${moneyARS(peak)} y hoy no te sobra plata por mes: mirá el plan en Metas.`}
+      </p>
+      <ul className="mt-4 grid gap-1 text-sm tabular-nums">
+        {rows.map(([ym, v]) => (
+          <li key={ym} className="flex justify-between border-t border-white/5 py-1.5">
+            <span className="capitalize">{periodName(ym)}</span>
+            <span>{moneyARS(v)}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 text-xs text-subtle">Mes en que vence cada resumen, con las cuotas ya cargadas.</p>
     </section>
   );
 }

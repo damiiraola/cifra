@@ -9,7 +9,9 @@ import {
   compareDebtPlans,
   mandatoryNow,
   monthlyRate,
+  onlyCuotas,
   payoff,
+  peakCuotas,
   suggestedDebtBudget,
   type CardDebt,
 } from "./debt.ts";
@@ -107,6 +109,43 @@ describe("payoff", () => {
     assert.equal(suggestedDebtBudget(d, today, 0), 5_000);
     assert.equal(suggestedDebtBudget(d, today, 30_000), 35_000);
     assert.equal(suggestedDebtBudget(d, today, 900_000), 100_000);
+  });
+
+  it("only new cuotas, the first one due next month: never proposes $ 0 nor invents interest", () => {
+    // The beta walk-through: zapatillas in 6 cuotas sin interés, TNA 85, nothing due this month.
+    const months = ["2026-11", "2026-12", "2027-01", "2027-02", "2027-03", "2027-04"];
+    const cuotas = Object.fromEntries(months.map((m) => [m, 50_000]));
+    const d = [debt({ tna: 85, cuotas, cuotasTotal: 300_000, cuotasEnd: "2027-04" })];
+    assert.equal(mandatoryNow(d, today), 0);
+    assert.equal(peakCuotas(d, today), 50_000);
+    assert.equal(onlyCuotas(d), true);
+    // Without surplus it still covers the cuotas; with surplus it never goes past the debt.
+    assert.equal(suggestedDebtBudget(d, today, 0), 50_000);
+    assert.equal(suggestedDebtBudget(d, today, 547_835), 50_000);
+    const c = compareDebtPlans(d, suggestedDebtBudget(d, today, 547_835), today);
+    assert.equal(c.avalancha.interest, 0);
+    assert.equal(c.avalancha.shortFrom, "");
+    assert.equal(c.avalancha.end, "2027-04");
+    assert.ok(c.avalancha.schedule.every((m) => m.interest === 0));
+  });
+
+  it("peak cuotas: the highest month from now on, across cards; past months do not count", () => {
+    const d = [
+      debt({ cardId: "a", cuotas: { "2026-09": 90_000, "2026-11": 10_000, "2026-12": 30_000 } }),
+      debt({ cardId: "b", cuotas: { "2026-11": 25_000 } }),
+    ];
+    assert.equal(peakCuotas(d, today), 35_000);
+    assert.equal(peakCuotas([], today), 0);
+    assert.equal(onlyCuotas([debt({ balance: 1_000 })]), false);
+    assert.equal(onlyCuotas([]), false);
+  });
+
+  it("with a balance, the suggestion adds the surplus on top of the peak cuotas", () => {
+    const d = [debt({ balance: 200_000, tna: 80, cuotas: { "2026-11": 40_000 }, cuotasTotal: 40_000, cuotasEnd: "2026-11" })];
+    // mandatory now = 5 % of the balance = 10.000; the cuotas peak at 40.000 next month.
+    assert.equal(suggestedDebtBudget(d, today, 0), 40_000);
+    assert.equal(suggestedDebtBudget(d, today, 60_000), 100_000);
+    assert.equal(suggestedDebtBudget(d, today, 9_000_000), 240_000);
   });
 
   it("lists cards without TNA, and one card means the same plan", () => {
