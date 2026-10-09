@@ -64,7 +64,9 @@ export async function getSessionUser(
     headers = new Headers(request.headers);
     headers.set("Authorization", `Bearer ${bearerToken}`);
   }
-  const session = await auth.api.getSession({ headers });
+  // Always ask the database, not the 5-minute session cookie cache: a deleted
+  // account (or a revoked session) must stop reading and writing right away.
+  const session = await auth.api.getSession({ headers, query: { disableCookieCache: true } });
   if (!session?.user) return null;
   return { id: session.user.id, email: session.user.email ?? null };
 }

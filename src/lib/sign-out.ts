@@ -1,6 +1,22 @@
 import { signOut } from "@/lib/auth/client";
-import { clearAllDrafts, draftStorage } from "@/lib/statement-draft";
+import { clearAllDrafts } from "@/lib/statement-draft";
 import { forgetLocalLedger, useLedger } from "@/lib/store";
+import { forgetSeenTours } from "@/lib/tours";
+
+/**
+ * What else this device keeps about the user: the old tour keys with the mail
+ * in clear and any PDF review left open. With `email` (account deleted) also
+ * that account's tour key.
+ */
+export function forgetDevice(email?: string) {
+  try {
+    const s = window.localStorage;
+    forgetSeenTours(s, email);
+    clearAllDrafts(s);
+  } catch {
+    /* storage blocked: nothing to forget */
+  }
+}
 
 /**
  * Sign out and wipe this browser's copy of the ledger.
@@ -31,8 +47,7 @@ export async function signOutAndForget(redirectTo = "/login"): Promise<boolean> 
     return false;
   }
   await signOut(redirectTo);
+  forgetDevice();
   forgetLocalLedger();
-  const drafts = draftStorage();
-  if (drafts) clearAllDrafts(drafts);
   return true;
 }
