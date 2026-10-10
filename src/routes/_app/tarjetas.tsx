@@ -264,7 +264,7 @@ function CardBlock({ card, today, tour = false }: { card: Card; today: string; t
         ) : null}
         <ul className="mt-2 grid gap-2">
           {purchases.map((p) => {
-            const prog = purchaseProgress(p, txs, today);
+            const prog = purchaseProgress(p, txs, today, open.period);
             if (editingId === p.id) {
               return (
                 <li key={p.id} id={`compra-${p.id}`}>
@@ -283,7 +283,11 @@ function CardBlock({ card, today, tour = false }: { card: Card; today: string; t
                 <p className="mt-0.5 text-xs text-muted">
                   {prog.current ? `Vas por la ${prog.current}/${prog.count}` : `Arranca en ${monthLabel(p.date.slice(0, 7), "LLLL")}`}
                   {" · "}
-                  {prog.left > 0 ? `quedan ${money(prog.left, p.currency)}` : "ya está paga"}
+                  {prog.left > 0
+                    ? `quedan ${money(prog.left, p.currency)} en ${prog.leftCount === 1 ? "1 resumen" : `${prog.leftCount} resúmenes`}`
+                    : prog.lastPeriod
+                      ? `la última va en el resumen de ${monthLabel(prog.lastPeriod, "LLLL")}`
+                      : "sin cuotas por venir"}
                   {p.interestFree ? " · sin interés" : " · con interés"}
                 </p>
                 <div className="mt-2 flex gap-2">
