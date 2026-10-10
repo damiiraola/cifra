@@ -1129,8 +1129,8 @@ describe("how to do things in the app (never 'no existe')", () => {
     assert.equal(r.modelCalls, 0);
     assert.equal(m.bodies.length, 0);
     assert.match(r.text, /Más → Tarjetas/);
-    assert.match(r.text, /«Importar resumen PDF»/);
-    assert.deepEqual(r.links?.[0], { label: "Ir a Tarjetas", to: "/tarjetas" });
+    assert.match(r.text, /«Subir resumen PDF»/);
+    assert.deepEqual(r.links?.[0], { label: "Subir resumen PDF", to: "/tarjetas#subir" });
   });
 
   it("works with no model at all (assistant off)", async () => {
@@ -1142,7 +1142,7 @@ describe("how to do things in the app (never 'no existe')", () => {
       call: null,
     });
     assert.equal(r.source, "guia");
-    assert.match(r.text, /Importar resumen PDF/);
+    assert.match(r.text, /Subir resumen PDF/);
   });
 
   it("a chip is never taken by the guide", async () => {

@@ -279,6 +279,8 @@ function day(v: unknown): string | null {
 }
 
 function amount(v: unknown): number | null {
+  // null stays null ("not in the PDF"), not 0: the PDF's own labels may fill it.
+  if (v == null || v === "") return null;
   const n = typeof v === "number" ? v : Number(v);
   return Number.isFinite(n) && Math.abs(n) < 1e11 ? round2(Math.abs(n)) : null;
 }
@@ -636,13 +638,13 @@ export function buildImport(opts: {
 
 // --------------------------------------------------------- server input
 
+/** cardId "" = no card yet: Cifra reads which card it is from the PDF. */
 export type ReadPdfInput = { cardId: string; pdf: string; password: string; categories: CatHint[] };
 
 /** Validate what the browser sends to the PDF reader. */
 export function cleanPdfInput(input: unknown): ReadPdfInput {
   const i = (input ?? {}) as Record<string, unknown>;
   const cardId = typeof i.cardId === "string" ? i.cardId.slice(0, 80) : "";
-  if (!cardId) throw new Error("Elegí una tarjeta");
   const pdf = typeof i.pdf === "string" ? i.pdf : "";
   if (!pdf) throw new Error("Subí el PDF del resumen");
   if (pdf.length > Math.ceil((PDF_MAX_BYTES * 4) / 3) + 8) throw new Error("El PDF es muy grande (máximo 3 MB)");

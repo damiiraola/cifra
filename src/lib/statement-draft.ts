@@ -76,3 +76,12 @@ export function draftStorage(): DraftStorage | null {
     return null;
   }
 }
+
+/** Where the review of a PDF uploaded without a card waits across a reload. */
+export const UPLOAD_DRAFT_KEY = "subir";
+
+/** A review left from before a reload (the PDF was already read and paid for). */
+export function hasUploadDraft() {
+  const st = draftStorage();
+  return Boolean(st && loadDraft(st, UPLOAD_DRAFT_KEY));
+}

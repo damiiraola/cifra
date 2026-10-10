@@ -202,7 +202,9 @@ describe("model answer", () => {
   });
 
   it("validates the upload", () => {
-    assert.throws(() => cleanPdfInput({}), /tarjeta/);
+    assert.throws(() => cleanPdfInput({}), /PDF/);
+    // No card yet: Cifra finds it in the PDF.
+    assert.equal(cleanPdfInput({ pdf: "JVBERi0=" }).cardId, "");
     assert.throws(() => cleanPdfInput({ cardId: "c" }), /PDF/);
     assert.throws(() => cleanPdfInput({ cardId: "c", pdf: "no base64!" }), /dañado/);
     assert.throws(() => cleanPdfInput({ cardId: "c", pdf: "A".repeat(4_300_000) }), /grande/);

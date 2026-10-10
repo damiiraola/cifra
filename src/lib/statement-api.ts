@@ -27,6 +27,7 @@ import {
   type ParsedStatement,
   type ReadPdfInput,
 } from "@/lib/statement-import";
+import { extractCardInfo, withCardInfo, type StatementCardInfo } from "@/lib/statement-card";
 
 /** The model gets up to 55 s (a long statement is ~5k tokens out). */
 const PDF_AI_MS = 55_000;
@@ -35,6 +36,11 @@ export type ReadStatementResult =
   | {
       ok: true;
       statement: ParsedStatement;
+      /**
+       * The card, read from the PDF's own lines (issuer, network, last 4,
+       * limit, TNA, dates, totals). The card number never goes to the model.
+       */
+      card: StatementCardInfo;
       /** Per line: is its amount printed in the PDF? */
       inText: boolean[];
       checks: ReturnType<typeof checkTotals>;
@@ -62,10 +68,12 @@ export const readStatementPdf = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .handler(async ({ data, context }): Promise<ReadStatementResult> => {
     const sql = await getSql();
-    const card = await sql<{ id: string }>`
-      select id from ledger_cards where id = ${data.cardId} and user_id = ${context.userId} limit 1
-    `;
-    if (!card[0]) return { ok: false, error: "Esa tarjeta no es tuya." };
+    if (data.cardId) {
+      const card = await sql<{ id: string }>`
+        select id from ledger_cards where id = ${data.cardId} and user_id = ${context.userId} limit 1
+      `;
+      if (!card[0]) return { ok: false, error: "Esa tarjeta no es tuya." };
+    }
     const user = await sql<{ name: string | null }>`select name from "user" where id = ${context.userId} limit 1`;
 
     const bytes = new Uint8Array(Buffer.from(data.pdf, "base64"));
@@ -76,7 +84,9 @@ export const readStatementPdf = createServerFn({ method: "POST" })
     const read = await readPdfItems(bytes, data.password);
     if (!read.ok) return { ok: false, error: READ_ERRORS[read.error] };
 
-    const { text, amountLines, keptLines, droppedLines } = textForModel(itemsToLines(read.items), user[0]?.name ?? "");
+    const lines = itemsToLines(read.items);
+    const cardInfo = extractCardInfo(lines);
+    const { text, amountLines, keptLines, droppedLines } = textForModel(lines, user[0]?.name ?? "");
     if (amountLines < 3) {
       return {
         ok: false,
@@ -109,7 +119,8 @@ export const readStatementPdf = createServerFn({ method: "POST" })
         last = r.failure;
         continue;
       }
-      const statement = parseModelStatement(r.text, categoryIds);
+      const parsed = parseModelStatement(r.text, categoryIds);
+      const statement = parsed ? withCardInfo(parsed, cardInfo) : null;
       if (!statement || !statement.lines.length) {
         const lastCall = track.logs[track.logs.length - 1];
         if (lastCall) lastCall.result = "error";
@@ -120,6 +131,7 @@ export const readStatementPdf = createServerFn({ method: "POST" })
       return {
         ok: true,
         statement,
+        card: cardInfo,
         inText: statement.lines.map((l) => amountInText(l.amount, text)),
         checks: checkTotals(statement),
         sentLines: keptLines,

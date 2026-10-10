@@ -204,7 +204,7 @@
   "dueDate": "2026-10-07",
   "nextClosingDate": "2026-10-23",
   "nextDueDate": "2026-11-05",
-  "totalArs": 237179.12,
+  "totalArs": 300179.12,
   "totalUsd": 210.0,
   "minimumArs": 9500.0,
   "previousArs": 45000.0,
@@ -259,6 +259,16 @@
     "installmentCount": null,
     "currency": "ARS",
     "amount": 2312.45,
+    "kind": "charge",
+    "categoryId": "impuestos"
+   },
+   {
+    "date": "2026-09-25",
+    "description": "PERCEPCION RG 5617 30%",
+    "installmentNo": null,
+    "installmentCount": null,
+    "currency": "ARS",
+    "amount": 63000.0,
     "kind": "charge",
     "categoryId": "impuestos"
    }

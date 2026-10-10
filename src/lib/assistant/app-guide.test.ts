@@ -20,10 +20,10 @@ describe("how to upload the card statement PDF (the case that went wrong)", () =
     assert.equal(g.featureId, "importar_pdf");
     assert.match(g.text, /^Sí, Cifra lee el resumen de la tarjeta en PDF/);
     assert.match(g.text, /Más → Tarjetas/);
-    assert.match(g.text, /«Importar resumen PDF»/);
+    assert.match(g.text, /«Subir resumen PDF»/);
+    assert.match(g.text, /no hace falta cargar nada antes/);
     assert.doesNotMatch(g.text, /no hay|por ahora no|todavía no/i);
-    assert.deepEqual(g.links[0], { label: "Ir a Tarjetas", to: "/tarjetas" });
-    assert.ok(g.links.some((l) => "to" in l && l.to === "/ajustes#tarjetas"));
+    assert.deepEqual(g.links[0], { label: "Subir resumen PDF", to: "/tarjetas#subir" });
   });
 
   for (const q of [
@@ -68,6 +68,12 @@ describe("each feature answers its how-to question", () => {
     ["¿Cómo separo la plata del negocio?", "negocio"],
   ];
   for (const [q, id] of cases) it(`${q} → ${id}`, () => assert.equal(featureFor(q)?.id, id));
+
+  it("adding a card points to the PDF first", () => {
+    const g = guideAnswer("¿Cómo agrego una tarjeta?");
+    assert.match(g?.text ?? "", /^Lo más rápido es subir el PDF del resumen/);
+    assert.deepEqual(g?.links.map((l) => ("to" in l ? l.to : l.action)), ["/tarjetas#subir", "/ajustes#tarjetas"]);
+  });
 
   it("every feature has a route, a link or a clear place, and no digits", () => {
     for (const f of FEATURES) {
