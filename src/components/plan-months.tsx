@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { say } from "@/lib/plan/month-numbers";
 import { money, moneyARS } from "@/lib/format";
 import { periodName } from "@/lib/card-pay";
 import type { Cashflow } from "@/lib/plan/cashflow";
@@ -31,11 +32,7 @@ export function PlanMonths({ flow, surplus }: { flow: Cashflow; surplus: number 
         Los próximos meses
       </p>
       <p className="mt-1 font-display text-3xl tracking-tight">
-        {surplus > 0
-          ? `Te sobran unos ${moneyARS(surplus)} por mes`
-          : avgNet < 0
-            ? `Faltan unos ${moneyARS(-avgNet)} por mes`
-            : "No sobra"}
+        {say.beforeGoals(surplus > 0 ? surplus : Math.min(0, avgNet))}
       </p>
       <p className="mt-2 max-w-xl text-sm text-muted">
         Hoy tenés {moneyARS(flow.startBalance)} en tus cajas (sin contar tarjetas). La cuenta usa

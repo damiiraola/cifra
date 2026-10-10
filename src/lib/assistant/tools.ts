@@ -24,6 +24,8 @@ import {
   type PlanData,
 } from "../plan/cashflow.ts";
 import { goalPlan } from "../plan/goal-plan.ts";
+import { say, thisMonthIncome } from "../plan/month-numbers.ts";
+import { recurringLines } from "../budget-math.ts";
 import { committedByCategory, suggestBudgets } from "../plan/budgets.ts";
 import { monthPlan, planLevers } from "../plan/month-plan.ts";
 import {
@@ -219,11 +221,18 @@ function resumenMes(run: ToolRun, args: Record<string, unknown>): ToolResult {
       ...(before >= 1 ? { mes_anterior: f.ars(before) } : {}),
     };
   });
+  // Same base as Presupuestos («Te quedan este mes»): income fijos or what came in.
+  const base = isCurrent
+    ? thisMonthIncome(
+        recurringLines(d.plan.recurrings, d.plan.bookId, d.plan.rates, "income").reduce((s, r) => s + r.amount, 0),
+        cur.earned,
+      )
+    : cur.earned;
   const data = {
     mes: f.month(ym),
     entro: f.ars(cur.earned),
     gastado: f.ars(cur.spent),
-    ...signed(f, cur.earned - cur.spent, "te_quedo", "gastaste_mas_de_lo_que_entro_por"),
+    ...signed(f, base - cur.spent, "te_quedo", "gastaste_mas_de_lo_que_entro_por"),
     ...(isCurrent
       ? {
           si_seguis_asi_gastas_en_el_mes: f.ars(projected),
@@ -233,10 +242,12 @@ function resumenMes(run: ToolRun, args: Record<string, unknown>): ToolResult {
     gastado_mes_anterior: f.ars(prev.spent),
     categorias,
   };
-  const net = cur.earned - cur.spent;
+  const net = base - cur.spent;
   const summary = textLines([
     net >= 0
-      ? `En ${monthLabel(ym)} te quedan ${ars(net)} de lo que entró${isCurrent ? ", por ahora" : ""}.`
+      ? isCurrent
+        ? `${say.thisMonth(net)}.`
+        : `En ${monthLabel(ym)} te quedaron ${ars(net)} de lo que entró.`
       : `En ${monthLabel(ym)} gastaste ${ars(-net)} más de lo que entró.`,
     `- Entró: ${ars(cur.earned)}`,
     `- Gastaste: ${ars(cur.spent)}`,
@@ -468,7 +479,7 @@ function metas(run: ToolRun): ToolResult {
     summary: textLines([
       `${verdict.charAt(0).toUpperCase()}${verdict.slice(1)}. ${
         surplus > 0
-          ? `Te sobran unos ${ars(surplus)} por mes para metas.`
+          ? `${say.beforeGoals(surplus)} por mes.`
           : surplus < 0
             ? `Hoy no te sobra nada para metas: faltan ${ars(-surplus)} por mes.`
             : "Hoy no te sobra nada para metas."
@@ -566,9 +577,9 @@ function planMes(run: ToolRun): ToolResult {
     propuestas,
   };
   const summary = textLines([
-    plan.closes
-      ? `El mes cierra: te sobran ${ars(plan.gap)} por mes.`
-      : `El mes no cierra: te faltan ${ars(-plan.gap)} por mes.`,
+    [`${say.afterGoals(plan.gap, plan.goalsTotal)}.`, say.bridge(plan.gap + plan.goalsTotal, plan.goalsTotal)]
+      .filter(Boolean)
+      .join(" "),
     `- Entra: ${ars(plan.income)}`,
     `- Fijos: ${ars(plan.fijos)}`,
     `- Tarjetas: ${ars(plan.cards)}`,
