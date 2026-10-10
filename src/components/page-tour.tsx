@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouterState } from "@tanstack/react-router";
 import { useLedger } from "@/lib/store";
-import { clearReplay, currentReplay, markSeen, placeBubble, readSeen, subscribeReplay, tourFor } from "@/lib/tours";
+import { autoTour, clearReplay, currentReplay, markSeen, placeBubble, readSeen, subscribeReplay, tourFor } from "@/lib/tours";
 import { Button } from "@/components/ui/button";
 
 const MOVE = "top .4s cubic-bezier(.2,.7,.2,1), left .4s cubic-bezier(.2,.7,.2,1), width .4s cubic-bezier(.2,.7,.2,1), height .4s cubic-bezier(.2,.7,.2,1)";
@@ -26,7 +26,7 @@ export function PageTour() {
     onboarded &&
     Boolean(email) &&
     Boolean(tour) &&
-    (replay === pathname || !seen.includes(pathname));
+    (replay === pathname || autoTour(pathname, seen));
   const current = tour?.steps[step];
 
   useEffect(

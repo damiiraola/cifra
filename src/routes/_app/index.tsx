@@ -120,7 +120,7 @@ function Diario() {
         </div>
       </div>
 
-      {viewMonth === monthISO() && !searching ? <PlanAlerts limit={2} /> : null}
+      {viewMonth === monthISO() && !searching ? <PlanAlerts limit={1} /> : null}
       <FxStrip />
       <WalletStrip />
       <GoalStrip />

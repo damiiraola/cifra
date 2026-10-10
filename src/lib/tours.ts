@@ -171,6 +171,17 @@ export function tourFor(path: string) {
   return TOURS.find((t) => t.path === path);
 }
 
+/**
+ * Only one tour shows by itself: the Diario's, the first time. The tours of
+ * the other pages are in Aprender ("Ver el recorrido"), so they no longer pop
+ * up on every screen (UX audit 2026-10-10, P5).
+ */
+export const FIRST_TOUR = "/";
+
+export function autoTour(path: string, seen: string[]): boolean {
+  return path === FIRST_TOUR && !seen.includes(FIRST_TOUR);
+}
+
 const SEEN_V2 = "cifra-seen-tours:v2:";
 const SEEN_V3 = "cifra-seen-tours:v3:";
 
