@@ -1,4 +1,5 @@
 import { toast } from "sonner";
+import { say } from "@/lib/plan/month-numbers";
 import { GOAL_PRIORITIES, type Goal } from "@/lib/goals";
 import { moneyARS } from "@/lib/format";
 import type { Lever } from "@/lib/plan/month-plan";
@@ -85,12 +86,11 @@ export function MonthPlanCard() {
         Plan de un mes normal
       </p>
       <p className="mt-1 font-display text-3xl tracking-tight">
-        {plan.closes
-          ? plan.gap > 0
-            ? `Cierra: sobran ${moneyARS(plan.gap)}`
-            : "Cierra justo"
-          : `No cierra: faltan ${moneyARS(-plan.gap)} por mes`}
+        {say.afterGoals(plan.gap, plan.goalsTotal)}
       </p>
+      {plan.goalsTotal > 0 ? (
+        <p className="mt-1 text-sm text-muted">{say.bridge(plan.gap + plan.goalsTotal, plan.goalsTotal)}</p>
+      ) : null}
       <div className="mt-4 grid gap-1.5">
         <Row label="Entra" value={`+${moneyARS(plan.income)}`} tone="in" />
         <Row label="Ya comprometido" value={`−${moneyARS(plan.committed)}`} />
