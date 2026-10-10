@@ -185,7 +185,8 @@ async function ensureSettings(sql: Awaited<ReturnType<typeof getSql>>, userId: s
       typeof namesRaw === "string" ? (JSON.parse(namesRaw) as Record<string, string>) : (namesRaw ?? {});
     return {
       budgets: { ...DEFAULT_BUDGETS, ...budgets },
-      globalBudget: Number(existing[0].global_budget) || DEFAULT_GLOBAL_BUDGET,
+      // 0 = no tope (chosen in onboarding); only a missing value falls back to the default.
+      globalBudget: existing[0].global_budget == null ? DEFAULT_GLOBAL_BUDGET : Number(existing[0].global_budget) || 0,
       bookBudgets: parseBookBudgets(existing[0].book_budgets),
       bookGlobals: parseBookGlobals(existing[0].book_globals),
       bookBudgetLocks: parseBookLocks(existing[0].book_budget_locks),
