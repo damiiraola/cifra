@@ -38,13 +38,10 @@ const SETUP =
 export const FEATURES: Feature[] = [
   {
     id: "importar_pdf",
-    name: "Importar el resumen de la tarjeta en PDF",
-    where: "Más → Tarjetas → en la tarjeta, «Importar resumen PDF»",
-    how: "Sí, Cifra lee el resumen de la tarjeta en PDF. Andá a Más → Tarjetas y, en el bloque de la tarjeta, tocá «Importar resumen PDF». Subí el PDF que bajás del home banking (si tiene clave, ponela), revisá lo que leyó línea por línea e importá lo que apruebes. Funciona con PDFs digitales, no con fotos, y usa usos diarios del asistente. Si la tarjeta no está cargada, agregala primero en Ajustes → Tarjetas.",
-    links: [
-      { label: "Ir a Tarjetas", to: "/tarjetas" },
-      { label: "Agregar una tarjeta", to: "/ajustes#tarjetas" },
-    ],
+    name: "Subir el resumen de la tarjeta en PDF",
+    where: "Más → Tarjetas → «Subir resumen PDF» (no hace falta cargar la tarjeta antes)",
+    how: "Sí, Cifra lee el resumen de la tarjeta en PDF y no hace falta cargar nada antes. Andá a Más → Tarjetas y tocá «Subir resumen PDF». Subí el PDF que bajás del home banking (si tiene clave, ponela): Cifra reconoce la tarjeta por el banco, la red y los últimos números, o te propone crearla con el cierre, el vencimiento y el límite del resumen. En la misma pantalla revisás la tarjeta, los movimientos y las cuotas, y confirmás. Nada se guarda hasta que confirmes. Funciona con PDFs digitales, no con fotos, y usa usos diarios del asistente.",
+    links: [{ label: "Subir resumen PDF", to: "/tarjetas#subir" }],
     followUps: ["¿Cómo agrego una tarjeta?", "¿Cómo registro el pago del resumen?"],
     match: (t) =>
       has(t, /\bpdf\b|\bimportador\b/) ||
@@ -73,19 +70,19 @@ export const FEATURES: Feature[] = [
     where: "Más → Tarjetas → «Cargar compra en cuotas»",
     how: "Andá a Más → Tarjetas y, en la tarjeta, tocá «Cargar compra en cuotas»: qué compraste, el monto, cuántas cuotas y si tienen interés. Cifra reparte las cuotas en los próximos resúmenes. También podés escribirla en el Asistente con «Interpretar como movimiento» marcado.",
     links: [{ label: "Ir a Tarjetas", to: "/tarjetas" }],
-    followUps: ["¿Y si compro algo en cuotas?", "¿Cómo importo el resumen en PDF?"],
+    followUps: ["¿Y si compro algo en cuotas?", "¿Cómo subo el resumen en PDF?"],
     match: (t) => has(t, /\bcuotas?\b/) && has(t, SETUP),
   },
   {
     id: "tarjetas",
     name: "Agregar o editar una tarjeta",
-    where: "Ajustes → Tarjetas",
-    how: "Las tarjetas se agregan en Ajustes → Tarjetas: nombre, día de cierre, día de vencimiento y límite. Después las ves en Más → Tarjetas, con lo que pagás en cada resumen.",
+    where: "Más → Tarjetas → «Subir resumen PDF», o Ajustes → Tarjetas",
+    how: "Lo más rápido es subir el PDF del resumen: Más → Tarjetas → «Subir resumen PDF», y Cifra arma la tarjeta con su banco, red, cierre, vencimiento y límite. También podés agregarla a mano en Ajustes → Tarjetas, y editarla ahí cuando quieras.",
     links: [
-      { label: "Agregar una tarjeta", to: "/ajustes#tarjetas" },
-      { label: "Ver Tarjetas", to: "/tarjetas" },
+      { label: "Subir resumen PDF", to: "/tarjetas#subir" },
+      { label: "Agregar a mano", to: "/ajustes#tarjetas" },
     ],
-    followUps: ["¿Cómo importo el resumen en PDF?", "¿Cómo cargo una compra en cuotas?"],
+    followUps: ["¿Cómo subo el resumen en PDF?", "¿Cómo cargo una compra en cuotas?"],
     match: (t) =>
       has(t, /\btarjetas?\b|\bvisa\b|\bmaster\w*\b|\bamex\b/) &&
       has(t, SETUP) &&

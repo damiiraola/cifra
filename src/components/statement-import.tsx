@@ -17,13 +17,14 @@ import { argentinaDay } from "@/lib/market-hours";
 import { useBookTxs, useLedger, useVisibleCategories } from "@/lib/store";
 import type { Card } from "@/lib/types";
 import { clearDraft, draftStorage, loadDraft, saveDraft } from "@/lib/statement-draft";
+import { importedBefore } from "@/lib/statement-card";
 import { userMessage } from "@/lib/user-error";
 import { cn, uid } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-type Read = Extract<ReadStatementResult, { ok: true }>;
+export type Read = Extract<ReadStatementResult, { ok: true }>;
 
 const SELECT =
   "h-9 max-w-[9.5rem] rounded-lg bg-surface px-2 text-sm text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)] outline-none";
@@ -43,10 +44,6 @@ function toBase64(file: File): Promise<string> {
 
 /** Upload a statement PDF, review what Cifra read line by line, import what you approve. */
 export function StatementImport({ card, onClose }: { card: Card; onClose: () => void }) {
-  const [file, setFile] = useState<File | null>(null);
-  const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
   // A review left open survives a reload (reading the PDF again costs uses).
   const [read, setReadState] = useState<Read | null>(() => {
     const st = draftStorage();
@@ -65,6 +62,41 @@ export function StatementImport({ card, onClose }: { card: Card; onClose: () => 
     if (st) clearDraft(st, card.id);
     onClose();
   };
+
+  if (read) return <Review card={card} read={read} onClose={close} onRetry={() => setRead(null)} />;
+
+  return (
+    <PdfUpload
+      idp={card.id}
+      cardId={card.id}
+      title="Importar resumen en PDF (beta)"
+      intro={`Subí el PDF del resumen de ${card.name} que bajás del home banking. Cifra lee los movimientos, los compara con lo que ya cargaste y vos elegís qué entra.`}
+      onRead={setRead}
+      onCancel={onClose}
+    />
+  );
+}
+
+/** The file + password form; reads the PDF on the server (cardId "" = Cifra finds the card). */
+export function PdfUpload({
+  idp,
+  cardId,
+  title,
+  intro,
+  onRead,
+  onCancel,
+}: {
+  idp: string;
+  cardId: string;
+  title: string;
+  intro: string;
+  onRead: (r: Read) => void;
+  onCancel: () => void;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   const cats = useVisibleCategories();
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -79,12 +111,12 @@ export function StatementImport({ card, onClose }: { card: Card; onClose: () => 
     try {
       const pdf = await toBase64(file);
       const res = await readStatementPdf({
-        data: { cardId: card.id, pdf, password, categories: cats.map((c) => ({ id: c.id, name: c.name, kind: c.kind })) },
+        data: { cardId, pdf, password, categories: cats.map((c) => ({ id: c.id, name: c.name, kind: c.kind })) },
       });
       if (!res.ok) setError(res.error);
       else {
-        setRead(res);
         setPassword("");
+        onRead(res);
       }
     } catch (err) {
       setError(userMessage(err, "No pude leer el resumen. Probá de nuevo en un rato."));
@@ -93,22 +125,17 @@ export function StatementImport({ card, onClose }: { card: Card; onClose: () => 
     }
   }
 
-  if (read) return <Review card={card} read={read} onClose={close} onRetry={() => setRead(null)} />;
-
   return (
     <div className="mt-3 grid gap-3 rounded-xl bg-elevated p-3" aria-label="Importar resumen">
       <div>
-        <p className="text-sm font-medium">Importar resumen en PDF (beta)</p>
-        <p className="mt-1 text-xs text-muted">
-          Subí el PDF del resumen de {card.name} que bajás del home banking. Cifra lee los movimientos, los compara con
-          lo que ya cargaste y vos elegís qué entra.
-        </p>
+        <p className="text-sm font-medium">{title}</p>
+        <p className="mt-1 text-xs text-muted">{intro}</p>
       </div>
       <div>
-        <Label htmlFor={`pdf-${card.id}`}>PDF del resumen</Label>
+        <Label htmlFor={`pdf-${idp}`}>PDF del resumen</Label>
         <input
           ref={inputRef}
-          id={`pdf-${card.id}`}
+          id={`pdf-${idp}`}
           type="file"
           accept="application/pdf,.pdf"
           className="mt-1.5 block w-full text-sm text-muted file:mr-3 file:h-11 file:rounded-lg file:border-0 file:bg-surface file:px-4 file:text-sm file:font-medium file:text-fg"
@@ -119,9 +146,9 @@ export function StatementImport({ card, onClose }: { card: Card; onClose: () => 
         />
       </div>
       <div>
-        <Label htmlFor={`pdfpw-${card.id}`}>Clave del PDF (si tiene)</Label>
+        <Label htmlFor={`pdfpw-${idp}`}>Clave del PDF (si tiene)</Label>
         <Input
-          id={`pdfpw-${card.id}`}
+          id={`pdfpw-${idp}`}
           type="password"
           autoComplete="off"
           className="mt-1.5"
@@ -143,7 +170,7 @@ export function StatementImport({ card, onClose }: { card: Card; onClose: () => 
         </p>
       ) : null}
       <div className="flex gap-2">
-        <Button type="button" variant="secondary" className="flex-1" onClick={onClose} disabled={busy}>
+        <Button type="button" variant="secondary" className="flex-1" onClick={onCancel} disabled={busy}>
           Cancelar
         </Button>
         <Button type="button" className="flex-1" onClick={() => void submit()} disabled={!file || busy}>
@@ -156,7 +183,27 @@ export function StatementImport({ card, onClose }: { card: Card; onClose: () => 
   );
 }
 
-function Review({ card, read, onClose, onRetry }: { card: Card; read: Read; onClose: () => void; onRetry: () => void }) {
+/**
+ * One screen to review a statement and confirm it. `card` is the card the
+ * lines are compared with (a stand-in with no movements for a card that does
+ * not exist yet); `prepare` runs first on confirm and returns the real card
+ * (creates or updates it), or null to stop. `top` = the card's data.
+ */
+export function Review({
+  card,
+  read,
+  onClose,
+  onRetry,
+  prepare,
+  top,
+}: {
+  card: Card;
+  read: Read;
+  onClose: () => void;
+  onRetry: () => void;
+  prepare?: () => Promise<Card | null>;
+  top?: React.ReactNode;
+}) {
   const txs = useBookTxs();
   const statements = useLedger((s) => s.statements);
   const saveStatement = useLedger((s) => s.saveStatement);
@@ -192,6 +239,7 @@ function Review({ card, read, onClose, onRetry }: { card: Card; read: Read; onCl
   const { ars, usd } = read.checks;
   const mismatch = ars.status === "mismatch" || usd.status === "mismatch";
   const period = closing.slice(0, 7);
+  const before = importedBefore(statements, card.id, period);
 
   async function apply() {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(closing) || !/^\d{4}-\d{2}-\d{2}$/.test(due)) {
@@ -199,12 +247,24 @@ function Review({ card, read, onClose, onRetry }: { card: Card; read: Read; onCl
       return;
     }
     setSaving(true);
-    const existing = statements.find((s) => s.cardId === card.id && s.period === period);
+    let target = card;
+    if (prepare) {
+      const ready = await prepare().catch((err: unknown) => {
+        toast.error(userMessage(err, "No pude guardar la tarjeta. Revisá tu conexión y probá de nuevo."));
+        return null;
+      });
+      if (!ready) {
+        setSaving(false);
+        return;
+      }
+      target = ready;
+    }
+    const existing = importedBefore(statements, target.id, period);
     const plan = buildImport({
       st,
       review,
       choices,
-      card,
+      card: target,
       txs,
       dates: { period, closing, due, nextClosing: auto.nextClosing, nextDue: auto.nextDue },
       statementId: existing?.id ?? uid(),
@@ -229,10 +289,17 @@ function Review({ card, read, onClose, onRetry }: { card: Card; read: Read; onCl
 
   return (
     <div className="mt-3 grid gap-4 rounded-xl bg-elevated p-3" aria-label="Revisar resumen">
+      {top}
       <div>
         <p className="text-sm font-medium">Resumen de {monthLabel(period, "LLLL yyyy").toLowerCase()}</p>
         <p className="mt-0.5 text-xs text-muted">Revisá lo que leí. Nada entra hasta que lo confirmes.</p>
       </div>
+      {before ? (
+        <p role="status" className="rounded-lg bg-surface p-3 text-sm text-fg">
+          Este resumen ya lo importaste. Lo que ya está cargado aparece en «Ya estaban cargados» y no se vuelve a cargar;
+          si confirmás, se actualizan los totales del banco.
+        </p>
+      ) : null}
 
       <div className="grid grid-cols-2 gap-3">
         <div>

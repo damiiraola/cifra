@@ -46,7 +46,7 @@ STATEMENTS = [
         "file": "visa-galicia",
         "brand": "VISA", "bank": "Banco Galicia", "card": "4509 XXXX XXXX 6789",
         "closing": "2026-09-24", "due": "2026-10-06", "nextClosing": "2026-10-22", "nextDue": "2026-11-04",
-        "prevArs": 210000.00, "prevUsd": 15.00, "payArs": 210000.00, "payUsd": 15.00, "minimum": 41000.00,
+        "prevArs": 210000.00, "prevUsd": 15.00, "payArs": 210000.00, "payUsd": 15.00, "minimum": 41000.00, "limit": 2500000.00,
         "dateFmt": "visa",
         "lines": [
             {"date": "2026-08-28", "desc": "COTO SUC 123", "cuota": None, "cur": "ARS", "amount": 45300.50, "kind": "purchase", "cat": "alimentos"},
@@ -64,7 +64,7 @@ STATEMENTS = [
         "file": "mastercard-santander",
         "brand": "MASTERCARD", "bank": "Banco Santander", "card": "5412 **** **** 4321",
         "closing": "2026-09-26", "due": "2026-10-08", "nextClosing": "2026-10-29", "nextDue": "2026-11-10",
-        "prevArs": 98500.00, "prevUsd": 0.0, "payArs": 98500.00, "payUsd": 0.0, "minimum": 18800.00,
+        "prevArs": 98500.00, "prevUsd": 0.0, "payArs": 98500.00, "payUsd": 0.0, "minimum": 18800.00, "limit": 1800000.00,
         "dateFmt": "slash",
         "lines": [
             {"date": "2026-04-14", "desc": "GARBARINO SA", "cuota": [6, 6], "cur": "ARS", "amount": 22000.00, "kind": "purchase", "cat": "compras"},
@@ -89,13 +89,14 @@ STATEMENTS = [
             {"date": "2026-09-10", "desc": "HOTEL MIRADOR BRC", "cuota": None, "cur": "USD", "amount": 210.00, "kind": "purchase", "cat": "ocio"},
             {"date": "2026-09-17", "desc": "LA PARRILLA DE TOTO", "cuota": None, "cur": "ARS", "amount": 48900.00, "kind": "purchase", "cat": "alimentos"},
             {"date": "2026-09-25", "desc": "INTERESES FINANCIACION", "cuota": None, "cur": "ARS", "amount": 2312.45, "kind": "charge", "cat": "impuestos"},
+            {"date": "2026-09-25", "desc": "PERCEPCION RG 5617 30%", "cuota": None, "cur": "ARS", "amount": 63000.00, "kind": "charge", "cat": "impuestos"},
         ],
     },
     {
         "file": "visa-nacion",
         "brand": "VISA", "bank": "Banco de la Nacion Argentina", "card": "4546 40XX XXXX 2468",
         "closing": "2026-09-23", "due": "2026-10-05", "nextClosing": "2026-10-21", "nextDue": "2026-11-02",
-        "prevArs": 60000.00, "prevUsd": 0.0, "payArs": 30000.00, "payUsd": 0.0, "minimum": 15000.00,
+        "prevArs": 60000.00, "prevUsd": 0.0, "payArs": 30000.00, "payUsd": 0.0, "minimum": 15000.00, "limit": 900000.00,
         "dateFmt": "visa",
         "lines": [
             {"date": "2026-06-10", "desc": "MERCADOLIBRE*ELECTRO", "cuota": [4, 9], "cur": "ARS", "amount": 15555.56, "kind": "purchase", "cat": "compras"},
@@ -184,6 +185,10 @@ def draw(st, path, password=None, scanned=False):
     c.drawString(40, y, "PAGO MINIMO $")
     c.drawRightString(260, y, ar(st["minimum"]))
     c.drawString(300, y, "TNA 98,50%  TEA 157,22%")
+    if st.get("limit"):
+        y -= 12
+        c.drawString(40, y, "LIMITE DE COMPRA $")
+        c.drawRightString(260, y, ar(st["limit"]))
     y -= 24
     c.setFont("Helvetica-Bold", 9)
     c.drawString(40, y, "FECHA")

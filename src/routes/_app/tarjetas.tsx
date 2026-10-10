@@ -25,6 +25,8 @@ import { StatementImport } from "@/components/statement-import";
 import { draftStorage, loadDraft } from "@/lib/statement-draft";
 import { PayStatement } from "@/components/pay-statement";
 import { DebtPlanCard } from "@/components/debt-plan-card";
+import { CardFromPdf } from "@/components/card-from-pdf";
+import { hasUploadDraft } from "@/lib/statement-draft";
 
 export const Route = createFileRoute("/_app/tarjetas")({
   component: Tarjetas,
@@ -45,11 +47,14 @@ function Tarjetas() {
   const accounts = useBookAccounts();
   const book = useLedger((s) => s.books.find((b) => b.id === s.activeBookId));
   const today = argentinaDay();
+  // «Subir resumen PDF»: open from #subir (Ajustes, the assistant) or a review left before a reload.
+  const [uploading, setUploading] = useState(() => hasUploadDraft());
 
   // Links from a cuota land on #compra-<id>: scroll there.
   useEffect(() => {
     const id = window.location.hash.slice(1);
     if (!id) return;
+    if (id === "subir") setUploading(true);
     window.setTimeout(() => document.getElementById(id)?.scrollIntoView({ block: "center" }), 300);
   }, []);
 
@@ -74,18 +79,41 @@ function Tarjetas() {
               : "No tenés resúmenes cerrados por pagar."}
           </p>
         ) : null}
+        {cards.length > 0 && !uploading ? (
+          <Button className="mt-4 w-full sm:w-auto" onClick={() => setUploading(true)}>
+            <FileUp aria-hidden />
+            Subir resumen PDF
+          </Button>
+        ) : null}
       </div>
 
+      {uploading ? (
+        <section id="subir" className="scroll-mt-24 rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
+          <CardFromPdf onClose={() => setUploading(false)} />
+        </section>
+      ) : null}
+
       {cards.length === 0 ? (
-        <div data-tour="tarjeta" className="rounded-3xl bg-surface p-5">
-          <p className="text-sm">Todavía no cargaste ninguna tarjeta.</p>
-          <p className="mt-1 text-sm text-muted">Agregala en Ajustes con su día de cierre y vencimiento.</p>
-          <Button asChild className="mt-4">
-            <Link to="/ajustes" hash="tarjetas">
-              Agregar tarjeta
-            </Link>
-          </Button>
-        </div>
+        uploading ? null : (
+          <div data-tour="tarjeta" className="rounded-3xl bg-surface p-5">
+            <p className="text-sm">Todavía no cargaste ninguna tarjeta.</p>
+            <p className="mt-1 text-sm text-muted">
+              Subí el PDF del resumen que bajás del home banking: Cifra arma la tarjeta con su banco, cierre,
+              vencimiento y límite, y carga los movimientos y las cuotas. Sin tipear nada.
+            </p>
+            <div className="mt-4 grid gap-2 sm:flex">
+              <Button onClick={() => setUploading(true)}>
+                <FileUp aria-hidden />
+                Subir resumen PDF
+              </Button>
+              <Button asChild variant="ghost">
+                <Link to="/ajustes" hash="tarjetas">
+                  Cargarla a mano
+                </Link>
+              </Button>
+            </div>
+          </div>
+        )
       ) : (
         cards.map((c, i) => <CardBlock key={c.id} card={c} today={today} tour={i === 0} />)
       )}

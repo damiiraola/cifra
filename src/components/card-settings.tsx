@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { CreditCard } from "lucide-react";
+import { CreditCard, FileUp } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { accountBalance, accountLabel } from "@/lib/books";
 import { cardDebt, lastClosedStatement, openStatement, validLast4 } from "@/lib/card-math";
 import { amountInput, money, parseAmount } from "@/lib/format";
@@ -76,22 +77,32 @@ export function CardSettings() {
           ),
         )}
         {cards.length === 0 && !editing ? (
-          <p className="text-sm text-muted">Todavía no cargaste ninguna tarjeta.</p>
+          <p className="text-sm text-muted">
+            Todavía no cargaste ninguna tarjeta. Lo más rápido: subí el PDF del resumen y Cifra la arma sola.
+          </p>
         ) : null}
       </div>
       {editing && !editing.id ? (
         <CardForm initial={editing} onDone={() => setEditing(null)} />
       ) : (
-        <Button
-          variant="secondary"
-          className="mt-4 w-full sm:w-auto"
-          onClick={() => {
-            setConfirmId("");
-            setEditing({ ...EMPTY });
-          }}
-        >
-          Agregar tarjeta
-        </Button>
+        <div className="mt-4 grid gap-2 sm:flex">
+          <Button asChild className="w-full sm:w-auto">
+            <Link to="/tarjetas" hash="subir">
+              <FileUp aria-hidden />
+              Subir resumen PDF
+            </Link>
+          </Button>
+          <Button
+            variant="secondary"
+            className="w-full sm:w-auto"
+            onClick={() => {
+              setConfirmId("");
+              setEditing({ ...EMPTY });
+            }}
+          >
+            Agregar tarjeta a mano
+          </Button>
+        </div>
       )}
     </div>
   );
