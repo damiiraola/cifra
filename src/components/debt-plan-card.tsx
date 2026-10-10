@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { amountInput, moneyARS, parseAmount } from "@/lib/format";
+import { amountInput, money, moneyARS, parseAmount } from "@/lib/format";
 import { periodName } from "@/lib/card-pay";
 import { MAX_MONTHS, onlyCuotas, peakCuotas, type CardDebt, type DebtStrategy, type Payoff } from "@/lib/plan/debt";
 import { useDebtPlan } from "@/lib/plan/use-plan";
@@ -16,7 +16,15 @@ function months(n: number) {
   return n === 1 ? "1 mes" : `${n} meses`;
 }
 
+/** A balance as the bank prints it: "$ 207.912 + US$ 35,20". */
+function bankAmount(d: CardDebt) {
+  const usd = d.balanceUsd ?? 0;
+  const ars = d.balanceArs ?? d.balance;
+  return usd >= 0.01 ? `${moneyARS(ars)} + ${money(usd, "USD")}` : moneyARS(d.balance);
+}
+
 function exit(p: Payoff, current: string) {
+  if (p.stuck) return "no salís con este monto";
   if (p.months === null) return `Más de ${MAX_MONTHS / 12} años`;
   return p.end === current ? "Este mes" : `${periodName(p.end)} (${months(p.months)})`;
 }
@@ -40,6 +48,9 @@ export function DebtPlanCard() {
   const cuotasEnd = debts.map((d) => d.cuotasEnd).filter(Boolean).sort().at(-1) ?? "";
   const names = (ids: string[]) => ids.map((id) => debts.find((d) => d.cardId === id)?.name ?? "").join(" → ");
   const chosen = c[pick];
+  // As the bank prints it: pesos and dollars apart (the plan itself works in pesos).
+  const usdOwed = debts.reduce((s, d) => s + (d.balanceUsd ?? 0), 0);
+  const arsOwed = balanceTotal + cuotasTotal - debts.reduce((s, d) => s + (d.balance - (d.balanceArs ?? d.balance)), 0);
   const short = chosen.shortFrom;
 
   return (
@@ -49,13 +60,19 @@ export function DebtPlanCard() {
     >
       <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Plan para bajar deudas</p>
       <p className="mt-1 font-display text-3xl tracking-tight">
-        Debés {moneyARS(balanceTotal + cuotasTotal)}
+        Debés {moneyARS(arsOwed)}
+        {usdOwed >= 0.01 ? ` + ${money(usdOwed, "USD")}` : ""}
       </p>
+      {usdOwed >= 0.01 ? (
+        <p className="mt-1 text-xs text-subtle">
+          Como lo imprime el banco. En pesos al dólar de hoy, unos {moneyARS(balanceTotal + cuotasTotal)}.
+        </p>
+      ) : null}
       <p className="mt-2 max-w-xl text-sm text-muted">
         {balanceTotal > 0
-          ? `${moneyARS(balanceTotal)} de resúmenes sin pagar (${balances
-              .map((d) => `${d.name} ${moneyARS(d.balance)}${d.overdue ? ", vencido" : ""}`)
-              .join(" · ")})`
+          ? `Resúmenes sin pagar: ${balances
+              .map((d) => `${d.name} ${bankAmount(d)}${d.overdue ? ", vencido" : ""}`)
+              .join(" · ")}`
           : "Sin saldos de resúmenes por pagar"}
         {cuotasTotal > 0 ? ` y ${moneyARS(cuotasTotal)} en cuotas que siguen hasta ${periodName(cuotasEnd)}.` : "."}
         {" "}Supone que lo que compres de ahora en más lo pagás completo.
@@ -98,7 +115,14 @@ export function DebtPlanCard() {
                 </span>
                 <span className="text-xs text-subtle">{STRATEGY[k].hint}{p.order.length > 1 ? `: ${names(p.order)}` : ""}</span>
                 <span className="mt-1 text-sm">Salís: {exit(p, current)}</span>
-                <span className="text-sm tabular-nums text-muted">Intereses estimados: {moneyARS(p.interest)}</span>
+                {p.stuck ? (
+                  <span className="text-sm text-warn">
+                    El interés es de unos {moneyARS(p.stuck.interest)} por mes y este monto no lo cubre: la deuda crece.
+                    Para que baje, al menos {moneyARS(p.stuck.needed)}.
+                  </span>
+                ) : (
+                  <span className="text-sm tabular-nums text-muted">Intereses estimados: {moneyARS(p.interest)}</span>
+                )}
               </button>
             );
           })}
