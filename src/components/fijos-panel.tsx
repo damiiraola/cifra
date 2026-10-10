@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { money, parseAmount, amountInput } from "@/lib/format";
 import { FIJO_TEMPLATES, dueUnposted, isDue, isPosted, likelyDuplicate } from "@/lib/recurring";
@@ -169,6 +169,7 @@ export function FijosPanel() {
 
       {editing ? (
         <FijoEditor
+          key={editing.id}
           value={editing}
           accounts={accounts}
           onClose={() => setEditing(null)}
@@ -219,9 +220,15 @@ function FijoEditor({
     [type, visible],
   );
   const existing = Boolean(value.amount);
+  // The editor renders under the list: bring it to the user, focused on the amount.
+  const box = useRef<HTMLElement>(null);
+  useEffect(() => {
+    box.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+    document.getElementById("famt")?.focus({ preventScroll: true });
+  }, []);
 
   return (
-    <section className="rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_rgba(244,244,240,0.06)] sm:p-5">
+    <section ref={box} aria-label={existing ? "Editar fijo" : "Nuevo fijo"} className="scroll-mt-20 rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_rgba(244,244,240,0.06)] sm:p-5">
       <h2 className="font-display text-2xl tracking-tight">{existing ? "Editar fijo" : "Nuevo fijo"}</h2>
       <div className="mt-4 grid gap-3">
         <div className="grid grid-cols-2 gap-2">

@@ -286,7 +286,7 @@ function readLocalSnapshot(): {
     return {
       transactions,
       budgets: { ...DEFAULT_BUDGETS, ...(state.budgets ?? {}) },
-      globalBudget: Number(state.globalBudget) || DEFAULT_GLOBAL_BUDGET,
+      globalBudget: state.globalBudget == null ? DEFAULT_GLOBAL_BUDGET : Number(state.globalBudget) || 0,
     };
   } catch {
     return null;
