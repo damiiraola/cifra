@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { X } from "lucide-react";
 import { usePlanAlerts } from "@/lib/plan/use-plan";
-import type { AlertTone } from "@/lib/plan/alerts";
+import { byPriority, type AlertTone } from "@/lib/plan/alerts";
 import { cn } from "@/lib/utils";
 
 const HIDDEN_KEY = "cifra-avisos-ocultos:v1";
@@ -31,7 +31,7 @@ export function PlanAlerts({ limit = 3, title = false }: { limit?: number; title
   const [hidden, setHidden] = useState<string[] | null>(null);
   useEffect(() => setHidden(readHidden()), []);
   if (hidden === null) return null;
-  const visible = alerts.filter((a) => !hidden.includes(a.id));
+  const visible = byPriority(alerts.filter((a) => !hidden.includes(a.id)));
   if (!visible.length) {
     return title ? <p className="text-sm text-muted">Sin avisos por ahora.</p> : null;
   }
@@ -77,7 +77,7 @@ export function PlanAlerts({ limit = 3, title = false }: { limit?: number; title
           hash="avisos"
           className="inline-flex min-h-11 items-center text-xs text-muted hover:text-fg"
         >
-          Ver los {visible.length} avisos
+          {visible.length - shown.length === 1 ? "1 aviso más" : `${visible.length - shown.length} avisos más`}
         </Link>
       ) : null}
     </section>

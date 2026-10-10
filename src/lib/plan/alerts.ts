@@ -26,6 +26,13 @@ export type PlanAlert = {
   to: "/tarjetas" | "/presupuestos" | "/metas";
 };
 
+const RANK: Record<AlertTone, number> = { bad: 0, warn: 1, info: 2 };
+
+/** Most urgent first (bad, warn, info); same tone keeps its order. */
+export function byPriority<T extends { tone: AlertTone }>(alerts: T[]): T[] {
+  return alerts.map((a, i) => ({ a, i })).sort((x, y) => RANK[x.a.tone] - RANK[y.a.tone] || x.i - y.i).map((x) => x.a);
+}
+
 export type AlertInput = PlanData & {
   /** Categories with a tope the user set (current month). */
   /** `committed`: the part of `spent` that is fijos or cuotas already posted. */

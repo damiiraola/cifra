@@ -323,6 +323,8 @@ function fijoNames(rs: Recurring[]) {
  * an "Anotar" button, and leaves out the ones that look already loaded.
  */
 function offerDueRecurrings(get: () => LedgerState) {
+  // Not on top of the entry sheet; the Diario shows them again on the next open.
+  if (get().quickOpen) return;
   const ym = monthISO();
   const txs = get().transactions;
   const due = dueUnposted(get().recurrings, txs, ym);
@@ -924,12 +926,15 @@ export const useLedger = create<LedgerState>()((set, get) => ({
   },
   setViewMonth: (ym) => set({ viewMonth: ym, selectedDay: null }),
   setSelectedDay: (day) => set({ selectedDay: day }),
-  openQuick: (draft = {}) =>
+  openQuick: (draft = {}) => {
+    // No notice may cover the entry sheet (UX audit 2026-10-10, P5).
+    toast.dismiss();
     set({
       quickOpen: true,
       editingId: draft.id ?? null,
       draft,
-    }),
+    });
+  },
   closeQuick: () => set({ quickOpen: false, editingId: null, draft: {} }),
   addTx: (tx) => {
     const row = fillTx(get, tx);
