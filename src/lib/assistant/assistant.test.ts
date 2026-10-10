@@ -645,7 +645,7 @@ describe("plumbing", () => {
     const b = toolBody(gw, { messages: [] });
     assert.deepEqual(b.providerOptions, { gateway: { disallowPromptTraining: true } });
     assert.equal(b.tool_choice, "required");
-    assert.equal((b.tools as unknown[]).length, 9);
+    assert.equal((b.tools as unknown[]).length, 10);
     assert.equal(b.max_tokens, 450);
   });
 
@@ -1110,5 +1110,123 @@ describe("easy to read on the phone", () => {
     const r = runTool(new ToolRun(d), "tarjetas", {});
     const visa = (r.data.tarjetas as Record<string, unknown>[])[0]!;
     assert.equal(r.valores[String(visa.limite_usado)], "27%");
+  });
+});
+
+describe("how to do things in the app (never 'no existe')", () => {
+  const exact = "Hay alguna manera de cargar el resumen de mi tarjeta y que la app.lo lea ?";
+
+  it("the exact question: Cifra's guide answers, with the route and a link, and no model call", async () => {
+    const m = fake([]);
+    const r = await runAssistant({
+      data: data(),
+      message: exact,
+      chip: null,
+      history: [],
+      call: m.call,
+    });
+    assert.equal(r.source, "guia");
+    assert.equal(r.modelCalls, 0);
+    assert.equal(m.bodies.length, 0);
+    assert.match(r.text, /Más → Tarjetas/);
+    assert.match(r.text, /«Importar resumen PDF»/);
+    assert.deepEqual(r.links?.[0], { label: "Ir a Tarjetas", to: "/tarjetas" });
+  });
+
+  it("works with no model at all (assistant off)", async () => {
+    const r = await runAssistant({
+      data: data(),
+      message: "importar resumen",
+      chip: null,
+      history: [],
+      call: null,
+    });
+    assert.equal(r.source, "guia");
+    assert.match(r.text, /Importar resumen PDF/);
+  });
+
+  it("a chip is never taken by the guide", async () => {
+    const m = fake([responder({ texto: "Ok.", propuestas: [], seguir: [] })]);
+    const r = await runAssistant({
+      data: data(),
+      message: "¿Cuánto pago de tarjeta este mes?",
+      chip: chipById("tarjeta"),
+      history: [],
+      call: m.call,
+    });
+    assert.equal(r.modelCalls, 1);
+  });
+
+  it("unknown feature: the model denies it → Cifra says it isn't sure and sends to Contanos", async () => {
+    const m = fake([
+      calls([["funciones_app", { tema: "compartir el libro" }]]),
+      responder({
+        texto: "Por ahora no hay forma de compartir el libro.",
+        propuestas: [],
+        seguir: [],
+      }),
+    ]);
+    const r = await runAssistant({
+      data: data(),
+      message: "¿Puedo compartir el libro con mi pareja?",
+      chip: null,
+      history: [],
+      call: m.call,
+    });
+    assert.equal(r.source, "guia");
+    assert.equal(r.reason, "negó una función");
+    assert.match(r.text, /Más → Contanos/);
+    assert.ok(r.links?.some((l) => "action" in l && l.action === "contanos"));
+  });
+
+  it("funciones_app gives the model the routes, and its links ride with the answer", async () => {
+    const m = fake([
+      calls([["funciones_app", { tema: "avisos por mail" }]]),
+      responder({ texto: "Se activan en Ajustes → Avisos por mail.", propuestas: [], seguir: [] }),
+    ]);
+    const r = await runAssistant({
+      data: data(),
+      message: "che, me avisan por algún lado cuando vence algo?",
+      chip: null,
+      history: [],
+      call: m.call,
+    });
+    assert.equal(r.source, "ia");
+    assert.equal(r.text, "Se activan en Ajustes → Avisos por mail.");
+    assert.deepEqual(r.links, [{ label: "Ir a Avisos por mail", to: "/ajustes#avisos-mail" }]);
+    const tool = (m.bodies[1]!.messages as { role: string; content: string }[]).find(
+      (x) => x.role === "tool",
+    )!;
+    assert.match(tool.content, /Ajustes → Avisos por mail/);
+    assert.match(
+      String((m.bodies[1]!.messages as { content: string }[])[0]!.content),
+      /Nunca digas que no existe/,
+    );
+  });
+
+  it("a 'no' about money is left alone (not an app question)", async () => {
+    const m = fake([
+      calls([["tarjetas", {}]]),
+      responder({
+        texto: "No te conviene pagar solo el mínimo: se acumulan intereses.",
+        propuestas: [],
+        seguir: [],
+      }),
+    ]);
+    const r = await runAssistant({
+      data: data(),
+      message: "¿Puedo pagar el mínimo de la tarjeta?",
+      chip: null,
+      history: [],
+      call: m.call,
+    });
+    assert.equal(r.source, "ia");
+    assert.match(r.text, /No te conviene/);
+  });
+
+  it("the model gets the funciones_app tool", () => {
+    const body = toolBody({ id: "gateway", url: "x", token: "x", model: "m" }, { messages: [] });
+    const names = (body.tools as { function: { name: string } }[]).map((t) => t.function.name);
+    assert.ok(names.includes("funciones_app"));
   });
 });

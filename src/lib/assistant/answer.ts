@@ -8,6 +8,7 @@
  */
 import type { Facts } from "./facts.ts";
 import type { Proposal, ToolRun } from "./tools.ts";
+import type { GuideLink } from "./app-guide.ts";
 
 export const RESPONDER = {
   name: "responder",
@@ -36,8 +37,14 @@ export type Answer = {
   text: string;
   proposals: Proposal[];
   followUps: string[];
-  /** "ia": the model's text, checked. "plantilla": Cifra's own text (model failed or was rejected). */
-  source: "ia" | "plantilla";
+  /** Links into the app ("Ir a Tarjetas", "Abrir Contanos"). */
+  links?: GuideLink[];
+  /**
+   * "ia": the model's text, checked. "plantilla": Cifra's own text (model
+   * failed or was rejected). "guia": how to do something in the app, from
+   * Cifra's list of features (no model).
+   */
+  source: "ia" | "plantilla" | "guia";
   /** Why the model's answer was not used (for logs/tests, never shown). */
   reason?: string;
 };

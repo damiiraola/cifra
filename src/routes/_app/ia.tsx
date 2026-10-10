@@ -9,6 +9,8 @@ import { useLedger, useAllCategories, useBookCards } from "@/lib/store";
 import { cuotasFromText, draftFromModel } from "@/lib/movement-parse";
 import { AssistantProposals } from "@/components/assistant-proposals";
 import { AssistantText } from "@/components/assistant-text";
+import { AssistantLinks } from "@/components/assistant-links";
+import { guideAnswer } from "@/lib/assistant/app-guide";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
 import { CATEGORY_MAP } from "@/lib/categories";
@@ -122,7 +124,12 @@ export function Asistente() {
       role: "assistant",
       content: res.text,
       createdAt: new Date().toISOString(),
-      extra: { proposals: res.proposals, followUps: res.followUps, source: res.source },
+      extra: {
+        proposals: res.proposals,
+        followUps: res.followUps,
+        links: res.links,
+        source: res.source,
+      },
     });
   }
 
@@ -135,6 +142,22 @@ export function Asistente() {
       setText("");
       openQuick(cuotas);
       toast.success("Revisá y confirmá la compra en cuotas");
+      return;
+    }
+    // "¿Cómo subo el resumen?": Cifra answers from its list of features, right
+    // here (no model, works even when the assistant is off).
+    const guide = opts.parse || opts.chip ? null : guideAnswer(trimmed);
+    if (guide) {
+      setText("");
+      const at = new Date().toISOString();
+      pushChat({ id: uid(), role: "user", content: trimmed, createdAt: at });
+      pushChat({
+        id: uid(),
+        role: "assistant",
+        content: guide.text,
+        createdAt: at,
+        extra: { proposals: [], followUps: guide.followUps, links: guide.links, source: "guia" },
+      });
       return;
     }
     if (aiActive === false && !opts.chip) {
@@ -257,6 +280,9 @@ export function Asistente() {
                 ) : (
                   <div className="whitespace-pre-wrap text-sm leading-relaxed text-fg">{m.content}</div>
                 )}
+                {m.role === "assistant" && m.extra?.links?.length ? (
+                  <AssistantLinks links={m.extra.links} />
+                ) : null}
                 {m.role === "assistant" && m.extra?.proposals?.length ? (
                   <AssistantProposals proposals={m.extra.proposals} />
                 ) : null}
@@ -266,7 +292,7 @@ export function Asistente() {
                       <button
                         key={q}
                         type="button"
-                        disabled={busy || blocked}
+                        disabled={busy || (blocked && !guideAnswer(q))}
                         onClick={() => send(q)}
                         className="min-h-9 rounded-full bg-elevated px-3 text-xs text-muted hover:text-fg disabled:opacity-50"
                       >
