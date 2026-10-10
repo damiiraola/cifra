@@ -343,14 +343,47 @@ export function financingCost(cashPrice: number, cuota: number, n: number) {
   return { total, extra, monthly, tea: Math.pow(1 + monthly, 12) - 1 };
 }
 
-/** Cuota number you are on today (last one dated on or before today), and what is left to pay. */
-export function purchaseProgress(p: CardPurchase, txs: Transaction[], today: string) {
+/**
+ * Cuota number you are on and what is left to pay.
+ *
+ * With `openPeriod` (the card's open statement), a cuota counts as "to come"
+ * while its statement has not closed yet, whatever its date: a cuota dated the
+ * 1st that goes to the statement closing on the 29th is not paid on the 2nd.
+ * Without it, the date decides (old behaviour).
+ */
+export function purchaseProgress(p: CardPurchase, txs: Transaction[], today: string, openPeriod = "") {
   const mine = txs.filter((t) => t.purchaseId === p.id).sort((a, b) => a.installmentNo - b.installmentNo);
-  const done = mine.filter((t) => t.date <= today);
+  const toCome = (t: Transaction) => (openPeriod && t.cardPeriod ? t.cardPeriod >= openPeriod : t.date > today);
+  const done = mine.filter((t) => !toCome(t));
   const current = done.length ? done[done.length - 1]!.installmentNo : Math.round(p.paidBefore);
-  const left = round2(mine.filter((t) => t.date > today).reduce((s, t) => s + t.amount, 0));
+  const coming = mine.filter(toCome);
+  const left = round2(coming.reduce((s, t) => s + t.amount, 0));
   const lastPeriod = mine.length ? mine[mine.length - 1]!.cardPeriod : "";
-  return { current, count: Math.round(p.installments), left, lastPeriod };
+  return { current, count: Math.round(p.installments), left, leftCount: coming.length, lastPeriod };
+}
+
+/**
+ * Cuotas of purchases that have none at all (a purchase whose cuotas never
+ * reached the ledger, e.g. a failed write right after a PDF import). Without
+ * them the statement is short by the cuota ("Faltan $ 22.000") and the next
+ * statements show $ 0. Purchases with some cuotas are left alone: the user may
+ * have removed one on purpose.
+ */
+export function missingCuotas(
+  purchases: CardPurchase[],
+  cards: Card[],
+  txs: Transaction[],
+  statements: BankStatement[] = [],
+): Transaction[] {
+  const has = new Set(txs.filter((t) => t.purchaseId).map((t) => t.purchaseId));
+  const out: Transaction[] = [];
+  for (const p of purchases) {
+    if (has.has(p.id)) continue;
+    const card = cards.find((c) => c.id === p.cardId);
+    if (!card) continue;
+    out.push(...deriveInstallments(p, card, statements));
+  }
+  return out;
 }
 
 // ------------------------------------------------------- next statements

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { say } from "@/lib/plan/month-numbers";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
@@ -335,9 +336,9 @@ function PlanCard({
     plan.income <= 0
       ? "Cargá lo que entra"
       : plan.over > 0
-      ? `Te pasás ${moneyARS(plan.over)}`
+      ? say.thisMonthOver(plan.over)
       : days > 0
-        ? `Te quedan ${moneyARS(plan.left)}`
+        ? say.thisMonth(plan.left)
         : "Este mes ya cerró";
   const detail =
     plan.income <= 0

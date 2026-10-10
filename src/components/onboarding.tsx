@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { money, amountInput } from "@/lib/format";
 import { parseAmount } from "@/lib/format";
-import { FIJO_TEMPLATES } from "@/lib/recurring";
+import { moreFijos, onboardingFijos, suggestTope, templateFor, COMMON_FIJOS } from "@/lib/onboarding-plan";
 import { fijoAccount } from "@/lib/books";
 import { useLedger } from "@/lib/store";
 import { uid } from "@/lib/utils";
@@ -67,11 +67,21 @@ function OpeningList({
 export function Onboarding() {
   const books = useLedger((s) => s.books);
   const accounts = useLedger((s) => s.accounts);
-  const { globalBudget, completeOnboarding, usdSource, setUsdSource, upsertRecurring } = useLedger();
+  const { completeOnboarding, usdSource, setUsdSource, upsertRecurring } = useLedger();
   const [step, setStep] = useState(0);
-  const [budget, setBudget] = useState(amountInput(globalBudget || 1_150_000));
+  const [income, setIncome] = useState("");
+  // The store starts with a default tope; onboarding never shows it as if the user chose it.
+  const [budget, setBudget] = useState("");
+  const [budgetTouched, setBudgetTouched] = useState(false);
   const [openings, setOpenings] = useState<Record<string, string>>({});
-  const [fijoAmounts, setFijoAmounts] = useState<Record<string, string>>({});
+  const [fijoRows, setFijoRows] = useState<{ name: string; amount: string }[]>(
+    COMMON_FIJOS.map((name) => ({ name, amount: "" })),
+  );
+  const [adding, setAdding] = useState(false);
+  const incomeN = parseAmount(income) ?? 0;
+  const suggested = suggestTope(incomeN);
+  // Until the user types a tope, it follows the income (80 %). Nothing invented without income.
+  const tope = budgetTouched ? (parseAmount(budget) ?? 0) : suggested;
   const [wantBusiness, setWantBusiness] = useState(false);
 
   const personal = books.find((b) => b.kind === "personal");
@@ -90,7 +100,7 @@ export function Onboarding() {
   }
 
   function finish() {
-    const n = parseAmount(budget) ?? 0;
+    const n = tope;
     const rows = wantBusiness ? [...personalAccounts, ...businessAccounts] : personalAccounts;
     completeOnboarding({
       globalBudget: n,
@@ -101,9 +111,13 @@ export function Onboarding() {
     });
     const bookId = personal?.id;
     if (!bookId || personalAccounts.length === 0) return;
-    for (const t of FIJO_TEMPLATES) {
-      const amount = parseAmount(fijoAmounts[t.name] ?? "");
-      if (!amount) continue;
+    const fijos = onboardingFijos(
+      incomeN,
+      fijoRows.map((r) => ({ name: r.name, amount: parseAmount(r.amount) })),
+    );
+    for (const f of fijos) {
+      const t = { ...templateFor(f.name), name: f.name };
+      const amount = f.amount;
       // Same caja the Fijos page picks for the template (the Banco for
       // transferencia/débito), not the first ARS caja, which is Efectivo.
       const acc = fijoAccount(personalAccounts, bookId, t.method);
@@ -129,22 +143,44 @@ export function Onboarding() {
     return (
       <Frame
         kicker="Bienvenida"
-        title="Tu libro, vacío."
-        hint="Tope del mes, cajas y cotización. Si una palabra no se entiende, después está Aprender."
+        title="¿Cuánto entra por mes?"
+        hint="Tu sueldo o lo que cobrás en un mes normal. Con eso te sugerimos un tope de gasto. Si no querés decirlo, seguí: lo cargás después."
         footer={
           <Button className="w-full" onClick={() => setStep(1)}>
-            Siguiente
+            {incomeN > 0 || tope > 0 ? "Siguiente" : "Saltear"}
           </Button>
         }
       >
-        <Label htmlFor="budget">Tope de gasto del mes (ARS)</Label>
+        <Label htmlFor="income">Lo que entra por mes (ARS)</Label>
         <Input
-          id="budget"
+          id="income"
           className="mt-1.5 h-14 font-display text-2xl"
           inputMode="decimal"
-          value={budget}
-          onChange={(e) => setBudget(e.target.value)}
+          placeholder="Ej. 1.200.000"
+          value={income}
+          onChange={(e) => setIncome(e.target.value)}
         />
+        {incomeN > 0 || budgetTouched ? (
+          <div className="mt-6">
+            <Label htmlFor="budget">Tope de gasto del mes (ARS)</Label>
+            <Input
+              id="budget"
+              className="mt-1.5"
+              inputMode="decimal"
+              placeholder="Sin tope"
+              value={budgetTouched ? budget : suggested ? amountInput(suggested) : ""}
+              onChange={(e) => {
+                setBudgetTouched(true);
+                setBudget(e.target.value);
+              }}
+            />
+            {!budgetTouched && suggested > 0 ? (
+              <p className="mt-1.5 text-xs text-muted">
+                Sugerido: el 80 % de lo que entra. El resto queda para ahorro y metas. Cambialo si querés.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
       </Frame>
     );
   }
@@ -233,39 +269,69 @@ export function Onboarding() {
   }
 
   if (step === 4) {
+    const extra = moreFijos().filter((n) => !fijoRows.some((r) => r.name === n));
     return (
       <Frame
         kicker="Fijos"
-        title="¿Qué se repite cada mes?"
-        hint="Poné el monto de los que tengas. Si no, los cargás después en Ajustes."
+        title="¿Qué pagás todos los meses?"
+        hint="Los más comunes. Poné el monto de los que tengas y dejá vacío el resto. Podés saltear esto y cargarlos después."
         footer={
           <div className="flex gap-2">
             <Button variant="secondary" className="flex-1" onClick={() => setStep(wantBusiness ? 3 : 2)}>
               Atrás
             </Button>
             <Button className="flex-1" onClick={() => setStep(5)}>
-              Siguiente
+              {fijoRows.some((r) => parseAmount(r.amount)) ? "Siguiente" : "Saltear"}
             </Button>
           </div>
         }
       >
         <div className="grid gap-3">
-          {FIJO_TEMPLATES.map((t) => (
-            <div key={t.name}>
-              <Label htmlFor={`fijo-${t.name}`}>
-                {t.name}
-                {t.type === "income" ? " · ingreso" : ""}
-              </Label>
+          {fijoRows.map((r, i) => (
+            <div key={`${r.name}-${i}`}>
+              {COMMON_FIJOS.includes(r.name as (typeof COMMON_FIJOS)[number]) || moreFijos().includes(r.name) ? (
+                <Label htmlFor={`fijo-${i}`}>{r.name}</Label>
+              ) : (
+                <Input
+                  aria-label="Nombre del fijo"
+                  className="mb-1.5"
+                  placeholder="Nombre (ej. Gimnasio)"
+                  value={r.name}
+                  onChange={(e) => setFijoRows((rows) => rows.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))}
+                />
+              )}
               <Input
-                id={`fijo-${t.name}`}
+                id={`fijo-${i}`}
                 className="mt-1.5"
                 inputMode="decimal"
                 placeholder="0"
-                value={fijoAmounts[t.name] ?? ""}
-                onChange={(e) => setFijoAmounts((s) => ({ ...s, [t.name]: e.target.value }))}
+                aria-label={r.name ? `Monto de ${r.name}` : "Monto"}
+                value={r.amount}
+                onChange={(e) => setFijoRows((rows) => rows.map((x, j) => (j === i ? { ...x, amount: e.target.value } : x)))}
               />
             </div>
           ))}
+          {adding ? (
+            <div className="flex flex-wrap gap-1.5">
+              {[...extra, "Otro"].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  className="inline-flex h-11 items-center rounded-full bg-elevated px-3.5 text-sm text-muted"
+                  onClick={() => {
+                    setFijoRows((rows) => [...rows, { name: n === "Otro" ? "" : n, amount: "" }]);
+                    setAdding(false);
+                  }}
+                >
+                  {n === "Otro" ? "Otro…" : n}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <Button variant="secondary" className="w-full" onClick={() => setAdding(true)}>
+              Agregar otro
+            </Button>
+          )}
         </div>
       </Frame>
     );
@@ -282,8 +348,8 @@ export function Onboarding() {
             Empezar
           </Button>
           <p className="mt-3 text-center text-xs text-subtle">
-            {wantBusiness ? "Personal y Negocio." : "Personal ahora. Negocio queda para Ajustes."} Tope{" "}
-            {money(parseAmount(budget) ?? 0, "ARS")}.
+            {wantBusiness ? "Personal y Negocio." : "Personal ahora. Negocio queda para Ajustes."}{" "}
+            {tope > 0 ? `Tope ${money(tope, "ARS")}.` : "Sin tope por ahora."}
           </p>
         </>
       }
