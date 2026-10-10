@@ -320,7 +320,7 @@ function SimView({ result: r, kind, cardName }: { result: SimResult; kind: Kind;
       </p>
       {r.surplus.after !== r.surplus.before ? (
         <p className="text-sm text-muted">
-          Lo que te sobra por mes: {moneyARS(r.surplus.before)} → {moneyARS(r.surplus.after)}.
+          Un mes normal, antes de tus metas, te sobra: {moneyARS(r.surplus.before)} → {moneyARS(r.surplus.after)}.
         </p>
       ) : null}
       {r.limit ? (

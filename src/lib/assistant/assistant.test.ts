@@ -796,7 +796,7 @@ describe("easy to read on the phone", () => {
   it("plan template: the conclusion first, then a list, the topes and what they free", () => {
     const r = runTool(new ToolRun(tight()), "plan_mes", {});
     const [first, ...rest] = r.summary.split("\n");
-    assert.match(first!, /^El mes no cierra: te faltan \$\s?[\d.]+ por mes\.$/);
+    assert.match(first!, /^Para tus metas faltan \$\s?[\d.]+ por mes\. Antes de tus metas /);
     assert.ok(
       rest.some((l) => l.startsWith("- Entra: ")),
       r.summary,
