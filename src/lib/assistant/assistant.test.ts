@@ -380,7 +380,10 @@ describe("tools", () => {
     const av = r.data.avalancha as Record<string, unknown>;
     assert.match(String(av.intereses_estimados), /^f\d+$/);
     assert.equal(r.data.las_dos_estrategias_son_iguales, true);
-    assert.match(r.summary, /- Avalancha: salís en/);
+    // $ 1.500 a month does not cover the ~$ 2.155 of interest: say it, don't compound it.
+    assert.equal(av.no_cubre_el_interes, true);
+    assert.match(r.summary, /la deuda no baja: el interés es de unos .+ por mes\./);
+    assert.match(r.summary, /hacen falta al menos/);
   });
 
   it("metas: la conclusión abre la respuesta una sola vez", () => {

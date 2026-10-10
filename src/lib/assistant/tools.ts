@@ -794,6 +794,9 @@ function planDeuda(run: ToolRun, args: Record<string, unknown>): ToolResult {
     intereses_estimados: f.ars(x.interest),
     orden: x.order.map((id) => debts.find((dd) => dd.cardId === id)?.name ?? id),
     ...(x.shortFrom ? { no_alcanza_desde: f.month(x.shortFrom) } : {}),
+    ...(x.stuck
+      ? { no_cubre_el_interes: true, interes_por_mes: f.ars(x.stuck.interest), para_que_baje_hace_falta: f.ars(x.stuck.needed) }
+      : {}),
   });
   const data = {
     presupuesto_por_mes: f.ars(c.budget),
@@ -814,12 +817,19 @@ function planDeuda(run: ToolRun, args: Record<string, unknown>): ToolResult {
     ...(c.missingTna.length ? { tarjetas_sin_tna: c.missingTna } : {}),
   };
   const out = (end: string | null | undefined) => (end ? monthLabel(end) : "en más de 10 años");
-  const summary = textLines([
-    `Pagando ${ars(c.budget)} por mes:`,
-    `- Avalancha: salís en ${out(c.avalancha.end)}, con unos ${ars(c.avalancha.interest)} de intereses`,
-    `- Bola de nieve: salís en ${out(c.bola.end)}, con unos ${ars(c.bola.interest)} de intereses`,
-    "Son estimados con la TNA de cada tarjeta.",
-  ]);
+  const stuck = c.avalancha.stuck;
+  const summary = stuck
+    ? textLines([
+        `Con ${ars(c.budget)} por mes la deuda no baja: el interés es de unos ${ars(stuck.interest)} por mes.`,
+        `- Para que empiece a bajar hacen falta al menos ${ars(stuck.needed)} por mes.`,
+        "Son estimados con la TNA de cada tarjeta.",
+      ])
+    : textLines([
+        `Pagando ${ars(c.budget)} por mes:`,
+        `- Avalancha: salís en ${out(c.avalancha.end)}, con unos ${ars(c.avalancha.interest)} de intereses`,
+        `- Bola de nieve: salís en ${out(c.bola.end)}, con unos ${ars(c.bola.interest)} de intereses`,
+        "Son estimados con la TNA de cada tarjeta.",
+      ]);
   return { data, summary };
 }
 

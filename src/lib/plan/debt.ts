@@ -30,6 +30,9 @@ export type CardDebt = {
   tna: number;
   /** Unpaid balance of the last closed statement, ARS (USD at today's rate). */
   balance: number;
+  /** The same balance as the bank prints it: pesos and dollars apart. */
+  balanceArs?: number;
+  balanceUsd?: number;
   /** True when that balance is already past its due date. */
   overdue: boolean;
   /** Bank's minimum for that statement, 0 = unknown. */
@@ -92,6 +95,8 @@ export function cardDebts(input: {
       name: card.name,
       tna: card.tna > 0 ? card.tna : 0,
       balance: Math.max(0, balance),
+      balanceArs: Math.max(0, round0(st.leftArs)),
+      balanceUsd: Math.max(0, Math.round(st.leftUsd * 100) / 100),
       overdue: balance >= 1 && st.due < today,
       bankMinimum: st.minimumArs > 0 ? round0(st.minimumArs) : 0,
       cuotas,
@@ -137,6 +142,12 @@ export type Payoff = {
   schedule: PayoffMonth[];
   /** First month the budget does not cover cuotas + minimums, "". */
   shortFrom: string;
+  /**
+   * The payment does not even cover the month's interest (plus the cuotas due):
+   * the debt grows forever. The plan stops there instead of compounding for 10
+   * years into absurd numbers. `needed` is the least that makes it go down.
+   */
+  stuck: { ym: string; interest: number; needed: number } | null;
 };
 
 function attackOrder(debts: CardDebt[], strategy: DebtStrategy) {
@@ -179,6 +190,7 @@ export function payoff(
   let totalInterest = 0;
   let shortFrom = "";
   let end = "";
+  let stuck: Payoff["stuck"] = null;
   for (let m = 0; m < MAX_MONTHS; m++) {
     const ym = addMonths(start, m);
     let interest = 0;
@@ -194,11 +206,17 @@ export function payoff(
         interest += i;
       }
     }
-    totalInterest += interest;
     let avail = Math.max(0, budget);
     // 1. cuotas due this month.
     let cuotas = 0;
     for (const d of debts) cuotas += d.cuotas[ym] ?? 0;
+    // Sanity: if what is paid cannot cover this month's interest (after the
+    // cuotas), the balance only grows. Say so and stop: never compound it.
+    if (m > 0 && strategy !== "minimo" && interest >= 1 && avail - cuotas < interest) {
+      stuck = { ym, interest: round0(interest), needed: Math.ceil((interest + cuotas + 1) / 1000) * 1000 };
+      break;
+    }
+    totalInterest += interest;
     let short = false;
     const cuotasPaid = Math.min(avail, cuotas);
     if (cuotasPaid < cuotas - 0.5) {
@@ -272,6 +290,7 @@ export function payoff(
     months: end ? schedule.length : null,
     end,
     interest: round0(totalInterest),
+    stuck,
     order: order.filter((id) => (debts.find((d) => d.cardId === id)?.balance ?? 0) >= 1),
     cards: debts.map((d) => ({
       cardId: d.cardId,
@@ -325,7 +344,8 @@ export function compareDebtPlans(debts: CardDebt[], budget: number, today: strin
     bola,
     minimo,
     same: avalancha.order.join() === bola.order.join(),
-    avalanchaSaves: bola.interest - avalancha.interest,
+    // A plan that never ends (payment below the interest) has no "savings" to compare.
+    avalanchaSaves: avalancha.stuck || bola.stuck ? 0 : bola.interest - avalancha.interest,
     missingTna: debts.filter((d) => d.balance >= 1 && !(d.tna > 0)).map((d) => d.name),
   };
 }
