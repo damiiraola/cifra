@@ -49,6 +49,7 @@ import {
   cardPeriodFor,
   clampDay,
   deriveInstallments,
+  missingCuotas,
   MAX_INSTALLMENTS,
   missingVaultCards,
   staleCuotaIds,
@@ -804,7 +805,13 @@ export const useLedger = create<LedgerState>()((set, get) => ({
         await restoreVault(get, set);
         void get().flushRecurrings({ force: true });
         void get().flushCards();
-        void get().flushPurchases();
+        void get()
+          .flushPurchases()
+          .finally(() => {
+            // A purchase whose cuotas never reached the ledger: put them back.
+            const st = get();
+            for (const row of missingCuotas(st.purchases, st.cards, st.transactions, st.statements)) st.addTx(row);
+          });
         void get().refreshQuotes();
         offerDueRecurrings(get);
         void get().flushOutbox({ force: true });
