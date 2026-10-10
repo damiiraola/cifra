@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { money, parseAmount, amountInput, shortDay } from "@/lib/format";
 import { toARS } from "@/lib/analytics";
@@ -17,6 +17,7 @@ import { PAY_METHODS, type Currency, type PayMethod, type TxType } from "@/lib/t
 import { cn, todayISO } from "@/lib/utils";
 import type { Account } from "@/lib/types";
 import { useBookAccounts, useBookCards, useLedger, useVisibleCategories } from "@/lib/store";
+import { BANK_METHODS, currencyForCaja, firstProblem, showsPayMethod, startsNewSession, type QuickField, type QuickSession } from "@/lib/quick-form";
 import { defaultCategory, lastCategory, methodForAccount, rememberCategory } from "@/lib/quick-defaults";
 import { Button } from "@/components/ui/button";
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
@@ -72,6 +73,8 @@ export function QuickAdd() {
   const [running, setRunning] = useState(false);
   const [currentNo, setCurrentNo] = useState("2");
   const [confirmDrop, setConfirmDrop] = useState(false);
+  const [problem, setProblem] = useState<{ field: QuickField; message: string } | null>(null);
+  const session = useRef<QuickSession | null>(null);
 
   const bookKind = books.find((b) => b.id === activeBookId)?.kind;
   const startCategory = (t: TxType) =>
@@ -82,8 +85,19 @@ export function QuickAdd() {
       new Set(visible.filter((c) => c.kind === (t === "income" ? "income" : "expense")).map((c) => c.id)),
     );
 
+  // Reset only when a new sheet session starts. A store refresh (same cajas,
+  // new objects) must not wipe what the user is typing: see lib/quick-form.
   useEffect(() => {
+    const next = { open: quickOpen, editingId: editingId ?? null, draft };
+    const fresh = startsNewSession(session.current, next);
+    session.current = next;
     if (!quickOpen) return;
+    if (!fresh) {
+      // Cajas that arrive after the sheet opened (first hydrate): pick one only if none yet.
+      if (!accountId && accounts.length) setAccountId(inferAccount(accounts, activeBookId, method, currency));
+      return;
+    }
+    setProblem(null);
     const src = editing ?? draft;
     const nextType = src.type ?? "expense";
     const nextCurrency = src.currency ?? "ARS";
@@ -114,7 +128,7 @@ export function QuickAdd() {
     setConfirmDrop(false);
     // startCategory reads the latest categories; only re-run when the sheet opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [quickOpen, editing, draft, accounts, activeBookId]);
+  }, [quickOpen, editingId, draft, accounts, activeBookId]);
 
   const fx = { usd: usdRate, usdt: usdtRate };
   const parsed = parseAmount(amount);
@@ -176,6 +190,21 @@ export function QuickAdd() {
     if (next === "transfer") setMethod("transferencia");
   }
 
+  function flag(field: QuickField, message: string) {
+    setProblem({ field, message });
+    toast.error(message);
+    const el = document.getElementById(field === "category" ? "qa-category" : field === "to" ? "to" : field);
+    el?.scrollIntoView({ block: "center", behavior: "smooth" });
+    if (el instanceof HTMLInputElement || el instanceof HTMLSelectElement) el.focus({ preventScroll: true });
+  }
+  const bad = (f: QuickField) => problem?.field === f;
+  const errorText = (f: QuickField) =>
+    bad(f) ? (
+      <p role="alert" className="mt-1 text-xs text-red-400">
+        {problem!.message}
+      </p>
+    ) : null;
+
   function submit() {
     if (editing && editing.date < todayISO()) {
       toast.error("Un día que ya pasó no se puede modificar.");
@@ -203,10 +232,12 @@ export function QuickAdd() {
         if (llega) to = llega;
       }
     }
-    if (n == null || n <= 0) {
-      toast.error("Ingresá un monto válido");
+    const missing = firstProblem({ type, amount: n ?? null, categoryId, accountId, counterpartyId });
+    if (missing) {
+      flag(missing.field, missing.message);
       return;
     }
+    if (n == null) return;
     if (inCuotas && card) {
       if (!categoryId) {
         toast.error("Elegí una categoría");
@@ -277,7 +308,7 @@ export function QuickAdd() {
     const payload = {
       type,
       amount: n,
-      currency: src?.currency ?? currency,
+      currency: currencyForCaja(src, currency),
       categoryId: type === "transfer" ? "transferencias" : categoryId,
       merchant: merchant.trim(),
       note: note.trim(),
@@ -374,7 +405,7 @@ export function QuickAdd() {
   return (
     <Drawer open={quickOpen} onOpenChange={(o) => (!o ? closeQuick() : null)} shouldScaleBackground={false}>
       <DrawerContent>
-        <div className="overflow-y-auto px-5 pt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-4 pb-4">
           <DrawerTitle>{editing ? "Editar" : "Nuevo movimiento"}</DrawerTitle>
           <DrawerDescription className="mt-1">
             {type === "transfer" ? "Mover entre cajas no cuenta como gasto." : "Cargá un gasto o ingreso en segundos."}
@@ -412,16 +443,22 @@ export function QuickAdd() {
                 id="amount"
                 inputMode="decimal"
                 value={amount}
+                aria-invalid={bad("amount") || undefined}
                 onChange={(e) => {
                   const v = e.target.value;
                   setAmount(v);
+                  if (bad("amount")) setProblem(null);
                   setFxDriver("sale");
                   reprice("sale", v, amountTo, rate);
                 }}
                 placeholder="0"
-                className="h-14 min-w-0 flex-1 rounded-lg bg-elevated px-3 font-display text-3xl tracking-tight text-fg outline-none shadow-[0_0_0_1px_rgba(244,244,240,0.08)] placeholder:text-subtle"
+                className={cn(
+                  "h-14 min-w-0 flex-1 rounded-lg bg-elevated px-3 font-display text-3xl tracking-tight text-fg outline-none shadow-[0_0_0_1px_rgba(244,244,240,0.08)] placeholder:text-subtle",
+                  bad("amount") && "shadow-[0_0_0_2px_rgb(248,113,113)]",
+                )}
               />
             </div>
+            {errorText("amount")}
             {parsed && (fromAcc?.currency ?? currency) !== "ARS" && type !== "transfer" ? (
               <p className="mt-1 text-xs text-subtle tabular-nums">
                 ≈ {money(toARS({
@@ -636,15 +673,24 @@ export function QuickAdd() {
           ) : (
             <>
               <div className="mt-5">
-                <Label>Categoría</Label>
-                <div className="mt-2 flex flex-wrap gap-1.5">
+                <Label id="qa-category-label">Categoría</Label>
+                <div
+                  id="qa-category"
+                  role="group"
+                  aria-labelledby="qa-category-label"
+                  aria-invalid={bad("category") || undefined}
+                  className={cn("mt-2 flex flex-wrap gap-1.5 rounded-xl", bad("category") && "p-1 shadow-[0_0_0_2px_rgb(248,113,113)]")}
+                >
                   {cats.map((c) => {
                     const on = categoryId === c.id;
                     return (
                       <button
                         key={c.id}
                         type="button"
-                        onClick={() => setCategoryId(c.id)}
+                        onClick={() => {
+                          setCategoryId(c.id);
+                          if (bad("category")) setProblem(null);
+                        }}
                         className={cn(
                           "inline-flex h-11 items-center gap-1.5 rounded-full px-3.5 text-sm font-medium transition-colors duration-150",
                           on ? "bg-accent text-accent-fg" : "bg-elevated text-muted",
@@ -656,6 +702,7 @@ export function QuickAdd() {
                     );
                   })}
                 </div>
+                {errorText("category")}
               </div>
 
               <div className="mt-5 grid gap-3">
@@ -679,7 +726,7 @@ export function QuickAdd() {
                     placeholder="Opcional. También podés pegar un WhatsApp."
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className={cn("grid gap-3", showsPayMethod(fromAcc?.kind) && "grid-cols-2")}>
                   <div>
                     <Label htmlFor="date">Fecha</Label>
                     <Input
@@ -690,8 +737,9 @@ export function QuickAdd() {
                       onChange={(e) => setDate(e.target.value)}
                     />
                   </div>
+                  {showsPayMethod(fromAcc?.kind) ? (
                   <div>
-                    <Label htmlFor="method">Medio</Label>
+                    <Label htmlFor="method">Cómo pagaste</Label>
                     <select
                       id="method"
                       value={method}
@@ -708,19 +756,22 @@ export function QuickAdd() {
                       }}
                       className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)] outline-none"
                     >
-                      {PAY_METHODS.map((m) => (
+                      {PAY_METHODS.filter((m) => BANK_METHODS.includes(m.id) || m.id === method).map((m) => (
                         <option key={m.id} value={m.id}>
                           {m.label}
                         </option>
                       ))}
                     </select>
                   </div>
+                  ) : null}
                 </div>
               </div>
             </>
           )}
 
-          <div className="mt-6 flex gap-2">
+        </div>
+        {/* Always visible: the sheet scrolls, the button does not. */}
+        <div className="flex gap-2 border-t border-border bg-surface px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             {editing ? (
               <Button
                 variant="danger"
@@ -741,7 +792,6 @@ export function QuickAdd() {
             <Button className="flex-1" onClick={submit}>
               {editing ? "Guardar" : inCuotas ? `Registrar ${nCuotas} cuotas` : "Registrar"}
             </Button>
-          </div>
         </div>
       </DrawerContent>
     </Drawer>
