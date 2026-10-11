@@ -84,7 +84,7 @@ export function FeedbackSheet() {
                   ? "Qué hiciste, qué esperabas y qué pasó. No pongas contraseñas ni números de tarjeta."
                   : "Contanos. No pongas contraseñas ni números de tarjeta."
               }
-              className="w-full resize-none rounded-lg bg-elevated px-3 py-2.5 text-base text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)] placeholder:text-subtle"
+              className="w-full resize-none rounded-lg bg-elevated px-3 py-2.5 text-base text-fg shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.08)] placeholder:text-subtle"
             />
           </label>
           <label className="flex min-h-11 items-center gap-3 text-sm text-muted">

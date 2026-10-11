@@ -30,7 +30,7 @@ function ExampleMonth() {
   return (
     <figure
       aria-label="Ejemplo de cómo se ve un mes en Cifra"
-      className="w-full max-w-sm rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]"
+      className="w-full max-w-sm rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.06)]"
     >
       <div className="flex items-baseline justify-between">
         <p className="text-sm text-muted">Octubre</p>
@@ -122,7 +122,7 @@ export function Landing({ focus }: { focus?: "asistente" }) {
               <li
                 key={f.id}
                 id={f.id}
-                className="scroll-mt-6 rounded-2xl bg-surface p-5 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]"
+                className="scroll-mt-6 rounded-2xl bg-surface p-5 shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.06)]"
               >
                 <h3 className="font-display text-2xl tracking-tight">{f.title}</h3>
                 <p className="mt-2 text-sm text-muted">{f.text}</p>
@@ -132,7 +132,7 @@ export function Landing({ focus }: { focus?: "asistente" }) {
         </section>
 
         <section className="mx-auto max-w-5xl px-6 pb-16">
-          <div className="rounded-3xl bg-surface p-6 shadow-[0_0_0_1px_rgba(244,244,240,0.06)] md:p-8">
+          <div className="rounded-3xl bg-surface p-6 shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.06)] md:p-8">
             <h2 className="font-display text-3xl tracking-tight">Tus datos son tuyos</h2>
             <p className="mt-3 max-w-2xl text-sm text-muted">
               Cifra no se conecta a tu banco ni mueve plata: lo que ves es lo que anotaste vos.

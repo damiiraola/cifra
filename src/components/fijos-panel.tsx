@@ -87,7 +87,7 @@ export function FijosPanel() {
               key={r.id}
               type="button"
               onClick={() => setEditing(r)}
-              className="flex items-center gap-3 rounded-2xl bg-surface px-4 py-3 text-left shadow-[0_0_0_1px_rgba(244,244,240,0.06)]"
+              className="flex items-center gap-3 rounded-2xl bg-surface px-4 py-3 text-left shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.06)]"
             >
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium text-fg">{r.name}</span>
@@ -228,7 +228,7 @@ function FijoEditor({
   }, []);
 
   return (
-    <section ref={box} aria-label={existing ? "Editar fijo" : "Nuevo fijo"} className="scroll-mt-20 rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_rgba(244,244,240,0.06)] sm:p-5">
+    <section ref={box} aria-label={existing ? "Editar fijo" : "Nuevo fijo"} className="scroll-mt-20 rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.06)] sm:p-5">
       <h2 className="font-display text-2xl tracking-tight">{existing ? "Editar fijo" : "Nuevo fijo"}</h2>
       <div className="mt-4 grid gap-3">
         <div className="grid grid-cols-2 gap-2">
@@ -242,7 +242,7 @@ function FijoEditor({
               }}
               className={cn(
                 "h-11 rounded-lg text-sm font-medium",
-                type === t ? "bg-elevated text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.16)]" : "bg-elevated text-muted",
+                type === t ? "bg-elevated text-fg shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.16)]" : "bg-elevated text-muted",
               )}
             >
               {t === "income" ? "Ingreso" : "Gasto"}
@@ -279,7 +279,7 @@ function FijoEditor({
             id="fcat"
             value={categoryId}
             onChange={(e) => setCategoryId(e.target.value)}
-            className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)]"
+            className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.08)]"
           >
             {cats.map((c) => (
               <option key={c.id} value={c.id}>
@@ -298,7 +298,7 @@ function FijoEditor({
               const acc = accounts.find((a) => a.id === e.target.value);
               if (acc) setMethod(methodForAccount(acc.kind, method));
             }}
-            className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)]"
+            className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.08)]"
           >
             {accounts.map((a) => (
               <option key={a.id} value={a.id}>
@@ -313,7 +313,7 @@ function FijoEditor({
             id="fmethod"
             value={method}
             onChange={(e) => setMethod(e.target.value as PayMethod)}
-            className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)]"
+            className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.08)]"
           >
             {PAY_METHODS.map((m) => (
               <option key={m.id} value={m.id}>

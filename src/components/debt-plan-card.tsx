@@ -56,7 +56,7 @@ export function DebtPlanCard() {
   return (
     <section
       id="deudas"
-      className="scroll-mt-24 rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]"
+      className="scroll-mt-24 rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.06)]"
     >
       <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Plan para bajar deudas</p>
       <p className="mt-1 font-display text-3xl tracking-tight">
@@ -106,7 +106,7 @@ export function DebtPlanCard() {
                 onClick={() => setPick(k)}
                 className={cn(
                   "grid gap-1 rounded-2xl px-4 py-3 text-left",
-                  pick === k ? "bg-elevated shadow-[0_0_0_1px_rgba(244,244,240,0.18)]" : "bg-elevated/50",
+                  pick === k ? "bg-elevated shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.18)]" : "bg-elevated/50",
                 )}
               >
                 <span className="text-sm font-medium">
@@ -220,7 +220,7 @@ function OnlyCuotas({ debts, today, surplus }: { debts: CardDebt[]; today: strin
   return (
     <section
       id="deudas"
-      className="scroll-mt-24 rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]"
+      className="scroll-mt-24 rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.06)]"
     >
       <p className="text-[11px] font-medium tracking-wide text-muted uppercase">Plan para bajar deudas</p>
       <p className="mt-1 font-display text-3xl tracking-tight">No tenés deuda cara</p>
