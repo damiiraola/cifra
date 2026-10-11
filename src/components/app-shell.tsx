@@ -30,6 +30,7 @@ import { MoreSheet } from "@/components/more-sheet";
 import { FeedbackSheet } from "@/components/feedback-sheet";
 import { openFeedback } from "@/lib/feedback-events";
 import { Toaster } from "sonner";
+import { useTheme } from "@/lib/theme";
 
 const NAV = [
   { to: "/", label: "Diario", icon: CalendarDays },
@@ -54,6 +55,7 @@ const MORE_PATHS = new Set(["/ia", "/ajustes", "/privacidad", "/presupuestos", "
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const { resolved: theme } = useTheme();
   const openQuick = useLedger((s) => s.openQuick);
   const selectedDay = useLedger((s) => s.selectedDay);
   const viewMonth = useLedger((s) => s.viewMonth);
@@ -245,7 +247,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {chrome ? <BookTheme /> : null}
         {chrome ? <BookTransit /> : null}
         {chrome ? <FeedbackSheet /> : null}
-        <Toaster theme="dark" position="top-center" />
+        <Toaster theme={theme} position="top-center" />
         <PageTour />
       </div>
     </TooltipProvider>

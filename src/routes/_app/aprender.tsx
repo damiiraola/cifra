@@ -28,7 +28,7 @@ function Aprender() {
             key={l.id}
             id={l.id}
             open={i === 0}
-            className="rounded-3xl bg-surface px-5 py-4 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]"
+            className="rounded-3xl bg-surface px-5 py-4 shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.06)]"
           >
             <summary className="cursor-pointer text-sm font-medium text-fg">
               {i + 1}. {l.title}
@@ -55,7 +55,7 @@ function Aprender() {
 function ReplayRow({ tour }: { tour: Tour }) {
   const navigate = useNavigate();
   return (
-    <div className="flex items-center justify-between gap-3 rounded-2xl bg-surface px-4 py-3 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
+    <div className="flex items-center justify-between gap-3 rounded-2xl bg-surface px-4 py-3 shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.06)]">
       <span className="text-sm">{tour.page}</span>
       <Button
         variant="secondary"

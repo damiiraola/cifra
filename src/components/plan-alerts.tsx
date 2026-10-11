@@ -52,7 +52,7 @@ export function PlanAlerts({ limit = 3, title = false }: { limit?: number; title
       {shown.map((a) => (
         <div
           key={a.id}
-          className="flex items-start gap-3 rounded-2xl bg-surface px-4 py-2.5 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]"
+          className="flex items-start gap-3 rounded-2xl bg-surface px-4 py-2.5 shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.06)]"
         >
           <span aria-hidden className={cn("mt-1.5 size-2 shrink-0 rounded-full", DOT[a.tone])} />
           <Link

@@ -27,7 +27,7 @@ import { Label } from "@/components/ui/label";
 export type Read = Extract<ReadStatementResult, { ok: true }>;
 
 const SELECT =
-  "h-9 max-w-[9.5rem] rounded-lg bg-surface px-2 text-sm text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)] outline-none";
+  "h-9 max-w-[9.5rem] rounded-lg bg-surface px-2 text-sm text-fg shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.08)] outline-none";
 
 function dm(iso: string | null) {
   return iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : "—";

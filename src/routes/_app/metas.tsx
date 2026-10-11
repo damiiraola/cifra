@@ -60,7 +60,7 @@ function Metas() {
         </p>
       </div>
 
-      <section data-tour="nueva" className="grid gap-3 rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
+      <section data-tour="nueva" className="grid gap-3 rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.06)]">
         <div className="flex flex-wrap gap-1.5">
           {GOAL_KINDS.map((k) => (
             <button
@@ -192,7 +192,7 @@ function GoalCard({
   const [text, setText] = useState("");
   const label = GOAL_KINDS.find((k) => k.id === kind)?.label;
   return (
-    <article className="rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
+    <article className="rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.06)]">
       <div className="flex items-baseline justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[11px] font-medium tracking-wide text-muted uppercase">
@@ -245,7 +245,7 @@ function GoalCard({
           aria-label={`Prioridad de ${name}`}
           value={goal.priority}
           onChange={(e) => onPriority(Number(e.target.value) as GoalPriority)}
-          className="h-11 rounded-lg bg-elevated px-2 text-sm text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)]"
+          className="h-11 rounded-lg bg-elevated px-2 text-sm text-fg shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.08)]"
         >
           {GOAL_PRIORITIES.map((p) => (
             <option key={p.id} value={p.id}>

@@ -88,7 +88,7 @@ function Tarjetas() {
       </div>
 
       {uploading ? (
-        <section id="subir" className="scroll-mt-24 rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
+        <section id="subir" className="scroll-mt-24 rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.06)]">
           <CardFromPdf onClose={() => setUploading(false)} />
         </section>
       ) : null}
@@ -159,7 +159,7 @@ function CardBlock({ card, today, tour = false }: { card: Card; today: string; t
   const endings = upcoming.filter((u, i) => i > 0 && u.ending.count > 0).slice(0, 2);
 
   return (
-    <section data-tour={tour ? "tarjeta" : undefined} className="rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
+    <section data-tour={tour ? "tarjeta" : undefined} className="rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.06)]">
       <div className="flex items-start gap-3">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-elevated text-muted">
           <CreditCard className="size-4" aria-hidden />

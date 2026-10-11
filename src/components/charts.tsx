@@ -17,11 +17,11 @@ import { moneyARS, shortDay } from "@/lib/format";
 import { todayISO } from "@/lib/utils";
 
 const tooltipStyle = {
-  background: "#1c1c20",
-  border: "1px solid #2a2a2e",
+  background: "var(--color-elevated)",
+  border: "1px solid var(--color-border)",
   borderRadius: 12,
   fontSize: 12,
-  color: "#f4f4f0",
+  color: "var(--color-fg)",
 };
 
 function SafeChart({
@@ -72,22 +72,22 @@ export function DailyArea({
       <AreaChart data={rows} margin={{ top: 8, right: 4, left: -18, bottom: 0 }}>
         <defs>
           <linearGradient id="spentFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#c8ccd4" stopOpacity={0.28} />
-            <stop offset="100%" stopColor="#c8ccd4" stopOpacity={0} />
+            <stop offset="0%" stopColor="var(--color-accent)" stopOpacity={0.28} />
+            <stop offset="100%" stopColor="var(--color-accent)" stopOpacity={0} />
           </linearGradient>
         </defs>
-        <CartesianGrid stroke="#2a2a2e" vertical={false} />
+        <CartesianGrid stroke="var(--color-border)" vertical={false} />
         <XAxis
           dataKey="date"
           tickFormatter={(v) => shortDay(v)}
-          tick={{ fill: "#8c8c86", fontSize: 11 }}
+          tick={{ fill: "var(--color-muted)", fontSize: 11 }}
           axisLine={false}
           tickLine={false}
           minTickGap={28}
         />
         <YAxis
           tickFormatter={(v) => (v >= 1000 ? `${Math.round(v / 1000)}k` : `${v}`)}
-          tick={{ fill: "#8c8c86", fontSize: 11 }}
+          tick={{ fill: "var(--color-muted)", fontSize: 11 }}
           axisLine={false}
           tickLine={false}
         />
@@ -99,7 +99,7 @@ export function DailyArea({
         <Area
           type="monotone"
           dataKey="spent"
-          stroke="#c8ccd4"
+          stroke="var(--color-accent)"
           strokeWidth={1.5}
           fill="url(#spentFill)"
           isAnimationActive={false}
@@ -137,22 +137,22 @@ export function RhythmChart({
       <AreaChart data={rows} margin={{ top: 8, right: 4, left: -18, bottom: 0 }}>
         <defs>
           <linearGradient id="rhythmFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#c8ccd4" stopOpacity={0.28} />
-            <stop offset="100%" stopColor="#c8ccd4" stopOpacity={0} />
+            <stop offset="0%" stopColor="var(--color-accent)" stopOpacity={0.28} />
+            <stop offset="100%" stopColor="var(--color-accent)" stopOpacity={0} />
           </linearGradient>
         </defs>
-        <CartesianGrid stroke="#2a2a2e" vertical={false} />
+        <CartesianGrid stroke="var(--color-border)" vertical={false} />
         <XAxis
           dataKey="date"
           tickFormatter={(v) => shortDay(v)}
-          tick={{ fill: "#8c8c86", fontSize: 11 }}
+          tick={{ fill: "var(--color-muted)", fontSize: 11 }}
           axisLine={false}
           tickLine={false}
           minTickGap={28}
         />
         <YAxis
           tickFormatter={(v) => (v >= 1000 ? `${Math.round(v / 1000)}k` : `${v}`)}
-          tick={{ fill: "#8c8c86", fontSize: 11 }}
+          tick={{ fill: "var(--color-muted)", fontSize: 11 }}
           axisLine={false}
           tickLine={false}
         />
@@ -165,7 +165,7 @@ export function RhythmChart({
           <Area
             type="monotone"
             dataKey="pace"
-            stroke="#6a6a66"
+            stroke="var(--color-subtle)"
             strokeWidth={1}
             strokeDasharray="4 4"
             fill="none"
@@ -175,7 +175,7 @@ export function RhythmChart({
         <Area
           type="monotone"
           dataKey="spent"
-          stroke="#c8ccd4"
+          stroke="var(--color-accent)"
           strokeWidth={1.5}
           fill="url(#rhythmFill)"
           isAnimationActive={false}
@@ -189,11 +189,11 @@ export function WeekdayBars({ data }: { data: { name: string; value: number }[] 
   return (
     <SafeChart className="h-40 w-full">
       <BarChart data={data} margin={{ top: 8, right: 4, left: -18, bottom: 0 }}>
-        <CartesianGrid stroke="#2a2a2e" vertical={false} />
-        <XAxis dataKey="name" tick={{ fill: "#8c8c86", fontSize: 11 }} axisLine={false} tickLine={false} />
+        <CartesianGrid stroke="var(--color-border)" vertical={false} />
+        <XAxis dataKey="name" tick={{ fill: "var(--color-muted)", fontSize: 11 }} axisLine={false} tickLine={false} />
         <YAxis
           tickFormatter={(v) => (v >= 1000 ? `${Math.round(v / 1000)}k` : `${v}`)}
-          tick={{ fill: "#8c8c86", fontSize: 11 }}
+          tick={{ fill: "var(--color-muted)", fontSize: 11 }}
           axisLine={false}
           tickLine={false}
         />
@@ -201,7 +201,7 @@ export function WeekdayBars({ data }: { data: { name: string; value: number }[] 
           contentStyle={tooltipStyle}
           formatter={(v) => [moneyARS(Number(v)), "Promedio"]}
         />
-        <Bar dataKey="value" fill="#c8ccd4" radius={[6, 6, 0, 0]} isAnimationActive={false} />
+        <Bar dataKey="value" fill="var(--color-accent)" radius={[6, 6, 0, 0]} isAnimationActive={false} />
       </BarChart>
     </SafeChart>
   );
