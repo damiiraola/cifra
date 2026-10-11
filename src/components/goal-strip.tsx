@@ -21,7 +21,7 @@ export function GoalStrip() {
         const pace = goalPace(g, today);
         const kind = GOAL_KINDS.find((k) => k.id === g.kind)?.label;
         return (
-          <Link key={g.id} to="/metas" className="rounded-2xl bg-surface px-4 py-3 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
+          <Link key={g.id} to="/metas" className="rounded-2xl bg-surface px-4 py-3 shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.06)]">
             <span className="flex items-baseline justify-between gap-3">
               <span className="truncate text-sm">{g.name}</span>
               <span className="shrink-0 text-xs tabular-nums text-muted">

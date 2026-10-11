@@ -47,7 +47,7 @@ export function WalletStrip() {
             onClick={() =>
               openQuick({ type: "expense", accountId: c.accountArsId, currency: "ARS", method: "credito" })
             }
-            className="min-h-11 min-w-fit shrink-0 rounded-full bg-elevated px-3.5 py-2 text-left shadow-[inset_0_0_0_1px_rgba(244,244,240,0.10)]"
+            className="min-h-11 min-w-fit shrink-0 rounded-full bg-elevated px-3.5 py-2 text-left shadow-[inset_0_0_0_1px_rgb(var(--fg-rgb)/0.10)]"
           >
             <span className="text-[11px] text-muted">{c.name} · debés</span>
             <span className="ml-2 text-sm font-medium tabular-nums text-fg">{parts.join(" + ")}</span>

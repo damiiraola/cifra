@@ -21,7 +21,7 @@ export function DrawerContent({
       <DrawerOverlay />
       <Vaul.Content
         className={cn(
-          "fixed inset-x-0 bottom-0 z-50 mt-24 flex max-h-[92dvh] flex-col rounded-t-3xl bg-surface shadow-[0_0_0_1px_rgba(244,244,240,0.08)] outline-none",
+          "fixed inset-x-0 bottom-0 z-50 mt-24 flex max-h-[92dvh] flex-col rounded-t-3xl bg-surface shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.08)] outline-none",
           className,
         )}
         {...props}

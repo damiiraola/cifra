@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 const SELECT =
-  "mt-1.5 h-11 w-full rounded-lg bg-surface px-3 text-base text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)] outline-none";
+  "mt-1.5 h-11 w-full rounded-lg bg-surface px-3 text-base text-fg shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.08)] outline-none";
 
 type ArsChoice = "total" | "minimo" | "otro";
 type UsdChoice = "total" | "otro";
@@ -39,7 +39,7 @@ function Chips<T extends string>({
           onClick={() => onChange(o.id)}
           className={cn(
             "min-h-11 rounded-lg px-2 text-sm font-medium",
-            value === o.id ? "bg-surface text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.2)]" : "bg-surface/60 text-muted",
+            value === o.id ? "bg-surface text-fg shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.2)]" : "bg-surface/60 text-muted",
           )}
         >
           {o.label}

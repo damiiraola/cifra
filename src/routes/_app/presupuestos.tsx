@@ -354,7 +354,7 @@ function PlanCard({
           : "";
 
   return (
-    <section data-tour="plan" className="rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
+    <section data-tour="plan" className="rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.06)]">
       <p className="text-[11px] font-medium tracking-wide text-muted uppercase">
         {plan.income <= 0
           ? "Lo que queda"
@@ -443,7 +443,7 @@ function PlanCard({
                 <select
                   value={sendTo}
                   onChange={(e) => setSendTo(e.target.value)}
-                  className="h-11 rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)]"
+                  className="h-11 rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.08)]"
                 >
                   <option value="">No mandar</option>
                   {goals.map((g) => (

@@ -60,7 +60,7 @@ function Costos() {
       <Block title="Este mes" s={r.month} />
       <section className="grid gap-2">
         <h2 className="text-sm font-medium">Últimos 14 días</h2>
-        <div className="rounded-3xl bg-surface px-5 py-3 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
+        <div className="rounded-3xl bg-surface px-5 py-3 shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.06)]">
           {r.days.length ? (
             r.days.map((d) => (
               <div key={d.day} className="flex justify-between py-1 text-sm">
@@ -83,7 +83,7 @@ function Block({ title, s, extra }: { title: string; s: CostSummary; extra?: str
   return (
     <section className="grid gap-2">
       <h2 className="text-sm font-medium">{title}</h2>
-      <div className="rounded-3xl bg-surface px-5 py-4 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
+      <div className="rounded-3xl bg-surface px-5 py-4 shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.06)]">
         <Row label="Costo" value={usd(s.usd)} />
         <Row label="Llamadas" value={String(s.calls)} />
         <Row
