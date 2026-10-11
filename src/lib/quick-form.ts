@@ -51,3 +51,19 @@ export function firstProblem(input: {
   if (input.type === "transfer" && !input.counterpartyId) return { field: "to", message: "Elegí a qué caja va." };
   return null;
 }
+
+/**
+ * The USD/USDT rate field shows today's quote from Cotizaciones (same module
+ * as Ajustes, same value the movement is stamped with) instead of an empty
+ * box with a grey placeholder. Until the user types, the movement keeps the
+ * market rate (not locked); once touched, what they typed wins.
+ */
+export function rateFieldValue(typed: string, touched: boolean, market: number): string {
+  if (touched) return typed;
+  return market > 0 ? String(Math.round(market * 100) / 100).replace(".", ",") : "";
+}
+
+export function rateHint(sourceLabel: string, age: string, foreign: Currency): string {
+  const what = foreign === "USDT" ? "USDT" : `dólar ${sourceLabel}`;
+  return `Precargada: ${what} de Cotizaciones (${age}). Si pagaste otra, cambiala.`;
+}
