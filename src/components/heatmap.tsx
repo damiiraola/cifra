@@ -136,8 +136,8 @@ export function Heatmap({
               className={cn(
                 "relative flex min-h-11 aspect-square items-center justify-center rounded-lg text-xs tabular-nums transition-[transform,box-shadow] duration-150",
                 future ? "text-subtle/40" : "text-fg",
-                on && "z-[1] scale-[1.04] shadow-[0_0_0_1px_rgba(200,204,212,0.85)]",
-                isToday && !on && "shadow-[0_0_0_1px_rgba(244,244,240,0.28)]",
+                on && "z-[1] scale-[1.04] shadow-[0_0_0_1px_var(--color-accent)]",
+                isToday && !on && "shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.28)]",
               )}
               style={
                 future || d.spent <= 0

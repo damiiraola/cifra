@@ -24,28 +24,14 @@ import { FijosPanel } from "@/components/fijos-panel";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import type { Category, CategoryKind, Transaction } from "@/lib/types";
+import { downloadCsv, txCsv } from "@/lib/tx-filter";
+import { useTheme, type ThemePref } from "@/lib/theme";
+import type { Category, CategoryKind } from "@/lib/types";
 import type { ReactNode } from "react";
 
 export const Route = createFileRoute("/_app/ajustes")({
   component: Ajustes,
 });
-
-function exportCsv(txs: Transaction[]) {
-  const header = ["fecha", "tipo", "monto", "moneda", "categoria", "comercio", "nota", "medio"];
-  const lines = txs.map((t) =>
-    [t.date, t.type, t.amount, t.currency, t.categoryId, t.merchant, t.note, t.method]
-      .map((v) => `"${String(v).replace(/"/g, '""')}"`)
-      .join(","),
-  );
-  const blob = new Blob([[header.join(","), ...lines].join("\n")], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "cifra-movimientos.csv";
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 const USD_PICK = new Set(["blue", "bolsa", "cripto", "oficial"]);
 
@@ -215,6 +201,8 @@ function Ajustes() {
         </div>
       </Section>
 
+      <AppearanceSection />
+
       <Section id="cotizaciones" tour="cotizacion" title="Cotizaciones" hint="Dólar y USDT del día">
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -364,7 +352,7 @@ function Ajustes() {
             aria-label="Tipo de la nueva categoría"
             value={newKind}
             onChange={(e) => setNewKind(e.target.value as CategoryKind)}
-            className="h-11 rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)]"
+            className="h-11 rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.08)]"
           >
             <option value="expense">Gasto</option>
             <option value="income">Ingreso</option>
@@ -428,7 +416,7 @@ function Ajustes() {
           {auto ? ` Último automático: ${auto.day.slice(8, 10)}/${auto.day.slice(5, 7)}.` : " Hoy se copia al abrir el libro."}
         </p>
         <div className="mt-4 grid gap-2 sm:max-w-sm">
-          <Button variant="secondary" onClick={() => exportCsv(transactions)}>
+          <Button variant="secondary" onClick={() => downloadCsv(txCsv(transactions, categories, accounts))}>
             Exportar CSV
           </Button>
           <Button
@@ -603,6 +591,39 @@ function CatGroup({
  * Collapsible block of Ajustes (native <details>, works with keyboard and
  * screen readers). Only "Cuenta" starts open so the page fits on a phone.
  */
+const THEMES: { id: ThemePref; label: string }[] = [
+  { id: "system", label: "Sistema" },
+  { id: "light", label: "Claro" },
+  { id: "dark", label: "Oscuro" },
+];
+
+/** Modo claro u oscuro, por dispositivo. "Sistema" sigue al teléfono. */
+function AppearanceSection() {
+  const { pref, set } = useTheme();
+  return (
+    <Section id="apariencia" title="Apariencia" hint="Claro, oscuro o como el teléfono">
+      <div role="radiogroup" aria-label="Tema" className="grid grid-cols-3 gap-2">
+        {THEMES.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="radio"
+            aria-checked={pref === t.id}
+            onClick={() => set(t.id)}
+            className={cn(
+              "h-11 rounded-xl text-sm font-medium",
+              pref === t.id ? "bg-accent text-accent-fg" : "bg-elevated text-fg",
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <p className="mt-2 text-xs text-subtle">Se guarda en este dispositivo.</p>
+    </Section>
+  );
+}
+
 function Section({
   id,
   title,
@@ -619,7 +640,7 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <details id={id} data-tour={tour} open={defaultOpen} className="group rounded-3xl bg-surface shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
+    <details id={id} data-tour={tour} open={defaultOpen} className="group rounded-3xl bg-surface shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.06)]">
       <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 rounded-3xl px-5 py-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
         <span className="min-w-0">
           <span className="block text-[11px] font-medium tracking-wide text-muted uppercase">{title}</span>

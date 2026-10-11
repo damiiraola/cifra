@@ -1,10 +1,11 @@
 import { Link } from "@tanstack/react-router";
-import { Brain, Flag, GraduationCap, LogOut, MessageCircle, Settings, Shield, Target, CreditCard } from "lucide-react";
+import { List, Brain, Flag, GraduationCap, LogOut, MessageCircle, Settings, Shield, Target, CreditCard } from "lucide-react";
 import { toast } from "sonner";
 import { signOutAndForget } from "@/lib/sign-out";
 import { cn } from "@/lib/utils";
 import { BookEntryButton } from "@/components/book-mode";
 import { openFeedback } from "@/lib/feedback-events";
+import { InstallEntry } from "@/components/install-entry";
 import {
   Drawer,
   DrawerContent,
@@ -13,6 +14,7 @@ import {
 } from "@/components/ui/drawer";
 
 const ITEMS = [
+  { to: "/movimientos", label: "Movimientos", icon: List },
   { to: "/tarjetas", label: "Tarjetas", icon: CreditCard },
   { to: "/presupuestos", label: "Presupuestos", icon: Target },
   { to: "/metas", label: "Metas", icon: Flag },
@@ -37,6 +39,7 @@ export function MoreSheet({
           <DrawerTitle>Más</DrawerTitle>
           <DrawerDescription className="mt-1">Negocio, tope, asistente y cuenta.</DrawerDescription>
           <nav className="mt-5 grid gap-1">
+            <InstallEntry onDone={() => onOpenChange(false)} />
             <BookEntryButton onPicked={() => onOpenChange(false)} />
             {ITEMS.map((item) => {
               const Icon = item.icon;

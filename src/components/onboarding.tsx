@@ -362,7 +362,7 @@ export function Onboarding() {
             onClick={() => setUsdSource(id)}
             className={
               usdSource === id
-                ? "h-11 rounded-lg bg-elevated text-sm font-medium text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.2)]"
+                ? "h-11 rounded-lg bg-elevated text-sm font-medium text-fg shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.2)]"
                 : "h-11 rounded-lg bg-elevated text-sm text-muted"
             }
           >

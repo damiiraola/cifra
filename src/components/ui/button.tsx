@@ -10,10 +10,10 @@ const buttonVariants = cva(
       variant: {
         default: "bg-accent text-accent-fg hover:opacity-90",
         secondary:
-          "bg-elevated text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)] hover:shadow-[0_0_0_1px_rgba(244,244,240,0.16)]",
+          "bg-elevated text-fg shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.08)] hover:shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.16)]",
         ghost: "text-fg hover:bg-elevated",
         outline:
-          "bg-transparent text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.12)] hover:bg-elevated",
+          "bg-transparent text-fg shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.12)] hover:bg-elevated",
         danger: "bg-expense/20 text-expense hover:bg-expense/30",
       },
       size: {

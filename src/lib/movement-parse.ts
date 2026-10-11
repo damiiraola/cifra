@@ -21,7 +21,7 @@ const METHODS = new Set<PayMethod>([
   "otro",
 ]);
 
-function norm(s: string) {
+export function norm(s: string) {
   return s
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -53,10 +53,10 @@ export function matchCard<T extends CardLike>(cards: T[], text: unknown): T | un
   return best?.card;
 }
 
-const AMOUNT =
+export const AMOUNT =
   /(?:\$\s*)?(\d+(?:[.,]\d+)*)\s*(mil\b|k\b|lucas?\b|palos?\b|millones\b|mill[oó]n\b|m\b)?/gi;
 
-function amountOf(n: string, word = "") {
+export function amountOf(n: string, word = "") {
   const w = norm(word);
   const decimal = /^\d+[.,]\d{1,2}$/.test(n);
   const base = decimal ? Number(n.replace(",", ".")) : Number(n.replace(/[.,]/g, ""));
