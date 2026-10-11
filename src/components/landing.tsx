@@ -107,7 +107,7 @@ export function Landing({ focus }: { focus?: "asistente" }) {
               un asistente que te ayuda a hacer las cuentas.
             </p>
             {su.closed ? (
-              <p className="mt-6 max-w-lg rounded-xl bg-surface px-4 py-3 text-sm text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.06)]">
+              <p className="mt-6 max-w-lg rounded-xl bg-surface px-4 py-3 text-sm text-fg shadow-[0_0_0_1px_var(--color-border)]">
                 <b>Beta cerrada:</b> {su.notice}{" "}
                 <a href="#lista-de-espera" className="underline underline-offset-2">
                   ¿No tenés? Anotate en la lista de espera
