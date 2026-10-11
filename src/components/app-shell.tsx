@@ -10,7 +10,7 @@ import {
   MessageCircle,
   Plus,
   Settings,
-  Target, CreditCard } from "lucide-react";
+  Target, CreditCard, List } from "lucide-react";
 import { UserButton } from "@/lib/auth/gates";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { useLedger } from "@/lib/store";
@@ -38,6 +38,7 @@ const NAV = [
 ] as const;
 
 const MORE = [
+  { to: "/movimientos", label: "Movimientos", icon: List },
   { to: "/tarjetas", label: "Tarjetas", icon: CreditCard },
   { to: "/presupuestos", label: "Presupuestos", icon: Target },
   { to: "/metas", label: "Metas", icon: Flag },
@@ -51,7 +52,7 @@ const TAB = [
   { to: "/analitica", label: "Analítica", icon: BarChart3 },
 ] as const;
 
-const MORE_PATHS = new Set(["/ia", "/ajustes", "/privacidad", "/presupuestos", "/aprender", "/metas"]);
+const MORE_PATHS = new Set(["/ia", "/ajustes", "/privacidad", "/presupuestos", "/aprender", "/metas", "/movimientos"]);
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });

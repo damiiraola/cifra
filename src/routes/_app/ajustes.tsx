@@ -24,29 +24,14 @@ import { FijosPanel } from "@/components/fijos-panel";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { downloadCsv, txCsv } from "@/lib/tx-filter";
 import { useTheme, type ThemePref } from "@/lib/theme";
-import type { Category, CategoryKind, Transaction } from "@/lib/types";
+import type { Category, CategoryKind } from "@/lib/types";
 import type { ReactNode } from "react";
 
 export const Route = createFileRoute("/_app/ajustes")({
   component: Ajustes,
 });
-
-function exportCsv(txs: Transaction[]) {
-  const header = ["fecha", "tipo", "monto", "moneda", "categoria", "comercio", "nota", "medio"];
-  const lines = txs.map((t) =>
-    [t.date, t.type, t.amount, t.currency, t.categoryId, t.merchant, t.note, t.method]
-      .map((v) => `"${String(v).replace(/"/g, '""')}"`)
-      .join(","),
-  );
-  const blob = new Blob([[header.join(","), ...lines].join("\n")], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "cifra-movimientos.csv";
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 const USD_PICK = new Set(["blue", "bolsa", "cripto", "oficial"]);
 
@@ -431,7 +416,7 @@ function Ajustes() {
           {auto ? ` Último automático: ${auto.day.slice(8, 10)}/${auto.day.slice(5, 7)}.` : " Hoy se copia al abrir el libro."}
         </p>
         <div className="mt-4 grid gap-2 sm:max-w-sm">
-          <Button variant="secondary" onClick={() => exportCsv(transactions)}>
+          <Button variant="secondary" onClick={() => downloadCsv(txCsv(transactions, categories, accounts))}>
             Exportar CSV
           </Button>
           <Button
