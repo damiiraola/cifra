@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 const SELECT =
-  "mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)] outline-none";
+  "mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.08)] outline-none";
 
 /** New or edit a purchase in cuotas (used in /tarjetas). The app does the math, not the IA. */
 export function PurchaseForm({
@@ -124,7 +124,7 @@ export function PurchaseForm({
             onClick={() => setInterestFree(o.on)}
             className={cn(
               "h-11 rounded-lg text-sm font-medium",
-              interestFree === o.on ? "bg-surface text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.16)]" : "bg-surface text-muted",
+              interestFree === o.on ? "bg-surface text-fg shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.16)]" : "bg-surface text-muted",
             )}
           >
             {o.label}

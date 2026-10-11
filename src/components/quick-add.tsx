@@ -425,7 +425,7 @@ export function QuickAdd() {
                   type === t.id
                     ? t.id === "income"
                       ? "bg-income/20 text-income"
-                      : "bg-elevated text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.16)]"
+                      : "bg-elevated text-fg shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.16)]"
                     : "bg-elevated text-muted",
                 )}
               >
@@ -439,7 +439,7 @@ export function QuickAdd() {
               {type === "transfer" ? "Sale" : perCuota ? "Valor de cada cuota" : inCuotas ? "Total de la compra" : "Monto"}
             </Label>
             <div className="mt-1.5 flex items-center gap-2">
-              <span className="grid h-14 min-w-16 place-items-center rounded-lg bg-elevated px-3 text-sm font-medium text-muted shadow-[0_0_0_1px_rgba(244,244,240,0.08)]">
+              <span className="grid h-14 min-w-16 place-items-center rounded-lg bg-elevated px-3 text-sm font-medium text-muted shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.08)]">
                 {fromAcc?.currency ?? currency}
               </span>
               <input
@@ -456,7 +456,7 @@ export function QuickAdd() {
                 }}
                 placeholder="0"
                 className={cn(
-                  "h-14 min-w-0 flex-1 rounded-lg bg-elevated px-3 font-display text-3xl tracking-tight text-fg outline-none shadow-[0_0_0_1px_rgba(244,244,240,0.08)] placeholder:text-subtle",
+                  "h-14 min-w-0 flex-1 rounded-lg bg-elevated px-3 font-display text-3xl tracking-tight text-fg outline-none shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.08)] placeholder:text-subtle",
                   bad("amount") && "shadow-[0_0_0_2px_rgb(248,113,113)]",
                 )}
               />
@@ -525,7 +525,7 @@ export function QuickAdd() {
                   else reprice(fxDriver, amount, amountTo, rate, acc, toAcc);
                 }
               }}
-              className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)] outline-none"
+              className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.08)] outline-none"
             >
               <CajaOptions cajas={creditOnly ? [] : moneyCajas} cards={cardCajas} />
             </select>
@@ -586,7 +586,7 @@ export function QuickAdd() {
                         onClick={() => setInterestFree(o.on)}
                         className={cn(
                           "h-11 rounded-lg text-sm font-medium",
-                          interestFree === o.on ? "bg-elevated text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.16)]" : "bg-elevated text-muted",
+                          interestFree === o.on ? "bg-elevated text-fg shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.16)]" : "bg-elevated text-muted",
                         )}
                       >
                         {o.label}
@@ -636,7 +636,7 @@ export function QuickAdd() {
                   setCounterpartyId(id);
                   reprice(fxDriver, amount, amountTo, rate, fromAcc, accounts.find((a) => a.id === id));
                 }}
-                className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)] outline-none"
+                className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.08)] outline-none"
               >
                 <option value="">Elegí caja</option>
                 <CajaOptions
@@ -757,7 +757,7 @@ export function QuickAdd() {
                         }
                         if (inferred) setAccountId(inferred);
                       }}
-                      className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)] outline-none"
+                      className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.08)] outline-none"
                     >
                       {PAY_METHODS.filter((m) => BANK_METHODS.includes(m.id) || m.id === method).map((m) => (
                         <option key={m.id} value={m.id}>

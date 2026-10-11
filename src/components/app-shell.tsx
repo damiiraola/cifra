@@ -10,7 +10,7 @@ import {
   MessageCircle,
   Plus,
   Settings,
-  Target, CreditCard } from "lucide-react";
+  Target, CreditCard, List } from "lucide-react";
 import { UserButton } from "@/lib/auth/gates";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { useLedger } from "@/lib/store";
@@ -30,6 +30,7 @@ import { MoreSheet } from "@/components/more-sheet";
 import { FeedbackSheet } from "@/components/feedback-sheet";
 import { openFeedback } from "@/lib/feedback-events";
 import { Toaster } from "sonner";
+import { useTheme } from "@/lib/theme";
 
 const NAV = [
   { to: "/", label: "Diario", icon: CalendarDays },
@@ -37,6 +38,7 @@ const NAV = [
 ] as const;
 
 const MORE = [
+  { to: "/movimientos", label: "Movimientos", icon: List },
   { to: "/tarjetas", label: "Tarjetas", icon: CreditCard },
   { to: "/presupuestos", label: "Presupuestos", icon: Target },
   { to: "/metas", label: "Metas", icon: Flag },
@@ -50,10 +52,11 @@ const TAB = [
   { to: "/analitica", label: "Analítica", icon: BarChart3 },
 ] as const;
 
-const MORE_PATHS = new Set(["/ia", "/ajustes", "/privacidad", "/presupuestos", "/aprender", "/metas"]);
+const MORE_PATHS = new Set(["/ia", "/ajustes", "/privacidad", "/presupuestos", "/aprender", "/metas", "/movimientos"]);
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const { resolved: theme } = useTheme();
   const openQuick = useLedger((s) => s.openQuick);
   const selectedDay = useLedger((s) => s.selectedDay);
   const viewMonth = useLedger((s) => s.viewMonth);
@@ -245,7 +248,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {chrome ? <BookTheme /> : null}
         {chrome ? <BookTransit /> : null}
         {chrome ? <FeedbackSheet /> : null}
-        <Toaster theme="dark" position="top-center" />
+        <Toaster theme={theme} position="top-center" />
         <PageTour />
       </div>
     </TooltipProvider>

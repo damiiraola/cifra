@@ -222,7 +222,7 @@ export function Asistente() {
               aria-pressed={t.id === activeChatId}
               className={
                 t.id === activeChatId
-                  ? "h-11 shrink-0 rounded-full bg-elevated px-3.5 text-sm text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.16)]"
+                  ? "h-11 shrink-0 rounded-full bg-elevated px-3.5 text-sm text-fg shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.16)]"
                   : "h-11 shrink-0 rounded-full bg-elevated px-3.5 text-sm text-muted"
               }
             >
@@ -250,7 +250,7 @@ export function Asistente() {
         ))}
       </div>
 
-      <section data-tour="charla" className="min-h-72 rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_rgba(244,244,240,0.06)] sm:p-5">
+      <section data-tour="charla" className="min-h-72 rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.06)] sm:p-5">
         {chat.length === 0 && !pending ? (
           <div className="flex h-56 flex-col items-center justify-center text-center">
             <p className="font-display text-2xl tracking-tight">Preguntale a tu libro</p>
