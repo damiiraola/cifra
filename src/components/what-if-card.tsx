@@ -137,7 +137,7 @@ export function WhatIfCard() {
   return (
     <section
       id="simular"
-      className="scroll-mt-24 rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]"
+      className="scroll-mt-24 rounded-3xl bg-surface p-5 shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.06)]"
     >
       <p className="text-[11px] font-medium tracking-wide text-muted uppercase">¿Y si…?</p>
       <p className="mt-1 font-display text-3xl tracking-tight">Probalo antes de hacerlo</p>
@@ -198,7 +198,7 @@ export function WhatIfCard() {
                 aria-label="Tarjeta"
                 value={card?.id ?? ""}
                 onChange={(e) => setCardId(e.target.value)}
-                className="h-11 rounded-lg bg-elevated px-2 text-sm text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)]"
+                className="h-11 rounded-lg bg-elevated px-2 text-sm text-fg shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.08)]"
               >
                 {cards.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -215,7 +215,7 @@ export function WhatIfCard() {
             aria-label="De qué caja sale"
             value={caja?.id ?? ""}
             onChange={(e) => setAccountId(e.target.value)}
-            className="h-11 rounded-lg bg-elevated px-2 text-sm text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)]"
+            className="h-11 rounded-lg bg-elevated px-2 text-sm text-fg shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.08)]"
           >
             {cajas.map((a) => (
               <option key={a.id} value={a.id}>
@@ -254,7 +254,7 @@ export function WhatIfCard() {
                 aria-label="Categoría de la compra"
                 value={categoryId}
                 onChange={(e) => setCategoryId(e.target.value)}
-                className="h-11 rounded-lg bg-surface px-2 text-sm text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)]"
+                className="h-11 rounded-lg bg-surface px-2 text-sm text-fg shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.08)]"
               >
                 {cats.map((c) => (
                   <option key={c.id} value={c.id}>

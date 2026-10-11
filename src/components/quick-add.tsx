@@ -17,10 +17,13 @@ import { PAY_METHODS, type Currency, type PayMethod, type TxType } from "@/lib/t
 import { cn, todayISO } from "@/lib/utils";
 import type { Account } from "@/lib/types";
 import { useBookAccounts, useBookCards, useLedger, useVisibleCategories } from "@/lib/store";
-import { BANK_METHODS, currencyForCaja, firstProblem, showsPayMethod, startsNewSession, type QuickField, type QuickSession } from "@/lib/quick-form";
+import { BANK_METHODS, currencyForCaja, firstProblem, showsPayMethod, startsNewSession, type QuickField, type QuickSession, rateFieldValue, rateHint } from "@/lib/quick-form";
 import { defaultCategory, lastCategory, methodForAccount, rememberCategory } from "@/lib/quick-defaults";
 import { Button } from "@/components/ui/button";
+import { USD_SOURCES } from "@/lib/fx";
+import { quotesAgeLabel } from "@/lib/market-hours";
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
+import { QuickTextInput } from "@/components/quick-text-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -45,6 +48,8 @@ export function QuickAdd() {
     transactions,
     usdRate,
     usdtRate,
+    usdSource,
+    quotesAt,
     activeBookId,
     books,
   } = useLedger();
@@ -66,6 +71,7 @@ export function QuickAdd() {
   const [accountId, setAccountId] = useState("");
   const [counterpartyId, setCounterpartyId] = useState("");
   const [rate, setRate] = useState("");
+  const [rateTouched, setRateTouched] = useState(false);
   const [fxDriver, setFxDriver] = useState<"sale" | "llega">("llega");
   const [cuotas, setCuotas] = useState("1");
   const [interestFree, setInterestFree] = useState(true);
@@ -117,6 +123,7 @@ export function QuickAdd() {
     setAccountId(nextAccount);
     setCounterpartyId(src.counterpartyId ?? "");
     setRate(src.rateLocked && src.rateArs ? amountInput(src.rateArs) : "");
+    setRateTouched(Boolean(src.rateLocked && src.rateArs));
     setFxDriver(src.amountTo ? "llega" : "sale");
     // A cuotas purchase from the assistant ("tele 600 mil en 12"): only for a new movement.
     const askedCuotas = !editing && (src.installmentCount ?? 0) > 1 ? src.installmentCount! : 1;
@@ -411,6 +418,8 @@ export function QuickAdd() {
             {type === "transfer" ? "Mover entre cajas no cuenta como gasto." : "Cargá un gasto o ingreso en segundos."}
           </DrawerDescription>
 
+          {!editing ? <QuickTextInput /> : null}
+
           <div className="mt-4 grid grid-cols-3 gap-2">
             {KINDS.map((t) => (
               <button
@@ -422,7 +431,7 @@ export function QuickAdd() {
                   type === t.id
                     ? t.id === "income"
                       ? "bg-income/20 text-income"
-                      : "bg-elevated text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.16)]"
+                      : "bg-elevated text-fg shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.16)]"
                     : "bg-elevated text-muted",
                 )}
               >
@@ -436,7 +445,7 @@ export function QuickAdd() {
               {type === "transfer" ? "Sale" : perCuota ? "Valor de cada cuota" : inCuotas ? "Total de la compra" : "Monto"}
             </Label>
             <div className="mt-1.5 flex items-center gap-2">
-              <span className="grid h-14 min-w-16 place-items-center rounded-lg bg-elevated px-3 text-sm font-medium text-muted shadow-[0_0_0_1px_rgba(244,244,240,0.08)]">
+              <span className="grid h-14 min-w-16 place-items-center rounded-lg bg-elevated px-3 text-sm font-medium text-muted shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.08)]">
                 {fromAcc?.currency ?? currency}
               </span>
               <input
@@ -453,7 +462,7 @@ export function QuickAdd() {
                 }}
                 placeholder="0"
                 className={cn(
-                  "h-14 min-w-0 flex-1 rounded-lg bg-elevated px-3 font-display text-3xl tracking-tight text-fg outline-none shadow-[0_0_0_1px_rgba(244,244,240,0.08)] placeholder:text-subtle",
+                  "h-14 min-w-0 flex-1 rounded-lg bg-elevated px-3 font-display text-3xl tracking-tight text-fg outline-none shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.08)] placeholder:text-subtle",
                   bad("amount") && "shadow-[0_0_0_2px_rgb(248,113,113)]",
                 )}
               />
@@ -491,19 +500,29 @@ export function QuickAdd() {
           {(cross ||
           ((currency === "USDT" || fromAcc?.currency === "USDT" || fromAcc?.currency === "USD") && type !== "income")) ? (
             <div className="mt-4">
-              <Label htmlFor="rate">Cotización ARS {foreign === "USD" ? "(blue)" : "(cripto / P2P)"}</Label>
+              <Label htmlFor="rate">
+                Cotización ARS {foreign === "USD" ? `(${USD_SOURCES.find((x) => x.id === usdSource)?.label ?? "Blue"})` : "(cripto / P2P)"}
+              </Label>
               <Input
                 id="rate"
                 className="mt-1.5"
                 inputMode="decimal"
                 placeholder={String(Math.round(marketRate))}
-                value={rate}
+                value={rateFieldValue(rate, rateTouched, marketRate)}
+                onFocus={(e) => e.currentTarget.select()}
+                aria-describedby="rate-hint"
                 onChange={(e) => {
                   const v = e.target.value;
+                  setRateTouched(true);
                   setRate(v);
                   reprice(fxDriver, amount, amountTo, v);
                 }}
               />
+              {!rateTouched && marketRate > 0 ? (
+                <p id="rate-hint" className="mt-1 text-xs text-subtle">
+                  {rateHint(USD_SOURCES.find((x) => x.id === usdSource)?.label ?? "Blue", quotesAgeLabel(quotesAt), foreign)}
+                </p>
+              ) : null}
             </div>
           ) : null}
 
@@ -522,7 +541,7 @@ export function QuickAdd() {
                   else reprice(fxDriver, amount, amountTo, rate, acc, toAcc);
                 }
               }}
-              className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)] outline-none"
+              className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.08)] outline-none"
             >
               <CajaOptions cajas={creditOnly ? [] : moneyCajas} cards={cardCajas} />
             </select>
@@ -583,7 +602,7 @@ export function QuickAdd() {
                         onClick={() => setInterestFree(o.on)}
                         className={cn(
                           "h-11 rounded-lg text-sm font-medium",
-                          interestFree === o.on ? "bg-elevated text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.16)]" : "bg-elevated text-muted",
+                          interestFree === o.on ? "bg-elevated text-fg shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.16)]" : "bg-elevated text-muted",
                         )}
                       >
                         {o.label}
@@ -633,7 +652,7 @@ export function QuickAdd() {
                   setCounterpartyId(id);
                   reprice(fxDriver, amount, amountTo, rate, fromAcc, accounts.find((a) => a.id === id));
                 }}
-                className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)] outline-none"
+                className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.08)] outline-none"
               >
                 <option value="">Elegí caja</option>
                 <CajaOptions
@@ -754,7 +773,7 @@ export function QuickAdd() {
                         }
                         if (inferred) setAccountId(inferred);
                       }}
-                      className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)] outline-none"
+                      className="mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.08)] outline-none"
                     >
                       {PAY_METHODS.filter((m) => BANK_METHODS.includes(m.id) || m.id === method).map((m) => (
                         <option key={m.id} value={m.id}>

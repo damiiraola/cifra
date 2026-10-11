@@ -44,6 +44,82 @@
   --radius-xl: 1.5rem;
 }
 
+/* Modo claro: html[data-theme] lo pone src/lib/theme.ts (Sistema por defecto). */
+:root {
+  --fg-rgb: 244 244 240;
+  color-scheme: dark;
+}
+:root[data-theme="light"] {
+  --theme-light-start: 1;
+  --fg-rgb: 22 22 26;
+  color-scheme: light;
+  --color-bg: #f6f6f2;
+  --color-surface: #ffffff;
+  --color-elevated: #eeeee9;
+  --color-fg: #16161a;
+  --color-muted: #55554f;
+  --color-subtle: #5f5f59;
+  --color-border: #deded7;
+  --color-border-strong: #c9c9c1;
+  --color-accent: #26262b;
+  --color-accent-fg: #f6f6f2;
+  --color-income: #2f6145;
+  --color-expense: #8a3f36;
+  --color-warn: #6b5718;
+  --color-ring: #26262b;
+  --color-business: #6b5718;
+  --color-cat-food: #5b6a50;
+  --color-cat-transit: #4c5f72;
+  --color-cat-home: #6b6253;
+  --color-cat-util: #46625b;
+  --color-cat-health: #74585b;
+  --color-cat-edu: #575c74;
+  --color-cat-fun: #5c6249;
+  --color-cat-shop: #745c57;
+  --color-cat-sub: #4a5966;
+  --color-cat-tax: #6a5c59;
+  --color-cat-fee: #74603f;
+  --color-cat-xfer: #5c5c5c;
+  --color-cat-other: #555555;
+  --color-cat-income: #4a6a5a;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]):not([data-theme="light"]) {
+  --theme-light-start: 1;
+  --fg-rgb: 22 22 26;
+  color-scheme: light;
+  --color-bg: #f6f6f2;
+  --color-surface: #ffffff;
+  --color-elevated: #eeeee9;
+  --color-fg: #16161a;
+  --color-muted: #55554f;
+  --color-subtle: #5f5f59;
+  --color-border: #deded7;
+  --color-border-strong: #c9c9c1;
+  --color-accent: #26262b;
+  --color-accent-fg: #f6f6f2;
+  --color-income: #2f6145;
+  --color-expense: #8a3f36;
+  --color-warn: #6b5718;
+  --color-ring: #26262b;
+  --color-business: #6b5718;
+  --color-cat-food: #5b6a50;
+  --color-cat-transit: #4c5f72;
+  --color-cat-home: #6b6253;
+  --color-cat-util: #46625b;
+  --color-cat-health: #74585b;
+  --color-cat-edu: #575c74;
+  --color-cat-fun: #5c6249;
+  --color-cat-shop: #745c57;
+  --color-cat-sub: #4a5966;
+  --color-cat-tax: #6a5c59;
+  --color-cat-fee: #74603f;
+  --color-cat-xfer: #5c5c5c;
+  --color-cat-other: #555555;
+  --color-cat-income: #4a6a5a;
+  }
+}
+
 @layer base {
   html {
     -webkit-font-smoothing: antialiased;

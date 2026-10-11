@@ -128,7 +128,7 @@ export function PageTour() {
             width: spot.width + 16,
             height: spot.height + 16,
             boxShadow: "0 0 0 9999px rgba(0,0,0,0.62)",
-            outline: "1.5px solid rgba(244,244,240,0.9)",
+            outline: "1.5px solid rgb(var(--fg-rgb)/0.9)",
             transition: move ? MOVE : "none",
           }}
         />
@@ -140,7 +140,7 @@ export function PageTour() {
         role="dialog"
         aria-modal="true"
         aria-labelledby="tour-title"
-        className="fixed z-[62] rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_rgba(244,244,240,0.14)]"
+        className="fixed z-[62] rounded-3xl bg-surface p-4 shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.14)]"
         style={{
           width: cardWidth,
           top: place?.top ?? 24,

@@ -44,3 +44,16 @@ describe("the error points at the missing field", () => {
   it("transfer without destination", () => assert.equal(firstProblem({ ...base, type: "transfer", categoryId: "" })?.field, "to"));
   it("complete → no problem", () => assert.equal(firstProblem(base), null));
 });
+
+describe("cotización precargada", () => {
+  it("shows the market quote until the user types", async () => {
+    const { rateFieldValue, rateHint } = await import("./quick-form.ts");
+    assert.equal(rateFieldValue("", false, 1540), "1540");
+    assert.equal(rateFieldValue("", false, 1606.52), "1606,52");
+    assert.equal(rateFieldValue("", false, 0), "");
+    assert.equal(rateFieldValue("1500", true, 1540), "1500");
+    assert.equal(rateFieldValue("", true, 1540), "", "cleared by the user stays empty to type");
+    assert.match(rateHint("Blue", "hace 5 min", "USD"), /dólar Blue de Cotizaciones \(hace 5 min\)/);
+    assert.match(rateHint("Blue", "hace 5 min", "USDT"), /USDT de Cotizaciones/);
+  });
+});

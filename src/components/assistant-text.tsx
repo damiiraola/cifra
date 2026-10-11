@@ -9,7 +9,7 @@ export function AssistantText({ text }: { text: string }) {
         b.kind === "list" ? (
           <ul
             key={i}
-            className="grid gap-1.5 rounded-2xl px-3.5 py-2.5 shadow-[0_0_0_1px_rgba(244,244,240,0.08)]"
+            className="grid gap-1.5 rounded-2xl px-3.5 py-2.5 shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.08)]"
           >
             {b.items.map((it, j) =>
               "label" in it && it.value.length <= 28 ? (
