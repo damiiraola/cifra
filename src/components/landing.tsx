@@ -1,6 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { signupStatus } from "@/lib/beta-api";
+import { landingSignup } from "@/lib/landing-signup";
 import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
+import { WaitlistBox } from "@/components/waitlist-box";
 
 const FEATURES = [
   {
@@ -70,6 +73,13 @@ function ExampleMonth() {
  * the assistant). Static and light: no images, no data, no external calls.
  */
 export function Landing({ focus }: { focus?: "asistente" }) {
+  const [mode, setMode] = useState<"invitacion" | "abierto" | null>(null);
+  useEffect(() => {
+    void signupStatus({ data: { code: "" } })
+      .then((r) => setMode(r.mode))
+      .catch(() => setMode(null));
+  }, []);
+  const su = landingSignup(mode);
   useEffect(() => {
     if (focus) document.getElementById(focus)?.scrollIntoView({ block: "start" });
   }, [focus]);
@@ -96,16 +106,25 @@ export function Landing({ focus }: { focus?: "asistente" }) {
               planificar el mes sin planillas: tus cajas, las tarjetas con sus cuotas, tus metas y
               un asistente que te ayuda a hacer las cuentas.
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
+            {su.closed ? (
+              <p className="mt-6 max-w-lg rounded-xl bg-surface px-4 py-3 text-sm text-fg shadow-[0_0_0_1px_var(--color-border)]">
+                <b>Beta cerrada:</b> {su.notice}{" "}
+                <a href="#lista-de-espera" className="underline underline-offset-2">
+                  ¿No tenés? Anotate en la lista de espera
+                </a>
+                .
+              </p>
+            ) : null}
+            <div className="mt-5 flex flex-wrap gap-3">
               <Button asChild size="lg" className="px-6">
-                <a href="/login?modo=crear">Crear cuenta</a>
+                <a href="/login?modo=crear">{su.cta}</a>
               </Button>
               <Button asChild variant="outline" size="lg" className="px-6">
                 <Link to="/login">Entrar</Link>
               </Button>
             </div>
             <p className="mt-4 text-xs text-subtle">
-              Está en beta. Se usa desde el navegador y se puede instalar como app en el celular.
+              Se usa desde el navegador y se puede instalar como app en el celular.
             </p>
           </div>
           <div className="flex justify-center md:justify-end">
@@ -141,12 +160,13 @@ export function Landing({ focus }: { focus?: "asistente" }) {
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <Button asChild size="lg" className="px-6">
-                <a href="/login?modo=crear">Crear cuenta</a>
+                <a href="/login?modo=crear">{su.cta}</a>
               </Button>
               <Button asChild variant="outline" size="lg" className="px-6">
                 <Link to="/privacidad">Leer Privacidad</Link>
               </Button>
             </div>
+            {su.showWaitlist ? <WaitlistBox /> : null}
           </div>
         </section>
       </main>
