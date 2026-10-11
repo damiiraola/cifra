@@ -21,6 +21,7 @@ import { BANK_METHODS, currencyForCaja, firstProblem, showsPayMethod, startsNewS
 import { defaultCategory, lastCategory, methodForAccount, rememberCategory } from "@/lib/quick-defaults";
 import { Button } from "@/components/ui/button";
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
+import { QuickTextInput } from "@/components/quick-text-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -410,6 +411,8 @@ export function QuickAdd() {
           <DrawerDescription className="mt-1">
             {type === "transfer" ? "Mover entre cajas no cuenta como gasto." : "Cargá un gasto o ingreso en segundos."}
           </DrawerDescription>
+
+          {!editing ? <QuickTextInput /> : null}
 
           <div className="mt-4 grid grid-cols-3 gap-2">
             {KINDS.map((t) => (
