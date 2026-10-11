@@ -17,9 +17,11 @@ import { PAY_METHODS, type Currency, type PayMethod, type TxType } from "@/lib/t
 import { cn, todayISO } from "@/lib/utils";
 import type { Account } from "@/lib/types";
 import { useBookAccounts, useBookCards, useLedger, useVisibleCategories } from "@/lib/store";
-import { BANK_METHODS, currencyForCaja, firstProblem, showsPayMethod, startsNewSession, type QuickField, type QuickSession } from "@/lib/quick-form";
+import { BANK_METHODS, currencyForCaja, firstProblem, showsPayMethod, startsNewSession, type QuickField, type QuickSession, rateFieldValue, rateHint } from "@/lib/quick-form";
 import { defaultCategory, lastCategory, methodForAccount, rememberCategory } from "@/lib/quick-defaults";
 import { Button } from "@/components/ui/button";
+import { USD_SOURCES } from "@/lib/fx";
+import { quotesAgeLabel } from "@/lib/market-hours";
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
 import { QuickTextInput } from "@/components/quick-text-input";
 import { Input } from "@/components/ui/input";
@@ -46,6 +48,8 @@ export function QuickAdd() {
     transactions,
     usdRate,
     usdtRate,
+    usdSource,
+    quotesAt,
     activeBookId,
     books,
   } = useLedger();
@@ -67,6 +71,7 @@ export function QuickAdd() {
   const [accountId, setAccountId] = useState("");
   const [counterpartyId, setCounterpartyId] = useState("");
   const [rate, setRate] = useState("");
+  const [rateTouched, setRateTouched] = useState(false);
   const [fxDriver, setFxDriver] = useState<"sale" | "llega">("llega");
   const [cuotas, setCuotas] = useState("1");
   const [interestFree, setInterestFree] = useState(true);
@@ -118,6 +123,7 @@ export function QuickAdd() {
     setAccountId(nextAccount);
     setCounterpartyId(src.counterpartyId ?? "");
     setRate(src.rateLocked && src.rateArs ? amountInput(src.rateArs) : "");
+    setRateTouched(Boolean(src.rateLocked && src.rateArs));
     setFxDriver(src.amountTo ? "llega" : "sale");
     // A cuotas purchase from the assistant ("tele 600 mil en 12"): only for a new movement.
     const askedCuotas = !editing && (src.installmentCount ?? 0) > 1 ? src.installmentCount! : 1;
@@ -494,19 +500,29 @@ export function QuickAdd() {
           {(cross ||
           ((currency === "USDT" || fromAcc?.currency === "USDT" || fromAcc?.currency === "USD") && type !== "income")) ? (
             <div className="mt-4">
-              <Label htmlFor="rate">Cotización ARS {foreign === "USD" ? "(blue)" : "(cripto / P2P)"}</Label>
+              <Label htmlFor="rate">
+                Cotización ARS {foreign === "USD" ? `(${USD_SOURCES.find((x) => x.id === usdSource)?.label ?? "Blue"})` : "(cripto / P2P)"}
+              </Label>
               <Input
                 id="rate"
                 className="mt-1.5"
                 inputMode="decimal"
                 placeholder={String(Math.round(marketRate))}
-                value={rate}
+                value={rateFieldValue(rate, rateTouched, marketRate)}
+                onFocus={(e) => e.currentTarget.select()}
+                aria-describedby="rate-hint"
                 onChange={(e) => {
                   const v = e.target.value;
+                  setRateTouched(true);
                   setRate(v);
                   reprice(fxDriver, amount, amountTo, v);
                 }}
               />
+              {!rateTouched && marketRate > 0 ? (
+                <p id="rate-hint" className="mt-1 text-xs text-subtle">
+                  {rateHint(USD_SOURCES.find((x) => x.id === usdSource)?.label ?? "Blue", quotesAgeLabel(quotesAt), foreign)}
+                </p>
+              ) : null}
             </div>
           ) : null}
 
