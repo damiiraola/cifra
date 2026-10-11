@@ -19,7 +19,7 @@ export const Route = createFileRoute("/_app/panel")({
   head: () => ({ meta: [{ name: "robots", content: "noindex" }] }),
 });
 
-const card = "rounded-3xl bg-surface px-5 py-4 shadow-[0_0_0_1px_rgba(244,244,240,0.06)]";
+const card = "rounded-3xl bg-surface px-5 py-4 shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.06)]";
 
 /** Only for the owner: invitations, waiting list (and, later, how the beta is going). */
 function Panel() {

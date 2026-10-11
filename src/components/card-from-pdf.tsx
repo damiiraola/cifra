@@ -33,7 +33,7 @@ import { toast } from "sonner";
 const NEW = "nueva";
 
 const SELECT =
-  "mt-1.5 h-11 w-full rounded-lg bg-surface px-3 text-base text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)] outline-none";
+  "mt-1.5 h-11 w-full rounded-lg bg-surface px-3 text-base text-fg shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.08)] outline-none";
 
 /**
  * «Subir resumen PDF» with no card needed: Cifra reads the PDF, recognises

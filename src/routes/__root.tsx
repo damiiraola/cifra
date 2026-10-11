@@ -4,6 +4,7 @@ import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import { ServiceWorkerRegister } from "@/components/sw-register";
 import appCss from "../styles.css?url";
 import { ErrorReporter } from "@/components/error-reporter";
+import { THEME_BOOT } from "@/lib/theme";
 
 const APP_NAME = "Cifra";
 
@@ -32,6 +33,7 @@ export const Route = createRootRoute({
     <html lang="es" className="antialiased" suppressHydrationWarning>
       <head>
         <HeadContent />
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT }} />
       </head>
       <body>
         <PreviewHostBridge />

@@ -15,7 +15,7 @@ import { CreditMove } from "@/components/credit-move";
 import { planCreditMove } from "@/lib/card-pay";
 
 const SELECT =
-  "mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgba(244,244,240,0.08)] outline-none";
+  "mt-1.5 h-11 w-full rounded-lg bg-elevated px-3 text-base text-fg shadow-[0_0_0_1px_rgb(var(--fg-rgb)/0.08)] outline-none";
 
 function dm(iso: string) {
   return `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
