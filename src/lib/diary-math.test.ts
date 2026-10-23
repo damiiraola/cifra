@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { heatmapIntensity, isFixedExpense, pickDiaryDay } from "./diary-math.ts";
+import { hasAverageHistory, heatmapIntensity, isFixedExpense, pickDiaryDay } from "./diary-math.ts";
 
 describe("isFixedExpense", () => {
   it("treats vivienda and recurring alimentos as fijo", () => {
@@ -32,5 +32,17 @@ describe("heatmapIntensity", () => {
     assert.equal(heatmapIntensity(0, 100), 0);
     assert.ok(heatmapIntensity(1, 100) >= 0.22);
     assert.ok(heatmapIntensity(100, 100) <= 1);
+  });
+});
+
+describe("hasAverageHistory", () => {
+  const d = (n: number) => ({ date: `2026-10-${String(n).padStart(2, "0")}` });
+  it("needs 7 distinct days with movimientos", () => {
+    assert.equal(hasAverageHistory([], "2026-10-20"), false);
+    assert.equal(hasAverageHistory([d(1), d(1), d(2), d(3), d(4), d(5), d(6)], "2026-10-20"), false);
+    assert.equal(hasAverageHistory([d(1), d(2), d(3), d(4), d(5), d(6), d(7)], "2026-10-20"), true);
+  });
+  it("ignores future-dated movimientos", () => {
+    assert.equal(hasAverageHistory([d(1), d(2), d(3), d(4), d(5), d(6), d(25)], "2026-10-20"), false);
   });
 });

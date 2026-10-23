@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { createFileRoute, Link, useSearch } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { authClient } from "@/lib/auth/client";
 import { AuthScreen } from "@/components/auth-screen";
 import { Button } from "@/components/ui/button";
@@ -22,14 +22,19 @@ export const Route = createFileRoute("/reset")({
 function ExpiredLink() {
   return (
     <AuthScreen kicker={AUTH_MESSAGES.linkExpired}>
-      <p className="mt-6 text-sm text-muted">Los enlaces para cambiar la contraseña duran un rato y sirven una sola vez.</p>
+      <p className="mt-6 text-sm text-muted">
+        Los enlaces para cambiar la contraseña duran un rato y sirven una sola vez.
+      </p>
       <Link
         to="/olvide"
         className="mt-6 flex h-11 w-full items-center justify-center rounded-lg bg-accent text-sm font-medium text-accent-fg"
       >
         Pedí uno nuevo
       </Link>
-      <Link to="/login" className="mt-4 block text-center text-sm text-muted underline-offset-4 hover:text-fg hover:underline">
+      <Link
+        to="/login"
+        className="mt-4 block text-center text-sm text-muted underline-offset-4 hover:text-fg hover:underline"
+      >
         Volver a entrar
       </Link>
     </AuthScreen>
@@ -43,6 +48,7 @@ function Reset() {
   const [expired, setExpired] = useState(false);
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
+  const navigate = useNavigate();
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -60,11 +66,31 @@ function Reset() {
         return;
       }
       setDone(true);
+      // The token is spent now: take it out of the address bar so nobody copies it around.
+      void navigate({ to: "/reset", search: {}, replace: true });
     } catch (err) {
       setError(authErrorMessage(err, "No pude cambiar la contraseña. Probá de nuevo."));
     } finally {
       setBusy(false);
     }
+  }
+
+  if (done) {
+    return (
+      <AuthScreen kicker="Contraseña cambiada.">
+        <div className="mt-8">
+          <p role="status" className="text-sm">
+            Listo. Ya podés entrar con la contraseña nueva.
+          </p>
+          <Link
+            to="/login"
+            className="mt-6 flex h-11 w-full items-center justify-center rounded-lg bg-accent text-sm font-medium text-accent-fg"
+          >
+            Entrar
+          </Link>
+        </div>
+      </AuthScreen>
+    );
   }
 
   // Any `?error=` from Better Auth here means the mail link is no good anymore.
@@ -85,41 +111,27 @@ function Reset() {
 
   return (
     <AuthScreen kicker="Elegí una contraseña nueva. Mínimo 8 caracteres.">
-      {done ? (
-        <div className="mt-8">
-          <p role="status" className="text-sm">
-            Listo. Ya podés entrar con la contraseña nueva.
-          </p>
-          <Link
-            to="/login"
-            className="mt-6 flex h-11 w-full items-center justify-center rounded-lg bg-accent text-sm font-medium text-accent-fg"
-          >
-            Entrar
-          </Link>
+      <form className="mt-8 grid gap-3" onSubmit={(e) => void onSubmit(e)}>
+        <div className="grid gap-1.5">
+          <Label htmlFor="password">Nueva contraseña</Label>
+          <PasswordInput
+            id="password"
+            autoComplete="new-password"
+            required
+            minLength={8}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
         </div>
-      ) : (
-        <form className="mt-8 grid gap-3" onSubmit={(e) => void onSubmit(e)}>
-          <div className="grid gap-1.5">
-            <Label htmlFor="password">Nueva contraseña</Label>
-            <PasswordInput
-              id="password"
-              autoComplete="new-password"
-              required
-              minLength={8}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
-          {error ? (
-            <p role="alert" className="text-sm text-red-400">
-              {error}
-            </p>
-          ) : null}
-          <Button type="submit" disabled={busy}>
-            {busy ? "Guardando…" : "Guardar contraseña"}
-          </Button>
-        </form>
-      )}
+        {error ? (
+          <p role="alert" className="text-sm text-red-400">
+            {error}
+          </p>
+        ) : null}
+        <Button type="submit" disabled={busy}>
+          {busy ? "Guardando…" : "Guardar contraseña"}
+        </Button>
+      </form>
     </AuthScreen>
   );
 }

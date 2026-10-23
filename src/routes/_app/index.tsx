@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Plus, Search, X } from "lucide-react";
-import { computeMonth, pickDiaryDay, toARS } from "@/lib/analytics";
+import { computeMonth, hasAverageHistory, pickDiaryDay, toARS } from "@/lib/analytics";
 import { dayLabel, moneyARS } from "@/lib/format";
 import { dueUnposted } from "@/lib/recurring";
 import { useAllCategories, useBookTxs, useLedger } from "@/lib/store";
@@ -59,6 +59,8 @@ function Diario() {
   const spent = dayTx.filter((t) => t.type === "expense").reduce((s, t) => s + toARS(t, fx), 0);
   const earned = dayTx.filter((t) => t.type === "income").reduce((s, t) => s + toARS(t, fx), 0);
   const vsAvg = spent - stats.avgDaily;
+  // With only a few days logged the «average» is one or two days: hide the comparison.
+  const showVsAvg = stats.avgDaily > 0 && hasAverageHistory(transactions, todayISO());
   // Only fijos whose day already came; future ones are not "sin anotar".
   const fijosPendientes = dueUnposted(
     recurrings.filter((r) => r.bookId === activeBookId),
@@ -181,7 +183,7 @@ function Diario() {
                   </span>
                 </p>
                 <p className="mt-1 text-xs tabular-nums text-subtle">
-                  {stats.avgDaily
+                  {showVsAvg
                     ? vsAvg > 0
                       ? `+${moneyARS(vsAvg)} vs promedio`
                       : `${moneyARS(vsAvg)} vs promedio`
