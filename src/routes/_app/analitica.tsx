@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { computeMonth, isFixedExpense, prevMonth, splitFixedVariable } from "@/lib/analytics";
+import { monthDeltaPct } from "@/lib/month-compare";
 import { budgetAllocation, liveCategoryRows } from "@/lib/budget-math";
 import { catColorVar, DEFAULT_BUDGETS } from "@/lib/categories";
 import { moneyARS, monthLabel } from "@/lib/format";
@@ -40,7 +41,7 @@ function Analitica() {
   const { assigned, unassigned, overAssigned } = budgetAllocation(rows, globalBudget);
   const purchases = useBookPurchases();
   const financed = financedInMonth(purchases, viewMonth, usdRate);
-  const spentDelta = prevMtdSpent ? ((stats.spent - prevMtdSpent) / prevMtdSpent) * 100 : 0;
+  const spentDelta = monthDeltaPct(stats.spent, prevMtdSpent, prev.byDay);
   const [drill, setDrill] = useState<Drill>(null);
   const out = useCashOut(viewMonth);
   const pendingOut = out.pending ? out.pending.cards + out.pending.fijos : 0;
@@ -118,7 +119,9 @@ function Analitica() {
           </div>
         </div>
         <p className="mt-3 text-sm text-muted">
-          {spentDelta === 0
+          {spentDelta === null
+            ? `Pocos datos de ${monthLabel(prevMonth(viewMonth), "LLL")} para comparar`
+            : Math.round(spentDelta) === 0
             ? "Igual al mes previo"
             : `${spentDelta > 0 ? "+" : ""}${spentDelta.toFixed(0)}% vs ${monthLabel(prevMonth(viewMonth), "LLL")}`}
         </p>
