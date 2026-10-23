@@ -260,6 +260,9 @@ function EnvelopeRow({
             style={{ width: `${budget ? Math.min(100, pct) : 0}%` }}
           />
         </div>
+        {over ? (
+          <p className="mt-1 text-xs tabular-nums text-expense">Te pasaste {moneyARS(spent - budget)} del tope</p>
+        ) : null}
       </div>
       <Input
         inputMode="decimal"
