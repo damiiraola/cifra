@@ -41,6 +41,9 @@ function Metas() {
       return;
     }
     saveGoal({ kind, name, currency, target: n, deadline, priority });
+    // Back to the initial form, so the next goal doesn't inherit this one's type.
+    setKind("ahorro");
+    setCurrency("ARS");
     setName("");
     setTarget("");
     setDeadline("");
