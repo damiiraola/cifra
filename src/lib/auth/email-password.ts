@@ -44,6 +44,8 @@ export const emailPasswordOptions = {
 
 export const emailVerificationOptions = {
   sendOnSignUp: mailConfigured(),
+  // Explicit so the mail copy («vale una hora») matches Better Auth's token TTL.
+  expiresIn: 3600,
   autoSignInAfterVerification: true,
   sendVerificationEmail: async ({ user, url }: { user: MailUser; url: string }) => {
     await sendOrThrow({

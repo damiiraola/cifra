@@ -27,6 +27,10 @@ describe("mail templates — copy", () => {
     );
   });
 
+  it("verify says how long the link lasts", () => {
+    assert.match(MAIL.verify("Damian").body, /vale una hora/);
+  });
+
   it("verify greets by name, and without a name too", () => {
     const t = MAIL.verify("Damian");
     assert.match(t.body, /^Hola Damian\. /);
