@@ -57,9 +57,13 @@ export function fijoAccount(accounts: Account[], bookId: string, method: PayMeth
   return accounts.find((a) => a.id === id) ?? accounts.find((a) => a.bookId === bookId && !a.archived);
 }
 
-/** "Banco · ARS", or just the name when it already says the currency ("Visa USD"). */
+/**
+ * "Banco · ARS". Always the same « · » separator: a name that already ends in
+ * its currency ("Visa USD") drops it first, so it reads "Visa · USD", not "Visa USD".
+ */
 export function accountLabel(a: Pick<Account, "name" | "currency">): string {
-  return a.name.endsWith(` ${a.currency}`) ? a.name : `${a.name} · ${a.currency}`;
+  const base = a.name.replace(new RegExp(`(?:\\s*·\\s*|\\s+)${a.currency}$`), "").trim();
+  return `${base} · ${a.currency}`;
 }
 
 export function accountBalance(account: Account, txs: Transaction[]): number {
