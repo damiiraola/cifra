@@ -5,6 +5,7 @@ import { isFixedExpense } from "./diary-math";
 
 export {
   FIXED_CATEGORY_IDS,
+  hasAverageHistory,
   heatmapIntensity,
   heatmapMax,
   isFixedExpense,
