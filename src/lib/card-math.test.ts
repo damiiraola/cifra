@@ -188,7 +188,8 @@ describe("crédito goes to the card, not the bank", () => {
 describe("helpers", () => {
   it("labels cajas without repeating the currency", () => {
     assert.equal(accountLabel(accounts[1]!), "Banco · ARS");
-    assert.equal(accountLabel(accounts[4]!), "Visa Galicia USD");
+    assert.equal(accountLabel(accounts[4]!), "Visa Galicia · USD");
+    assert.equal(accountLabel({ name: "Caja · USD", currency: "USD" }), "Caja · USD");
     assert.equal(accountLabel(accounts[3]!), "Visa Galicia · ARS");
   });
 
