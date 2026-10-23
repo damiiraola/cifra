@@ -86,7 +86,7 @@ export const MAIL = {
     accent: C.silver,
     heading: "Confirmá tu cuenta",
     preheader: "Un toque para abrir tu libro.",
-    body: `${greeting(name)} Tocá el botón para confirmar el mail y abrir tu libro. El enlace vence.`,
+    body: `${greeting(name)} Tocá el botón para confirmar el mail y abrir tu libro. El enlace vale una hora.`,
     cta: "Confirmar mail",
     showLink: true,
     signoff: "¿No creaste una cuenta en Cifra? Ignorá este mail y no pasa nada.",
