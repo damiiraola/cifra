@@ -85,6 +85,8 @@ function Diario() {
 
   function selectDay(date: string) {
     setSelectedDay(date);
+    // From md: up the day sits next to the calendar, already in view: no scroll.
+    if (typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches) return;
     const reduce =
       typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     window.requestAnimationFrame(() => {
@@ -152,15 +154,19 @@ function Diario() {
           </div>
         </section>
       ) : (
-        <>
-          <Heatmap
-            byDay={stats.byDay}
-            selected={day}
-            viewMonth={viewMonth}
-            onSelect={selectDay}
-            onLongPress={(date) => openQuick({ date, type: "expense" })}
-            onMonthDelta={changeMonth}
-          />
+        // From md: up, a compact calendar on the left and the day's movimientos on
+        // the right, so they show without scrolling past a full-width calendar.
+        <div className="grid gap-4 md:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] md:items-start md:gap-8">
+          <div className="md:sticky md:top-8">
+            <Heatmap
+              byDay={stats.byDay}
+              selected={day}
+              viewMonth={viewMonth}
+              onSelect={selectDay}
+              onLongPress={(date) => openQuick({ date, type: "expense" })}
+              onMonthDelta={changeMonth}
+            />
+          </div>
 
           <section id="cifra-dia" className="scroll-mt-24">
             <div className="flex items-start justify-between gap-3">
@@ -202,7 +208,7 @@ function Diario() {
               ) : null}
             </div>
           </section>
-        </>
+        </div>
       )}
     </div>
   );
