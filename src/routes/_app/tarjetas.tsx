@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { accountBalance } from "@/lib/books";
 import {
   cardDebt,
+  cardFijos,
   closingOf,
   dueOf,
   limitUse,
@@ -156,6 +157,7 @@ function CardBlock({ card, today, tour = false }: { card: Card; today: string; t
   const debtUsd = usd ? cardDebt(usd, accountBalance(usd, txs)) : 0;
   const limit = limitUse(card, debtArs, debtUsd, usdRate);
   const network = CARD_NETWORKS.find((n) => n.id === card.network)?.label ?? "";
+  const fijos = cardFijos(card, recurrings);
   const endings = upcoming.filter((u, i) => i > 0 && u.ending.count > 0).slice(0, 2);
 
   return (
@@ -234,6 +236,27 @@ function CardBlock({ card, today, tour = false }: { card: Card; today: string; t
           </p>
         ))}
       </div>
+
+      {fijos.length ? (
+        <div className="mt-5">
+          <h3 className="text-sm font-medium">Fijos con esta tarjeta</h3>
+          <p className="text-xs text-subtle">Se suman solos a cada resumen, además de las cuotas.</p>
+          <ul className="mt-2 grid gap-1.5 text-sm">
+            {fijos.map((r) => (
+              <li key={r.id} className="flex items-baseline justify-between gap-3">
+                <span className="min-w-0 truncate">
+                  {r.name}
+                  <span className="text-xs text-subtle"> · el {r.day}</span>
+                </span>
+                <span className="shrink-0 tabular-nums">{money(r.amount, r.currency)}</span>
+              </li>
+            ))}
+          </ul>
+          <Link to="/ajustes" hash="fijos" className="mt-2 inline-block text-xs text-muted underline-offset-4 hover:text-fg hover:underline">
+            Editar fijos
+          </Link>
+        </div>
+      ) : null}
 
       <dl className="mt-5 grid gap-2 text-sm">
         <div className="flex justify-between gap-3">
