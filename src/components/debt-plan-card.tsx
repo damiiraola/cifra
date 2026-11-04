@@ -2,7 +2,16 @@ import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { amountInput, money, moneyARS, parseAmount } from "@/lib/format";
 import { periodName } from "@/lib/card-pay";
-import { MAX_MONTHS, onlyCuotas, peakCuotas, type CardDebt, type DebtStrategy, type Payoff } from "@/lib/plan/debt";
+import {
+  MAX_MONTHS,
+  MINIMO_MAX_MONTHS,
+  onlyCuotas,
+  peakCuotas,
+  type CardDebt,
+  type DebtStrategy,
+  type MinimoOutlook,
+  type Payoff,
+} from "@/lib/plan/debt";
 import { useDebtPlan } from "@/lib/plan/use-plan";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -21,6 +30,24 @@ function bankAmount(d: CardDebt) {
   const usd = d.balanceUsd ?? 0;
   const ars = d.balanceArs ?? d.balance;
   return usd >= 0.01 ? `${moneyARS(ars)} + ${money(usd, "USD")}` : moneyARS(d.balance);
+}
+
+/** "3 años y 2 meses", "8 meses". */
+function duration(n: number) {
+  const y = Math.floor(n / 12);
+  const m = n % 12;
+  if (!y) return months(n);
+  const years = y === 1 ? "1 año" : `${y} años`;
+  return m ? `${years} y ${months(m)}` : years;
+}
+
+/** «Pagando solo el mínimo: …», with the reason when it never ends. */
+function minimoText(o: MinimoOutlook) {
+  if (o.kind === "grows")
+    return `el mínimo del banco (${moneyARS(o.minimum)}) no cubre ni los intereses del mes (unos ${moneyARS(o.interest)}): si pagás solo eso, la deuda crece.`;
+  if (o.kind === "long")
+    return `en ${MINIMO_MAX_MONTHS / 12} años todavía no terminás: el mínimo apenas pasa los intereses. Ya llevarías ${moneyARS(o.interest)} de intereses.`;
+  return `salís en ${periodName(o.end)} (${duration(o.months)}) y pagás ${moneyARS(o.interest)} de intereses.`;
 }
 
 function exit(p: Payoff, current: string) {
@@ -146,12 +173,10 @@ export function DebtPlanCard() {
             <p>Las dos estrategias cuestan lo mismo en intereses con este monto.</p>
           )
         ) : null}
-        {balanceTotal > 0 ? (
+        {balanceTotal > 0 && c.minimoOutlook ? (
           <p>
             Pagando solo el mínimo:{" "}
-            {c.minimo.months === null
-              ? `más de ${MAX_MONTHS / 12} años y más de ${moneyARS(c.minimo.interest)} de intereses.`
-              : `salís en ${periodName(c.minimo.end)} y pagás ${moneyARS(c.minimo.interest)} de intereses.`}
+            {c.minimoOutlook ? minimoText(c.minimoOutlook) : null}
           </p>
         ) : null}
         {short ? (
