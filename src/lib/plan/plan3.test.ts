@@ -8,6 +8,8 @@ import {
   cardDebts,
   compareDebtPlans,
   mandatoryNow,
+  minimoOutlook,
+  MINIMO_MAX_MONTHS,
   monthlyRate,
   onlyCuotas,
   payoff,
@@ -69,6 +71,32 @@ describe("payoff", () => {
     const c = compareDebtPlans(two, 80_000, today);
     assert.ok(c.minimo.months === null || c.minimo.months > c.avalancha.months!);
     assert.ok(c.minimo.interest > c.avalancha.interest);
+  });
+
+  it("«solo el mínimo» ends in a credible number of years, not «más de 10 años»", () => {
+    const o = minimoOutlook([debt({ balance: 1_000_000, tna: 80 })], today)!;
+    assert.equal(o.kind, "ends");
+    if (o.kind !== "ends") return;
+    assert.ok(o.months > 12 && o.months < MINIMO_MAX_MONTHS, `${o.months} months`);
+    assert.ok(o.interest > 0);
+  });
+
+  it("«solo el mínimo» says the debt grows when the bank's minimum is below the interest", () => {
+    // 1M at 120 % TNA: about $121.000 of interest a month; the bank asks $50.000.
+    const o = minimoOutlook([debt({ balance: 1_000_000, tna: 120, bankMinimum: 50_000 })], today)!;
+    assert.equal(o.kind, "grows");
+    if (o.kind !== "grows") return;
+    assert.equal(o.minimum, 50_000);
+    assert.equal(o.interest, Math.round(1_000_000 * monthlyRate(120)));
+  });
+
+  it("«solo el mínimo» with a bank minimum above the interest still ends", () => {
+    const o = minimoOutlook([debt({ balance: 1_000_000, tna: 60, bankMinimum: 150_000 })], today)!;
+    assert.equal(o.kind, "ends");
+  });
+
+  it("«solo el mínimo» is null without balances", () => {
+    assert.equal(minimoOutlook([debt({ balance: 0 })], today), null);
   });
 
   it("flags the month the budget does not cover cuotas and minimums", () => {

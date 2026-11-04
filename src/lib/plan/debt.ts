@@ -49,6 +49,17 @@ export const IVA = 0.21;
 export const MIN_SHARE = 0.05;
 /** The plan gives up after this many months. */
 export const MAX_MONTHS = 120;
+/**
+ * «Pagando solo el mínimo» runs longer than the plan: banks keep asking for a
+ * minimum until the end, so 10 years is not where it stops.
+ */
+export const MINIMO_MAX_MONTHS = 600;
+/**
+ * Below this balance (ARS) the minimum is the whole balance. Banks put a floor
+ * on the minimum; without one, interest + 5 % shrinks the balance forever and
+ * never reaches 0.
+ */
+export const MIN_FLOOR = 10_000;
 
 function addMonths(ym: string, n: number) {
   return shiftPeriod(ym, n);
@@ -162,9 +173,9 @@ function attackOrder(debts: CardDebt[], strategy: DebtStrategy) {
 }
 
 /** Minimum of a balance this month: the bank's in the first month, else interest + MIN_SHARE. */
-export function minimumFor(balance: number, interest: number, bankMinimum: number, first: boolean) {
+export function minimumFor(balance: number, interest: number, bankMinimum: number, first: boolean, floor = 0) {
   if (balance < 1) return 0;
-  const est = interest + balance * MIN_SHARE;
+  const est = Math.max(interest + balance * MIN_SHARE, floor);
   const min = first && bankMinimum > 0 ? bankMinimum : est;
   return Math.min(balance, Math.max(0, min));
 }
@@ -178,7 +189,9 @@ export function payoff(
   budget: number,
   strategy: DebtStrategy | "minimo",
   today: string,
+  opts: { horizon?: number; minFloor?: number } = {},
 ): Payoff {
+  const horizon = opts.horizon ?? MAX_MONTHS;
   const start = today.slice(0, 7);
   const order = attackOrder(debts, strategy === "minimo" ? "avalancha" : strategy);
   const bal = new Map(debts.map((d) => [d.cardId, d.balance]));
@@ -191,7 +204,7 @@ export function payoff(
   let shortFrom = "";
   let end = "";
   let stuck: Payoff["stuck"] = null;
-  for (let m = 0; m < MAX_MONTHS; m++) {
+  for (let m = 0; m < horizon; m++) {
     const ym = addMonths(start, m);
     let interest = 0;
     const monthInterest = new Map<string, number>();
@@ -233,7 +246,7 @@ export function payoff(
     let balances = 0;
     const mins = debts.map((d) => ({
       d,
-      min: minimumFor(bal.get(d.cardId)!, monthInterest.get(d.cardId) ?? 0, d.bankMinimum, m === 0),
+      min: minimumFor(bal.get(d.cardId)!, monthInterest.get(d.cardId) ?? 0, d.bankMinimum, m === 0, opts.minFloor),
     }));
     const minTotal = mins.reduce((s, x) => s + x.min, 0);
     if (avail < minTotal - 0.5) short = true;
@@ -315,6 +328,35 @@ export function mandatoryNow(debts: CardDebt[], today: string) {
   );
 }
 
+/**
+ * What «pagar solo el mínimo» means, in words the card can say:
+ * - "grows": the bank's minimum does not even cover next month's interest, so
+ *   paying only that the debt goes up.
+ * - "ends": it gets paid, in `months` (up to MINIMO_MAX_MONTHS), with `interest`.
+ * - "long": it does not end within MINIMO_MAX_MONTHS.
+ */
+export type MinimoOutlook =
+  | { kind: "grows"; minimum: number; interest: number }
+  | { kind: "ends"; months: number; end: string; interest: number }
+  | { kind: "long"; interest: number };
+
+export function minimoOutlook(debts: CardDebt[], today: string): MinimoOutlook | null {
+  const withBalance = debts.filter((d) => d.balance >= 1);
+  if (!withBalance.length) return null;
+  // Only when every balance has the bank's minimum: an estimated one always covers interest.
+  if (withBalance.every((d) => d.bankMinimum > 0)) {
+    const minimum = withBalance.reduce((s, d) => s + Math.min(d.balance, d.bankMinimum), 0);
+    const interest = withBalance.reduce((s, d) => s + d.balance * monthlyRate(d.tna), 0);
+    if (interest >= 1 && minimum <= interest) return { kind: "grows", minimum: round0(minimum), interest: round0(interest) };
+  }
+  const p = payoff(debts, Number.MAX_SAFE_INTEGER, "minimo", today, {
+    horizon: MINIMO_MAX_MONTHS,
+    minFloor: MIN_FLOOR,
+  });
+  if (p.months === null) return { kind: "long", interest: p.interest };
+  return { kind: "ends", months: p.months, end: p.end, interest: p.interest };
+}
+
 export type DebtComparison = {
   debts: CardDebt[];
   budget: number;
@@ -322,6 +364,8 @@ export type DebtComparison = {
   avalancha: Payoff;
   bola: Payoff;
   minimo: Payoff;
+  /** «Pagando solo el mínimo», with a realistic horizon; null without balances. */
+  minimoOutlook: MinimoOutlook | null;
   /** Same attack order: the two strategies are the same plan. */
   same: boolean;
   /** Interest saved by avalancha vs bola (≥ 0 normally). */
@@ -343,6 +387,7 @@ export function compareDebtPlans(debts: CardDebt[], budget: number, today: strin
     avalancha,
     bola,
     minimo,
+    minimoOutlook: minimoOutlook(debts, today),
     same: avalancha.order.join() === bola.order.join(),
     // A plan that never ends (payment below the interest) has no "savings" to compare.
     avalanchaSaves: avalancha.stuck || bola.stuck ? 0 : bola.interest - avalancha.interest,
