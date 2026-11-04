@@ -464,6 +464,17 @@ export function upcomingStatements(
   return out;
 }
 
+/**
+ * Fijos charged to this card (Netflix on the Visa…): the same ones
+ * `upcomingStatements` adds to the next statements. Biggest first.
+ */
+export function cardFijos(card: Card, recurrings: Recurring[]): Recurring[] {
+  const cardIds = new Set([card.accountArsId, card.accountUsdId]);
+  return recurrings
+    .filter((r) => r.active && r.type === "expense" && cardIds.has(r.accountId))
+    .sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name));
+}
+
 /** Share of the limit in use (0–1+). Cuotas take the whole purchase until paid. USD counts at `usdRate`. */
 export function limitUse(card: Card, debtArs: number, debtUsd: number, usdRate: number) {
   if (!(card.limitArs > 0)) return null;

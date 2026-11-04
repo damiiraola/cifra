@@ -12,6 +12,7 @@ import {
   purchaseProgress,
   staleCuotaIds,
   upcomingStatements,
+  cardFijos,
   cardForAccount,
   cardPeriodFor,
   closingDate,
@@ -345,6 +346,17 @@ describe("next statements", () => {
     assert.equal(up[2]!.ending.count, 1);
     assert.equal(up[2]!.ending.ars, 100_000);
     assert.equal(up[3]!.ars, 9000, "only the fijo after cuotas end");
+  });
+
+  it("lists the fijos charged to the card, the same ones the statements add", () => {
+    const other = { ...fijo, id: "gym", name: "Gimnasio", amount: 30_000, accountId: "banco" };
+    const paused = { ...fijo, id: "spotify", name: "Spotify", active: false };
+    const usdFijo = { ...fijo, id: "icloud", name: "iCloud", amount: 3, currency: "USD" as const, accountId: card.accountUsdId };
+    const sueldo = { ...fijo, id: "sueldo", type: "income" as const };
+    assert.deepEqual(
+      cardFijos(card, [fijo, other, paused, usdFijo, sueldo]).map((r) => r.id),
+      ["netflix", "icloud"],
+    );
   });
 
   it("a posted fijo is not counted twice", () => {
